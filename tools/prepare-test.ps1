@@ -4,6 +4,7 @@ param(
     [switch]$SystemFonts,
     [switch]$SupplementarySaveProbe,
     [switch]$PersistenceProbe,
+    [switch]$SearchProbe,
     [string]$MigratedLocalisationDirectory
 )
 $ErrorActionPreference = 'Stop'
@@ -15,14 +16,17 @@ if (Get-CimInstance Win32_Process -Filter "Name='eu4.exe'" | Where-Object { $_.E
     throw 'Exit the isolated game before changing its localization or font fixture.'
 }
 $migratedFiles = @()
-if ($SupplementarySaveProbe -and $PersistenceProbe) {
-    throw 'Choose one dedicated save-name or persistence fixture.'
+if (@($SupplementarySaveProbe,$PersistenceProbe,$SearchProbe).Where({ $_ }).Count -gt 1) {
+    throw 'Choose one dedicated save-name, persistence or search fixture.'
 }
 if ($SupplementarySaveProbe -and !$SystemFonts) {
     throw 'The supplementary save-name probe needs the system font atlas.'
 }
 if ($PersistenceProbe -and !$SystemFonts) {
     throw 'The persistence probe needs the system font atlas.'
+}
+if ($SearchProbe -and !$SystemFonts) {
+    throw 'The multilingual search probe needs the system font atlas.'
 }
 if ($MigratedLocalisationDirectory) {
     $migrationRoot = (Resolve-Path -LiteralPath $MigratedLocalisationDirectory).Path
@@ -68,6 +72,10 @@ if ($SupplementarySaveProbe) {
 }
 if ($PersistenceProbe) {
     $localization = $localization.Replace(' FRA:0 "法兰西"',' FRA:0 "持久化𠀀"')
+}
+if ($SearchProbe) {
+    $localization = $localization.Replace(' ENG:0 "英格兰"',' ENG:0 "École Straße Ａ 英格兰𠀀"')
+    $localization = $localization.Replace(' CAS:0 "卡斯蒂利亚"',' CAS:0 "ΕΛΛΑΔΑ МОСКВА 卡斯蒂利亚"')
 }
 [IO.File]::WriteAllText((Join-Path $modRoot 'localisation\replace\eu4_unicode_probe_l_english.yml'),$localization,$utf8Bom)
 Copy-Item -LiteralPath (Join-Path $projectRoot 'fixtures\events\unicode_probe.txt') -Destination (Join-Path $modRoot 'events') -Force

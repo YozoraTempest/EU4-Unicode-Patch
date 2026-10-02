@@ -47,7 +47,9 @@ std::size_t next_grapheme(std::string_view text,std::size_t offset) {
     const auto cursor=std::upper_bound(positions.begin(),positions.end(),offset);
     return cursor==positions.end()?text.size():*cursor;
 }
-std::string search_key(std::string_view text) {
+namespace {
+using NormalizerFactory=const UNormalizer2*(*)(UErrorCode*);
+std::string normalize_text(std::string_view text,NormalizerFactory factory) {
     checked_text(text);
     if(text.empty()) return {};
     UErrorCode status=U_ZERO_ERROR;
@@ -58,7 +60,7 @@ std::string search_key(std::string_view text) {
     std::u16string wide(static_cast<std::size_t>(length),u'\0');
     u_strFromUTF8(wide.data(),length,&length,text.data(),static_cast<int32_t>(text.size()),&status);
     checked(status);
-    const auto normalizer=unorm2_getNFKCCasefoldInstance(&status);
+    const auto normalizer=factory(&status);
     checked(status);
     length=unorm2_normalize(normalizer,wide.data(),static_cast<int32_t>(wide.size()),nullptr,0,&status);
     if(status!=U_BUFFER_OVERFLOW_ERROR) checked(status);
@@ -76,4 +78,7 @@ std::string search_key(std::string_view text) {
     checked(status);
     return result;
 }
+}
+std::string search_key(std::string_view text) { return normalize_text(text,unorm2_getNFKCCasefoldInstance); }
+std::string canonical_text(std::string_view text) { return normalize_text(text,unorm2_getNFCInstance); }
 }

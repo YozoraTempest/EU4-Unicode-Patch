@@ -12,4 +12,5 @@ std::vector<std::size_t> line_boundaries(std::string_view text);
 std::size_t previous_grapheme(std::string_view text,std::size_t offset);
 std::size_t next_grapheme(std::string_view text,std::size_t offset);
 std::string search_key(std::string_view text);
+std::string canonical_text(std::string_view text);
 }

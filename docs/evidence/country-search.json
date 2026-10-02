@@ -1,0 +1,226 @@
+{
+  "artifact": {
+    "event": "artifact",
+    "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+    "dll_sha256": "f6c17af6944cad7178468ccde42b5ac9319564955c1425472cc4337c2b09c1cd",
+    "query_method": "native widget setter and observed change callback; not IME or keyboard"
+  },
+  "passed": true,
+  "cases": [
+    {
+      "id": 0,
+      "query": "英格兰",
+      "examined": 185,
+      "matched": [
+        "École Straße Ａ 英格兰𠀀"
+      ],
+      "original_preserved": true
+    },
+    {
+      "id": 1,
+      "query": "𠀀",
+      "examined": 185,
+      "matched": [
+        "École Straße Ａ 英格兰𠀀"
+      ],
+      "original_preserved": true
+    },
+    {
+      "id": 2,
+      "query": "𐀀",
+      "examined": 185,
+      "matched": [],
+      "original_preserved": true
+    },
+    {
+      "id": 3,
+      "query": "ecole",
+      "examined": 185,
+      "matched": [
+        "École Straße Ａ 英格兰𠀀"
+      ],
+      "original_preserved": true
+    },
+    {
+      "id": 4,
+      "query": "école",
+      "examined": 185,
+      "matched": [
+        "École Straße Ａ 英格兰𠀀"
+      ],
+      "original_preserved": true
+    },
+    {
+      "id": 5,
+      "query": "STRASSE",
+      "examined": 185,
+      "matched": [
+        "École Straße Ａ 英格兰𠀀"
+      ],
+      "original_preserved": true
+    },
+    {
+      "id": 6,
+      "query": "strase",
+      "examined": 185,
+      "matched": [
+        "École Straße Ａ 英格兰𠀀"
+      ],
+      "original_preserved": true
+    },
+    {
+      "id": 7,
+      "query": "ａ",
+      "examined": 185,
+      "matched": [
+        "Denmark",
+        "Gotland",
+        "Norway",
+        "Albania",
+        "Athens",
+        "Bosnia",
+        "Byzantium",
+        "Croatia",
+        "Moldavia",
+        "Naxos",
+        "Ragusa",
+        "Serbia",
+        "Wallachia",
+        "Hungary",
+        "Clanricarde",
+        "École Straße Ａ 英格兰𠀀",
+        "Scotland",
+        "Kildare",
+        "Offaly",
+        "Lithuania",
+        "Livonian Order",
+        "Mazovia",
+        "Poland",
+        "Riga",
+        "Strasbourg",
+        "Armagnac",
+        "Auvergne",
+        "Bourbonnais",
+        "Brittany",
+        "Orleans",
+        "Aachen",
+        "Anhalt",
+        "Ansbach",
+        "Augsburg",
+        "Baden",
+        "Bohemia",
+        "Brandenburg",
+        "East Frisia",
+        "Frankfurt",
+        "Austria",
+        "Hamburg",
+        "Saxe-Lauenburg",
+        "Lorraine",
+        "Magdeburg",
+        "Mainz",
+        "The Palatinate",
+        "Saxony",
+        "Salzburg",
+        "Switzerland",
+        "Thuringia",
+        "Nassau",
+        "Dithmarschen",
+        "Aragon",
+        "Granada",
+        "Navarra",
+        "Portugal",
+        "Ferrara",
+        "Genoa",
+        "Mantua",
+        "Milan",
+        "Naples",
+        "The Papal State",
+        "Savoy",
+        "Siena",
+        "Montferrat",
+        "Lucca",
+        "Brabant",
+        "Flanders",
+        "Friesland",
+        "Holland",
+        "Crimea",
+        "Georgia",
+        "Kazan",
+        "Ryazan",
+        "Yaroslavl",
+        "Great Horde",
+        "Anizah",
+        "Hejaz",
+        "Medina",
+        "Mikhlaf",
+        "Aq Qoyunlu",
+        "Candar",
+        "Dulkadir",
+        "Karaman",
+        "Syria",
+        "Ramazan",
+        "Avaria",
+        "Karabakh",
+        "Samtskhe",
+        "Mamluks",
+        "Tafilalt",
+        "Fezzan",
+        "Mzab",
+        "Marrakesh",
+        "Qara Qoyunlu",
+        "Circassia",
+        "Gazikumukh",
+        "Landshut",
+        "Ingolstadt",
+        "Passau",
+        "Konstanz",
+        "Bayreuth",
+        "Geneva",
+        "Three Leagues",
+        "Bologna",
+        "Saluzzo",
+        "Wolgast",
+        "Goslar",
+        "Herzegovina",
+        "Bamberg",
+        "Perugia"
+      ],
+      "original_preserved": true
+    },
+    {
+      "id": 8,
+      "query": "ελλαδα",
+      "examined": 185,
+      "matched": [
+        "ΕΛΛΑΔΑ МОСКВА 卡斯蒂利亚"
+      ],
+      "original_preserved": true
+    },
+    {
+      "id": 9,
+      "query": "москва",
+      "examined": 185,
+      "matched": [
+        "ΕΛΛΑΔΑ МОСКВА 卡斯蒂利亚"
+      ],
+      "original_preserved": true
+    },
+    {
+      "id": 10,
+      "query": "unmatched-query",
+      "examined": 185,
+      "matched": [],
+      "original_preserved": true
+    },
+    {
+      "id": 11,
+      "query": "𠀀",
+      "examined": 185,
+      "matched": [
+        "École Straße Ａ 英格兰𠀀"
+      ],
+      "original_preserved": true
+    }
+  ],
+  "scope": "native diplomacy country-name filter; programmatic widget text, not IME or keyboard"
+}

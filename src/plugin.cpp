@@ -4,6 +4,7 @@
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
 #include "unicode_editor.hpp"
+#include "unicode_search.hpp"
 #include "glyph_registry.hpp"
 #include <array>
 #include <atomic>
@@ -54,6 +55,21 @@ void transliterate_save_path(EngineString* text) {
     // filesystem still performs its ordinary illegal-path validation.
     if(caller==0x5ca24b && value.substr(0,11)=="save games/" && eu4unicode::valid_utf8(value)) return;
     original_transliterate(text);
+}
+using FindText=std::uint64_t(*)(const char*,std::uint64_t,std::uint64_t,const char*,std::uint64_t);
+FindText original_find_text=nullptr;
+std::uint64_t find_country_name(const char* name,std::uint64_t length,std::uint64_t start,
+                              const char* query,std::uint64_t query_length) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    // This country-list caller tests only found/not-found, never the offset.
+    // Other string-search callers retain the native byte-offset contract.
+    if(caller!=0xefc394) return original_find_text(name,length,start,query,query_length);
+    try {
+        return start<=length&&eu4unicode::country_search_contains(
+            std::string_view(name,static_cast<std::size_t>(length)).substr(static_cast<std::size_t>(start)),
+            std::string_view(query,static_cast<std::size_t>(query_length)))?0:UINT64_MAX;
+    } catch(...) { log("Unicode country-name search failed; candidate excluded."); return UINT64_MAX; }
 }
 struct LoadContext { int line; bool replace; char padding[11]; void* collection; };
 static_assert(offsetof(LoadContext,collection)==16);
@@ -412,6 +428,12 @@ bool initialize(HMODULE module) {
         ,{0x1175c2c,"e84ff55800"}
         ,{0x1705180,"8b411085c00f840c010000"}
         ,{0x19fc097,"8bca4983c302c1e10a0bc885c97417"}
+        ,{0xefc33b,"e8b0406500"}
+        ,{0xefc344,"e8278a8000"}
+        ,{0xf16156,"e895a26300"}
+        ,{0xf1615e,"e80dec7e00"}
+        ,{0x17061a0,"48895c240848896c24104889742418"}
+        ,{0xefc38f,"e80c9e800083f8ff"}
     };
     for(const auto& site:sites) if(!check(site)) return false;
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
@@ -519,6 +541,10 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&original_transliterate))!=MH_OK) {
         log("Save path hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
+    if(MH_CreateHook(image+0x17061a0,reinterpret_cast<void*>(find_country_name),
+        reinterpret_cast<void**>(&original_find_text))!=MH_OK) {
+        log("Country search hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
     if(experimental_input) {
         if(MH_CreateHook(image+0x1569f91,reinterpret_cast<void*>(input_hook),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x15366c0,reinterpret_cast<void*>(editor_key),
@@ -537,7 +563,13 @@ bool initialize(HMODULE module) {
         {0x1174e95,bytes("e8e6025900"),bytes("9090909090")},
         {0x13b9567,bytes("e814bc3400"),bytes("9090909090")},
         {0x117519e,bytes("e8ddff5800"),bytes("9090909090")},
-        {0x1175c2c,bytes("e84ff55800"),bytes("9090909090")} };
+        {0x1175c2c,bytes("e84ff55800"),bytes("9090909090")},
+        // Keep both the original query and localized candidate in UTF-8;
+        // derive display-search keys only in the scoped matching callback.
+        {0xefc33b,bytes("e8b0406500"),bytes("9090909090")},
+        {0xefc344,bytes("e8278a8000"),bytes("9090909090")},
+        {0xf16156,bytes("e895a26300"),bytes("9090909090")},
+        {0xf1615e,bytes("e80dec7e00"),bytes("9090909090")} };
     std::size_t applied=0;
     bool constants_ok=true;
     for(const auto& patch:constants) {
