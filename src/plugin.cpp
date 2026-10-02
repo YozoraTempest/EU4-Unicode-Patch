@@ -3,6 +3,7 @@
 #include <MinHook.h>
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
+#include "glyph_registry.hpp"
 #include <array>
 #include <atomic>
 #include <algorithm>
@@ -159,6 +160,7 @@ std::uintptr_t g_map_adjust_copy_return,g_map_adjust_glyph_return,g_map_upper_re
 std::uintptr_t g_map_kern_call;
 std::uintptr_t g_input_return;
 std::uintptr_t g_text_limit_return;
+std::uintptr_t g_font_allocate,g_font_duplicate,g_font_store_return,g_font_initialize,g_font_skip,g_engine_new;
 void main_draw_hook(); void main_copy_hook(); void main_measure_hook();
 void bitmap_measure_hook(); void bitmap_split_hook();
 void heap_zero_hook();
@@ -173,6 +175,26 @@ void map_justify_draw_hook(); void map_justify_measure_hook(); void map_justify_
 void map_adjust_copy_hook(); void map_adjust_glyph_hook(); void map_upper_hook(); void map_lower_hook();
 void input_hook();
 void text_limit_hook();
+void font_lookup_hook(); void font_store_hook();
+void font_allocate_hook();
+void* allocate_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept {
+    auto record=eu4unicode::allocate_unicode_glyph(table,scalar);
+    if(!record) log("Unicode glyph allocation failed; glyph skipped.");
+    return record;
+}
+void* find_supplementary_glyph(void* const* table,std::uint32_t scalar) noexcept {
+    return eu4unicode::find_unicode_glyph(table,scalar);
+}
+void* find_loaded_glyph(void* const* table,std::uint32_t scalar) noexcept {
+    return scalar<=0xff?table[scalar]:find_supplementary_glyph(table,scalar);
+}
+void store_loaded_glyph(void** table,std::uint32_t scalar,void* glyph) noexcept {
+    if(scalar<=0xff) {
+        table[scalar]=glyph;
+        if(scalar==0x41&&!eu4unicode::bind_unicode_font(table))
+            log("Unicode font alias binding failed.");
+    }
+}
 std::size_t bounded_text_length(const char* source,std::size_t length) noexcept {
     return eu4unicode::scalar_prefix({source,length},32000);
 }
@@ -317,6 +339,9 @@ bool initialize(HMODULE module) {
         (std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_probe.ini").c_str())!=0;
     const Site sites[]={
         {0x15989d8,"b8007d0000443bf8440f4df8"},
+        {0x1595c9b,"488b85301100004883bcf82001000000"},
+        {0x1595cad,"b910000000e81dd64900"},
+        {0x1595ceb,"4c8bbd30110000498984ff20010000"},
         {0x16fd650,"48895c240848896c2410488974241848"},
         {0x15995b0,"4c63cf488b55f84c03ca4863ce410fb6014c8d1d08a7e90042880419ffc6"},
         {0x1599728,"410fb601498b8cc62001000048894d004885c9"},
@@ -402,6 +427,12 @@ bool initialize(HMODULE module) {
     g_map_lower_return=address(0x1550438);
     g_input_return=address(0x156a22a);
     g_text_limit_return=address(0x15989e4);
+    g_font_allocate=address(0x1595cad);
+    g_font_duplicate=address(0x1595d07);
+    g_font_store_return=address(0x1595cfa);
+    g_font_initialize=address(0x1595cb7);
+    g_font_skip=address(0x1595f01);
+    g_engine_new=address(0x1a332d4);
     repeat_text=reinterpret_cast<RepeatText>(address(0x90320));
     append_text=reinterpret_cast<AppendText>(address(0x932f0));
     register_text=reinterpret_cast<RegisterText>(address(0x16fa8d0));
@@ -438,7 +469,10 @@ bool initialize(HMODULE module) {
         {0xfd6bc0,reinterpret_cast<void*>(map_adjust_glyph_hook)},
         {0x14ba825,reinterpret_cast<void*>(map_upper_hook)},
         {0x1550425,reinterpret_cast<void*>(map_lower_hook)},
-        {0x15989d8,reinterpret_cast<void*>(text_limit_hook)} };
+        {0x15989d8,reinterpret_cast<void*>(text_limit_hook)},
+        {0x1595c9b,reinterpret_cast<void*>(font_lookup_hook)},
+        {0x1595cad,reinterpret_cast<void*>(font_allocate_hook)},
+        {0x1595ceb,reinterpret_cast<void*>(font_store_hook)} };
     for(const auto& hook:hooks) {
         if(MH_CreateHook(image+hook.rva,hook.callback,nullptr)!=MH_OK) {
             log("Hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
@@ -453,9 +487,8 @@ bool initialize(HMODULE module) {
         log("Experimental UTF-8 input and single-line grapheme editing enabled.");
     }
     struct ConstantPatch { std::size_t rva; std::uint32_t before,after; };
-    const ConstantPatch constants[]={ {0x1595c88,0xff,0xffff},
-        {0x10b2a67,0x3d88,0x103d88}, {0x1b24a5a,0x3d88,0x103d88},
-        {0x10999fa,0x3d88,0x103d88}, {0x16c2cba,0x1000000,0x4000000} };
+    const ConstantPatch constants[]={ {0x1595c88,0xff,0x10ffff},
+        {0x16c2cba,0x1000000,0x4000000} };
     std::size_t applied=0;
     bool constants_ok=true;
     for(const auto& patch:constants) {

@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <string>
 
 namespace eu4unicode {
 struct Scalar {
@@ -10,6 +11,7 @@ struct Scalar {
     bool valid;
 };
 Scalar decode(std::string_view text) noexcept;
+std::string encode(std::uint32_t scalar);
 bool valid_utf8(std::string_view text) noexcept;
 // Largest complete-scalar prefix within a byte limit. Malformed bytes remain
 // single-byte units so compiled engine literals can still be measured.

@@ -34,14 +34,39 @@ RESTORE_CONTEXT MACRO
     add rsp, 0e8h
     popfq
 ENDM
+EXTERN find_supplementary_glyph:PROC
+SPARSE_GLYPH MACRO result, font, slot, table_offset
+    SAVE_CONTEXT
+    lea rcx, [font+table_offset]
+    mov rdx, slot
+    call find_supplementary_glyph
+    IFIDNI <result>, <rdx>
+        mov [rsp+90h], rax
+    ELSEIFIDNI <result>, <rcx>
+        mov [rsp+88h], rax
+    ELSEIFIDNI <result>, <r11>
+        mov [rsp+0b0h], rax
+    ELSEIFIDNI <result>, <r8>
+        mov [rsp+98h], rax
+    ELSE
+        mov result, rax
+    ENDIF
+    RESTORE_CONTEXT
+ENDM
 LOOKUP_GLYPH MACRO result, font, slot, table_offset
-    LOCAL selected
+    LOCAL selected, bmp, lookup_done
+    cmp slot, 0ffh
+    jbe bmp
+    SPARSE_GLYPH result, font, slot, table_offset
+    jmp lookup_done
+bmp:
     mov result, [font+slot*8+table_offset]
+lookup_done:
     test result, result
     jnz selected
     cmp slot, 20h
     jb selected
-    mov result, [font+10130h+table_offset]
+    SPARSE_GLYPH result, font, 2026h, table_offset
     test result, result
     jnz selected
     mov result, [font+1f8h+table_offset]

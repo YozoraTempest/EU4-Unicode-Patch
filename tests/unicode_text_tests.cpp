@@ -38,9 +38,9 @@ int main() {
     const std::string highest="\xf4\x8f\xbf\xbf";
     check(decode(highest).value==0x10ffff,"highest Unicode scalar retained");
     check(bitmap_slot(0x4e2d)==0x4e2d,"Chinese glyph mapping");
-    check(bitmap_slot(0x3b1)==0xe3b1,"fixture's relocated glyph mapping");
-    check(bitmap_slot(0x20000)==0x2026 && decode(u8"𠀀").value==0x20000,
-        "missing glyph does not truncate stored code point");
+    check(bitmap_slot(0x3b1)==0x3b1,"glyph key preserves the original Unicode scalar");
+    check(bitmap_slot(0x20000)==0x20000 && decode(u8"𠀀").value==0x20000,
+        "supplementary glyph keys retain the complete code point");
     check(bitmap_slot(0x2014)==0x2014,"native Unicode punctuation glyph ID");
     std::cout << "Unicode scalar, invalid-input and bitmap-adapter checks passed.\n";
 }

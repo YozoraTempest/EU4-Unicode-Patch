@@ -28,6 +28,15 @@ int main(int argc,char** argv) {
     }
     check(rtl,"Arabic and Hebrew produce RTL runs");
     check(fonts.size()>1,"system font fallback selects multiple font families");
+    const auto bitmap=TextLayout(u8"𠀀",28,100,100).rasterize();
+    check(bitmap.pixels.size()==static_cast<std::size_t>(bitmap.width)*bitmap.height*4&&bitmap.baseline>0,
+        "raster dimensions and baseline are available to the native atlas bridge");
+    bool ink=false,transparent=false;
+    for(std::size_t offset=3;offset<bitmap.pixels.size();offset+=4) {
+        ink=ink||bitmap.pixels[offset]!=0;
+        transparent=transparent||bitmap.pixels[offset]==0;
+    }
+    check(ink&&transparent,"supplementary glyph raster contains ink and transparent background");
     const auto boundaries=grapheme_boundaries(text);
     for(float y=0;y<measured.height;y+=11) for(float x=-10;x<measured.width+10;x+=9) {
         const auto hit=layout.hit_test(x,y);

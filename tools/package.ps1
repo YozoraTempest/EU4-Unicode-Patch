@@ -1,6 +1,13 @@
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $packageRoot=Join-Path $projectRoot 'dist\EU4UnicodePatch'
+# Remove only the previous generated package, after checking its resolved path.
+if (Test-Path -LiteralPath $packageRoot) {
+    if ((Resolve-Path -LiteralPath $packageRoot).Path -ne [IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\EU4UnicodePatch'))) {
+        throw 'Unexpected generated package path.'
+    }
+    Remove-Item -LiteralPath $packageRoot -Recurse -Force
+}
 New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
 foreach ($folder in @('include','src','tests','tools','fixtures','docs','third-party')) {
     Copy-Item (Join-Path $projectRoot $folder) $packageRoot -Recurse -Force
@@ -10,7 +17,9 @@ foreach ($file in @('README.md','LICENSE','THIRD_PARTY_NOTICES.md','CMakeLists.t
 }
 $binaryRoot=Join-Path $packageRoot 'build'
 New-Item -ItemType Directory -Path $binaryRoot -Force | Out-Null
-Copy-Item (Join-Path $projectRoot 'build\eu4_unicode_probe.dll') $binaryRoot -Force
+foreach ($binary in @('eu4_unicode_probe.dll','fontpack.exe')) {
+    Copy-Item (Join-Path $projectRoot "build\$binary") $binaryRoot -Force
+}
 $utfcppRoot=Join-Path $packageRoot 'vendor\utfcpp'
 $minhookRoot=Join-Path $packageRoot 'vendor\minhook'
 New-Item -ItemType Directory -Path $utfcppRoot,$minhookRoot -Force | Out-Null

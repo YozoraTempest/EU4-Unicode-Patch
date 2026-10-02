@@ -1,11 +1,16 @@
 param(
     [string]$GameDirectory = 'D:\SteamLibrary\steamapps\common\Europa Universalis IV',
-    [string]$FontDirectory = 'D:\SteamLibrary\steamapps\workshop\content\236850\2976470733\gfx\fonts'
+    [string]$FontDirectory = 'D:\SteamLibrary\steamapps\workshop\content\236850\2976470733\gfx\fonts',
+    [switch]$SystemFonts
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $testRoot = Join-Path $projectRoot 'private\test-userdir'
 $modRoot = Join-Path $projectRoot 'private\test-mod'
+$runtimeExe = Join-Path $projectRoot 'private\runtime\eu4.exe'
+if (Get-CimInstance Win32_Process -Filter "Name='eu4.exe'" | Where-Object { $_.ExecutablePath -eq $runtimeExe }) {
+    throw 'Exit the isolated game before changing its localization or font fixture.'
+}
 foreach ($relative in @('localisation\replace','gfx\fonts','interface','events','common\on_actions')) {
     New-Item -ItemType Directory -Path (Join-Path $modRoot $relative) -Force | Out-Null
 }
@@ -21,20 +26,15 @@ $actions = [IO.File]::ReadAllText((Join-Path $GameDirectory 'common\on_actions\0
 $actions = [regex]::new('on_startup\s*=\s*\{').Replace($actions, "on_startup = {`n if = { limit = { ai = no } country_event = { id = eu4_unicode.1 } }", 1)
 [IO.File]::WriteAllText((Join-Path $modRoot 'common\on_actions\00_on_actions.txt'),$actions,$utf8)
 # Reuse installed mod fonts only in the private test fixture. They are not packaged.
-foreach ($size in @(14,16,18,24,'map')) {
-    foreach ($extension in @('fnt','dds')) {
-        Copy-Item -LiteralPath (Join-Path $FontDirectory "zh-hans-$size.$extension") -Destination (Join-Path $modRoot 'gfx\fonts')
+if ($SystemFonts) {
+    & (Join-Path $projectRoot 'build\fontpack.exe') (Join-Path $projectRoot 'fixtures\localisation\eu4_unicode_probe_l_english.yml') (Join-Path $modRoot 'gfx\fonts')
+    if ($LASTEXITCODE -ne 0) { throw 'System font atlas generation failed.' }
+} else {
+    foreach ($size in @(14,16,18,24,'map')) {
+        foreach ($extension in @('fnt','dds')) {
+            Copy-Item -LiteralPath (Join-Path $FontDirectory "zh-hans-$size.$extension") -Destination (Join-Path $modRoot 'gfx\fonts') -Force
+        }
     }
-    # Relocate glyphs which would overlap the engine font object's fields.
-    $fontPath = Join-Path $modRoot "gfx\fonts\zh-hans-$size.fnt"
-    $fontText = [IO.File]::ReadAllText($fontPath)
-    $fontText = [regex]::Replace($fontText, '(?m)^char id=(\d+)\b', {
-        param($match)
-        $id = [int]$match.Groups[1].Value
-        if ($id -ge 0x100 -and $id -lt 0xa00) { 'char id=' + ($id + 0xe000) }
-        else { $match.Value }
-    })
-    [IO.File]::WriteAllText($fontPath,$fontText,$utf8)
 }
 # Keep the game's existing font definitions and change only the test font paths.
 $coreGfx = [IO.File]::ReadAllText((Join-Path $GameDirectory 'interface\core.gfx'))

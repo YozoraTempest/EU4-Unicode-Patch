@@ -16,6 +16,12 @@ struct GlyphRun {
 };
 struct LayoutMetrics { float width,height; std::uint32_t lines; };
 struct HitPosition { std::size_t byte_offset; bool inside; };
+struct RasterImage {
+    std::uint32_t width,height;
+    float baseline;
+    // Premultiplied BGRA, with a 16-pixel transparent margin on each side.
+    std::vector<std::uint8_t> pixels;
+};
 // UTF-8 remains the public text format. DirectWrite's UTF-16 positions are
 // translated at this boundary; engine byte offsets never become glyph IDs.
 class TextLayout {
@@ -30,6 +36,7 @@ public:
     LayoutMetrics metrics() const;
     std::vector<GlyphRun> glyph_runs() const;
     HitPosition hit_test(float x,float y) const;
+    RasterImage rasterize() const;
     void render_png(const std::filesystem::path& path) const;
 private:
     struct Impl;

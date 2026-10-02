@@ -1,5 +1,7 @@
 """Check observed localization bytes and glyph events from the isolated game."""
 import json
+import re
+import struct
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -21,7 +23,23 @@ for key,value in expected.items():
     assert value.encode("utf-8") in rendered, f"Text did not reach drawing intact: {key}"
 glyphs={event["slot"] for event in events if event["event"]=="draw-glyph" and event["present"]}
 assert {0x4e2d,0x6587,0x5355,0x6e38}.issubset(glyphs),"Chinese glyph lookup missing"
-assert 0x2026 in glyphs,"Non-BMP missing-glyph placeholder not observed"
+assert {0x20000,0x1f600}.issubset(glyphs),"Four-byte code points did not reach native glyph lookup"
+artifacts=[event for event in events if event["event"]=="artifact"]
+if artifacts and artifacts[0].get("font_backend")=="system":
+    # Check actual glyph geometry against generated font records. Presence by
+    # itself would also pass for a missing-glyph placeholder.
+    expected_metrics={0x20000:set(),0x1f600:set(),0xd55c:set()}
+    for font in (ROOT/"private/test-mod/gfx/fonts").glob("zh-hans-*.fnt"):
+        for line in font.read_text(encoding="utf-8").splitlines():
+            if not line.startswith("char "): continue
+            record={key:int(value) for key,value in re.findall(r"(\w+)=(-?\d+)",line)}
+            scalar=record["id"]
+            if scalar in expected_metrics:
+                expected_metrics[scalar].add(struct.pack("<7hBB",*(record[name] for name in
+                    ["x","y","width","height","xoffset","yoffset","xadvance"]),0,0))
+    for scalar,metrics in expected_metrics.items():
+        observed=[bytes(event["metrics"]) for event in events if event["event"]=="draw-glyph" and event["slot"]==scalar]
+        assert observed and all(value in metrics for value in observed),f"Generated glyph was replaced or truncated: {scalar:#x}"
 wraps=[event for event in events if event["event"]=="draw-newline" and bytes(event["source"]).startswith("这是使用标准".encode("utf-8"))]
 assert wraps and not any(event["present"] for event in wraps),"Wrapped text lost newline control semantics"
 colors={event["code"] for event in events if event["event"]=="format-color"}

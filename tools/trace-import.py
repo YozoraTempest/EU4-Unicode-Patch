@@ -83,7 +83,9 @@ Interceptor.attach(base.add(0x159a7ac),{onEnter(){
  }
  if(slot>255&&!glyphSeen.has(slot)) {
    glyphSeen.add(slot);
-   send({event:'draw-glyph',slot,index:this.context.r15.toUInt32(),present:!this.context.rdx.isNull()});
+   const glyph=this.context.rdx;
+   send({event:'draw-glyph',slot,index:this.context.r15.toUInt32(),present:!glyph.isNull(),
+     metrics:glyph.isNull()?[]:Array.from(new Uint8Array(glyph.readByteArray(16)))});
  }
 }});
 send({event:'ready',pid:Process.id,path:Process.mainModule.path});
@@ -118,7 +120,9 @@ def main():
         script=session.create_script(SCRIPT)
         with output.open("w",encoding="utf-8") as file:
             file.write(json.dumps({"type":"send","payload":{"event":"artifact",
-                "exe_sha256":EXPECTED_HASH,"dll_sha256":hashlib.sha256(plugin.read_bytes()).hexdigest()}})+"\n")
+                "exe_sha256":EXPECTED_HASH,"dll_sha256":hashlib.sha256(plugin.read_bytes()).hexdigest(),
+                "font_backend":"system" if 'DirectWrite system fallback' in
+                    (ROOT/'private/test-mod/gfx/fonts/zh-hans-18.fnt').read_text(encoding='utf-8') else "workshop"}})+"\n")
             def message(value,data):
                 file.write(json.dumps(value,ensure_ascii=False)+"\n")
                 file.flush()

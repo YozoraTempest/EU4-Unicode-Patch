@@ -14,6 +14,7 @@
 | 地图 | 法兰西、英格兰、卡斯蒂利亚、奥斯曼国家标签显示；选择法国并进入 1444 战局 |
 | 事件 | 自定义 UTF-8 事件标题、正文、颜色与资源图标正常；中文彩色选项可点击关闭 |
 | 换行 | 中文长段落产生多行；生成的换行保持空字形控制语义；ICU 行边界接入主文字路径 |
+| 生僻字与字体回退 | 系统字体模式原生显示“𠀀”、😀、韩文、希腊文；完整码点与 16 字节 glyph metrics 均与生成 FNT 核对通过 |
 | 缓冲区 | 测试 32000 字节边界附近的四字节字符，不保留半个 UTF-8 字符 |
 | 普通存档 | 隔离战局保存为专用存档，重启后读取并触发自定义事件；尚未验证中文文件名与自定义名称 |
 | 初始化保护 | 无关目录和错误 EXE 哈希均拒绝启用；保护宿主检查导出状态为 0 |
@@ -21,27 +22,28 @@
 
 跟踪验证：[runtime-trace.jsonl](evidence/runtime-trace.jsonl)。该文件第一条 artifact 事件记录本次 EXE / DLL 指纹。自动校验包含注册、绘制、字形、换行、颜色、图标和续字节碰撞，不接受 Frida 脚本错误。
 
-原生游戏画面：[主菜单](evidence/utf8-prototype.jpg)、[设置](evidence/settings.jpg)、[颜色与图标](evidence/utf8-format.jpg)、[中文地图](evidence/utf8-map.jpg)、[中文事件](evidence/utf8-event.jpg)。画面来自无 Frida 的交互测试；颜色与地图画面记录该功能完成时的版本。新的默认构建关闭未验收输入实验，显示路径保持相同。
+原生游戏画面：[生僻字与更多语言](evidence/utf8-supplementary.jpg)、[系统字体事件](evidence/utf8-system-font-event.jpg)、[设置](evidence/settings.jpg)、[颜色与图标](evidence/utf8-format.jpg)、[中文地图](evidence/utf8-map.jpg)。画面来自无 Frida 的交互测试；旧画面记录该功能完成时的版本。新的默认构建关闭未验收输入实验。
 
 测试模组会改变校验和，当前不据此声称铁人成就或联机兼容。游戏和字体夹具不随项目分发。
 
 ## 独立模块结果
 
-三个 CTest 均通过。
+四个 CTest 均通过。
 
 - UTF-8 核心：ASCII、中日韩、重音字符、四字节字符、U+10FFFF、非法/过长/代理项/截断编码、完整标量截断、BMFont 槽位适配。
 - ICU：组合重音、扩展汉字、旗帜、ZWJ 家庭序列、前后字素边界、完整删除、中文标点行边界、规范等价/大小写/全角搜索键。
 - DirectWrite：系统字体回退、复杂文字与 RTL glyph run、UTF-8 源偏移、每次命中落在完整字素边界、非法 UTF-8 拒绝。
+- 字形表：完整码点、独立字体与共享图集别名、稳定指针、重复拒绝、代理项拒绝、U+0100/私用区不碰撞；Unicode 记录先于 ASCII A 加载时，后续绑定保留原指针。
 
 本机字体样本包括中文、日文、韩文、𠀀、😀、希腊文、阿拉伯文、希伯来文、印地文与泰文，缺字数量为 0。系统选择了 Leelawadee UI、Malgun Gothic、Microsoft YaHei UI、Nirmala UI、Segoe UI、Segoe UI Emoji 和 SimSun-ExtB。[诊断图片](evidence/unicode-layout.png)由独立 TextLayout 模块生成，不能作为这些能力已接入 EU4 的证据。其他机器的实际覆盖取决于已安装字体。
 
-构建与语法检查通过。Ninja 正确识别本机中文 include 前缀，第二次构建报告 no work to do。GitHub Actions 模板定义 Windows x64 构建、三个 Unicode 测试和拒绝宿主测试。当前 OAuth 令牌没有 workflow 写入权限，GitHub 拒绝发布 .github/workflows 文件；模板保存在 docs/ci/windows-build.yml，尚未启用远端自动运行。
+构建与语法检查通过。Ninja 正确识别本机中文 include 前缀，公共 MASM 宏使用显式依赖。GitHub Actions 模板定义 Windows x64 构建、全部 CTest 和拒绝宿主测试。当前 OAuth 令牌没有 workflow 写入权限，GitHub 拒绝发布 .github/workflows 文件；模板保存在 docs/ci/windows-build.yml，尚未启用远端自动运行。
 
 ## 输入实验与未验收项
 
 SDL UTF-8 提交适配与单行无选区字素编辑已经实现，但默认关闭。本机自动化按键观察到输入法预编辑事件，部分 ASCII 输入经提交进入编辑框；直接注入中文未形成足够的原生提交证据。尚未验证中文提交、粘贴、选区、多行、鼠标命中、中文文件名、自定义名称保存往返或联机文本。独立字素测试不替代游戏编辑验收。
 
-字体模块尚未接到游戏绘制。游戏 BMFont 路径的非 BMP 字符和缺字仍显示占位；独立 DirectWrite 的生僻字、shaping、bidi 和回退通过不能消除这一限制。游戏搜索仍未接入新的 Unicode 搜索键。
+系统字体回退现已通过生成原生图集接入游戏，覆盖当前夹具收录的字符。未收录字符仍显示占位；运行时字形缓存、多页纹理、字体卸载与重载尚未完成。独立 DirectWrite 的 shaping 与 bidi 通过不能作为复杂文字已接入游戏的证据。游戏搜索仍未接入新的 Unicode 搜索键。
 
 完整范围与继续推进条件见 [roadmap.md](roadmap.md)。此记录不构成完整发行版或长时间游戏稳定性的证明。
 
@@ -52,7 +54,7 @@ eu4.exe:
 9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a
 
 本次跟踪与默认研究 DLL:
-2af94d9519a94d33ccbf91adbc7e1571f99147acc3fea50a9ab5b02f9d9dbe02
+02b160325f57e048bb9152da9ab542f94c5a27ad6ecc920ad6b95834e3e0a5a9
 ```
 
-在高频文字入口卸载 Frida 曾触发访问冲突，所以跟踪结束时先关闭它启动的测试进程，再释放会话。原生交互使用不附加代理的启动脚本。初始化的字体扩容要求启动前加载，不能热插入运行中的游戏。
+在高频文字入口卸载 Frida 曾触发访问冲突，所以跟踪结束时先关闭它启动的测试进程，再释放会话。原生交互使用不附加代理的启动脚本。初始化的字体与绘制挂钩要求启动前加载，不能热插入运行中的游戏。第三轮曾因 MASM 未追踪公共宏依赖而混入旧对象文件，启动发生访问冲突；补充 OBJECT_DEPENDS 并重新编译后原生游戏和跟踪验收通过。

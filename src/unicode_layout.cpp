@@ -150,6 +150,35 @@ HitPosition TextLayout::hit_test(float x,float y) const {
     }
     return {offset,inside!=FALSE};
 }
+RasterImage TextLayout::rasterize() const {
+    ComApartment apartment;
+    const auto size=metrics();
+    if(size.width>16320 || size.height>16320) throw std::length_error("Glyph bitmap exceeds dimension limit");
+    const auto width=static_cast<UINT>(std::ceil((std::max)(size.width,1.0f)))+32;
+    const auto height=static_cast<UINT>(std::ceil((std::max)(size.height,1.0f)))+32;
+    ComPtr<IWICImagingFactory> wic;
+    checked(CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&wic)));
+    ComPtr<IWICBitmap> bitmap;
+    checked(wic->CreateBitmap(width,height,GUID_WICPixelFormat32bppPBGRA,WICBitmapCacheOnLoad,&bitmap));
+    ComPtr<ID2D1Factory> factory;
+    checked(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,factory.GetAddressOf()));
+    ComPtr<ID2D1RenderTarget> target;
+    checked(factory->CreateWicBitmapRenderTarget(bitmap.Get(),D2D1::RenderTargetProperties(),&target));
+    ComPtr<ID2D1SolidColorBrush> brush;
+    checked(target->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White),&brush));
+    target->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+    target->BeginDraw();
+    target->Clear(D2D1::ColorF(0,0,0,0));
+    target->DrawTextLayout(D2D1::Point2F(16,16),impl_->layout.Get(),brush.Get());
+    checked(target->EndDraw());
+    std::vector<DWRITE_LINE_METRICS> lines(metrics().lines);
+    UINT32 actual=0;
+    checked(impl_->layout->GetLineMetrics(lines.data(),static_cast<UINT32>(lines.size()),&actual));
+    RasterImage result{width,height,actual?lines[0].baseline:0,{}};
+    result.pixels.resize(static_cast<std::size_t>(width)*height*4);
+    checked(bitmap->CopyPixels(nullptr,width*4,static_cast<UINT>(result.pixels.size()),result.pixels.data()));
+    return result;
+}
 void TextLayout::render_png(const std::filesystem::path& path) const {
     ComApartment apartment;
     const auto size=metrics();

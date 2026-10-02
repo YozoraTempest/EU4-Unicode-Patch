@@ -1,6 +1,6 @@
 # EU4 Unicode UTF-8 补丁原型
 
-针对 EU4 1.37.5 Windows x64 的隔离研究原型。标准 UTF-8 中文已经通过本地化读取、主文字、普通按钮、颜色、资源图标、中文换行、国家地图标签及实际事件窗口验证。文本保持标准 UTF-8，不使用旧补丁的转义编码。
+针对 EU4 1.37.5 Windows x64 的隔离研究原型。标准 UTF-8 中文已经通过本地化读取、主文字、普通按钮、颜色、资源图标、中文换行、国家地图标签及实际事件窗口验证。系统字体模式已在游戏中显示扩展汉字“𠀀”、emoji、韩文与希腊文。文本保持标准 UTF-8，不使用旧补丁的转义编码。
 
 当前仍是研究版本，不能据此宣称整套游戏已经支持完整 Unicode。DLL 只接受本项目 `private/runtime/eu4.exe` 测试副本，不会在正式 Steam 游戏目录启用。
 
@@ -10,6 +10,8 @@
 | --- | --- |
 | 本地化 | 保留原始 UTF-8；源文件按游戏要求带 UTF-8 BOM |
 | 字符遍历 | UTFCPP 解析 1–4 字节字符；32 位 Unicode 标量；缓冲区截断保留完整字符 |
+| 原生字形表 | ASCII 保留原生表，U+0100–U+10FFFF 使用稳定指针的稀疏表；不截断码点，不占用私用区 |
+| 系统字体图集 | DirectWrite 根据夹具实际字符选择系统回退字体，生成原生 FNT/DDS；𠀀、😀、韩文进入游戏绘制 |
 | UI | 主文字、按钮及位图测宽/绘制路径按完整 UTF-8 字符推进 |
 | 颜色与图标 | `§Y…§!`、`§G…§!`、`§R…§!` 和 `£adm£/£dip£/£mil£`；中文尾字节不会误触发格式解析 |
 | 地图 | 中文国家名测宽、绘制、间距和遍历；进入法国战局后正常运行 |
@@ -18,13 +20,13 @@
 | Unicode 服务 | ICU 字素边界、组合字符/ZWJ 序列处理及 NFKC casefold 搜索键，独立测试通过 |
 | 后续字体模块 | DirectWrite 字体回退、复杂文字 shaping、双向文字、测宽及 UTF-8 字素命中测试；独立渲染通过 |
 
-运行证据与限制见 [validation.md](docs/validation.md)。游戏截图：[主菜单格式](docs/evidence/utf8-format.jpg)、[中文地图](docs/evidence/utf8-map.jpg)、[中文事件](docs/evidence/utf8-event.jpg)。[多语言字体模块截图](docs/evidence/unicode-layout.png)来自独立测试程序，尚未接入游戏绘制。
+运行证据与限制见 [validation.md](docs/validation.md)。游戏截图：[生僻字与更多语言](docs/evidence/utf8-supplementary.jpg)、[系统字体事件](docs/evidence/utf8-system-font-event.jpg)、[主菜单格式](docs/evidence/utf8-format.jpg)、[中文地图](docs/evidence/utf8-map.jpg)。[复杂文字布局截图](docs/evidence/unicode-layout.png)来自独立测试程序，复杂文字排版尚未接入游戏绘制。
 
 ## 本机运行
 
 ```powershell
 cd D:\Astra-Paradox\repos\EU4UnicodePatch
-.\tools\prepare-test.ps1
+.\tools\prepare-test.ps1 -SystemFonts
 .\tools\start-test.ps1
 ```
 
@@ -32,11 +34,11 @@ cd D:\Astra-Paradox\repos\EU4UnicodePatch
 
 修改 [本地化源文件](fixtures/localisation/eu4_unicode_probe_l_english.yml) 后，退出测试实例、重新准备并启动即可。
 
-首次准备约 5 GB 的游戏副本，需要本机已经安装 EU4、现有 x64 `version.dll` 加载器和工坊中文字体 `2976470733`：
+首次准备约 5 GB 的游戏副本，需要本机已经安装 EU4、现有 x64 `version.dll` 加载器。系统字体模式使用本机字体；不传 `-SystemFonts` 时使用工坊中文字体 `2976470733`：
 
 ```powershell
 .\tools\prepare-runtime.ps1
-.\tools\prepare-test.ps1
+.\tools\prepare-test.ps1 -SystemFonts
 ```
 
 游戏、DLC、加载器、工坊字体与测试存档不会进入分发包。项目目录名需为 `EU4UnicodePatch`，以满足原型目录校验。
@@ -53,7 +55,7 @@ git submodule update --init --recursive
 
 构建脚本通过 `vswhere` 查找工具链，实际探测本机编译器的 include 前缀，让 Ninja 正确记录头文件依赖。需要重新配置时传入 `-Fresh`。重新构建前退出测试游戏；游戏的调试组件可能保持 PDB 打开。
 
-三个 CTest 分别覆盖 UTF-8 核心、ICU Unicode 服务和 DirectWrite 布局。保护测试会在两个错误宿主中加载 DLL，检查拒绝日志与导出的 `Eu4UnicodeProbeEnabled()` 状态。
+四个 CTest 分别覆盖 UTF-8 核心、ICU Unicode 服务、DirectWrite 布局与栅格化，以及原生稀疏字形表。公共 MASM 宏文件也有显式构建依赖。保护测试会在两个错误宿主中加载 DLL，检查拒绝日志与导出的 `Eu4UnicodeProbeEnabled()` 状态。
 
 运行跟踪需要 Python、Frida 和 psutil。本机已有研究环境：
 
@@ -82,8 +84,9 @@ git submodule update --init --recursive
 
 ## 当前限制与完整范围
 
-- 游戏仍使用本机 BMFont 夹具。非 BMP 字形及未收录的韩文等显示缺字占位，原始 UTF-8 字节保留。
-- DirectWrite 的生僻字、更多语言、字体回退、shaping 和 bidi 已有可运行的独立模块，尚需接入游戏测宽、绘制、选区及命中测试。
+- 系统字体模式按本地化夹具生成图集，已经显示非 BMP 和新增语言字符；工坊字体模式的覆盖取决于原字体。未收录字符仍使用占位。当前不是运行时按需生成任意字形。
+- 图集每字号一页，宽 1024、最高 8192，超过预算会停止生成。字体生命周期、运行时缓存与多页纹理桥接仍需完善，见 [字体桥接说明](docs/font-bridge.md)。
+- DirectWrite 的 shaping、bidi 与复杂文字选区/命中测试已在独立模块通过，尚需接入游戏统一布局。逐码点图集不能正确排版阿拉伯文等复杂文字。
 - ICU 搜索键尚未接入游戏搜索入口；地图大小写路径目前保留非 ASCII 字节，只转换 ASCII 字母。
 - 中文输入/粘贴、编辑选区、多行、中文存档文件名、自定义名称往返、联机文本和完整汉化模组迁移均未完成验收。
 - 支持版本固定为此 SHA-256 的 EU4 1.37.5 EXE。没有对其他版本或加载中的游戏提供热补丁。

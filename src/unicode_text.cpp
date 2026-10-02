@@ -1,7 +1,13 @@
 #include "unicode_text.hpp"
 #include <utf8.h>
+#include <iterator>
 
 namespace eu4unicode {
+std::string encode(std::uint32_t scalar) {
+    std::string result;
+    utf8::append(scalar,std::back_inserter(result));
+    return result;
+}
 Scalar decode(std::string_view text) noexcept {
     if (text.empty()) return {0, 0, false};
     auto cursor = text.begin();
@@ -26,10 +32,7 @@ std::size_t scalar_prefix(std::string_view text, std::size_t limit) noexcept {
     return scalar.valid && end + scalar.bytes > limit ? end : limit;
 }
 std::uint32_t bitmap_slot(std::uint32_t cp) noexcept {
-    // The old engine embeds fields inside slots U+0100..U+09FF. The local
-    // Chinese BMFont moves these glyph IDs by E000; text retains its code point.
-    if (cp >= 0x100 && cp < 0xa00) return cp + 0xe000;
-    if (cp > 0xffff) return 0x2026;
+    // Higher code points use the sparse font registry, not inline engine slots.
     return cp;
 }
 }
