@@ -1,0 +1,25 @@
+#include "unicode_text.hpp"
+#include <utf8.h>
+
+namespace eu4unicode {
+Scalar decode(std::string_view text) noexcept {
+    if (text.empty()) return {0, 0, false};
+    auto cursor = text.begin();
+    try {
+        const auto cp = utf8::next(cursor, text.end());
+        return {cp, static_cast<std::size_t>(cursor - text.begin()), true};
+    } catch (...) {
+        return {0xfffd, 1, false};
+    }
+}
+bool valid_utf8(std::string_view text) noexcept {
+    return utf8::is_valid(text.begin(), text.end());
+}
+std::uint32_t bitmap_slot(std::uint32_t cp) noexcept {
+    // The old engine embeds fields inside slots U+0100..U+09FF. The local
+    // Chinese BMFont moves these glyph IDs by E000; text retains its code point.
+    if (cp >= 0x100 && cp < 0xa00) return cp + 0xe000;
+    if (cp > 0xffff) return 0x2026;
+    return cp;
+}
+}

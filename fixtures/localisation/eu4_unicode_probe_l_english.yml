@@ -1,0 +1,10 @@
+l_english:
+ FE_SINGLE_PLAYER:0 "单人游戏 UTF8"
+ FE_MULTI_PLAYER:0 "中文与 English"
+ FE_TUTORIAL:0 "日本語 한국어"
+ FE_OPTIONS:0 "设置 UTF8"
+ FE_EXIT:0 "退出游戏"
+ EU4_UNICODE_PROBE:0 "中文与 English 123，法兰西 é ü ß。"
+ EU4_UNICODE_FORMAT_PROBE:0 "§Y中文标题§! $FE_SINGLE_PLAYER$ £adm£"
+ EU4_UNICODE_WRAP_PROBE:0 "这是使用标准 UTF-8 编码的长段落，用于检查中文标点、字符推进、测宽与自动换行。第二句继续检查文字，避免将一个汉字拆成三个字节。"
+ EU4_UNICODE_SCALAR_PROBE:0 "非 BMP: 𠀀 😀 END | α ā — €"
