@@ -20,3 +20,6 @@ l_english:
  EU4_UNICODE_EVENT_OPTION:0 "§Y确认中文与图标 £adm£§!"
  EU4_UNICODE_WRAP_PROBE:0 "这是使用标准 UTF-8 编码的长段落，用于检查中文标点、字符推进、测宽与自动换行。第二句继续检查文字，避免将一个汉字拆成三个字节。"
  EU4_UNICODE_SCALAR_PROBE:0 "非 BMP: 𠀀 😀 END | α ā — €"
+ EU4_UNICODE_PERSISTENCE_TITLE:0 "UTF-8 持久化测试"
+ EU4_UNICODE_PERSISTENCE_DESC:0 "省份改名为巴黎𠀀，首府改名为中文😀。法国测试军队使用中文𠀀测试军，舰队使用中文😀测试舰队。保存、退出并重新读取后检查这些名称；初始化标记阻止重命名事件再次执行。"
+ EU4_UNICODE_PERSISTENCE_OPTION:0 "写入省份与首府名称"

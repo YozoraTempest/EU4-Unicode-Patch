@@ -1,0 +1,14 @@
+{
+  "filename": "持久化𠀀1444_11_11.eu4",
+  "format": "compressed",
+  "size": 3517427,
+  "sha256": "19dd84a706d0bbef598fdba1ed0c3a9ec8cc6774ab9f857099ac60d1c7f93add",
+  "names": {
+    "province": "巴黎𠀀",
+    "capital": "中文😀",
+    "army": "中文𠀀测试军",
+    "navy": "中文😀测试舰队"
+  },
+  "initialization_flag": true,
+  "native_records_checked": true
+}

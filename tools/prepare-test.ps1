@@ -3,6 +3,7 @@ param(
     [string]$FontDirectory = 'D:\SteamLibrary\steamapps\workshop\content\236850\2976470733\gfx\fonts',
     [switch]$SystemFonts,
     [switch]$SupplementarySaveProbe,
+    [switch]$PersistenceProbe,
     [string]$MigratedLocalisationDirectory
 )
 $ErrorActionPreference = 'Stop'
@@ -14,8 +15,14 @@ if (Get-CimInstance Win32_Process -Filter "Name='eu4.exe'" | Where-Object { $_.E
     throw 'Exit the isolated game before changing its localization or font fixture.'
 }
 $migratedFiles = @()
+if ($SupplementarySaveProbe -and $PersistenceProbe) {
+    throw 'Choose one dedicated save-name or persistence fixture.'
+}
 if ($SupplementarySaveProbe -and !$SystemFonts) {
     throw 'The supplementary save-name probe needs the system font atlas.'
+}
+if ($PersistenceProbe -and !$SystemFonts) {
+    throw 'The persistence probe needs the system font atlas.'
 }
 if ($MigratedLocalisationDirectory) {
     $migrationRoot = (Resolve-Path -LiteralPath $MigratedLocalisationDirectory).Path
@@ -59,12 +66,38 @@ $localization = [IO.File]::ReadAllText((Join-Path $projectRoot 'fixtures\localis
 if ($SupplementarySaveProbe) {
     $localization = $localization.Replace(' FRA:0 "法兰西"',' FRA:0 "法兰西𠀀"')
 }
+if ($PersistenceProbe) {
+    $localization = $localization.Replace(' FRA:0 "法兰西"',' FRA:0 "持久化𠀀"')
+}
 [IO.File]::WriteAllText((Join-Path $modRoot 'localisation\replace\eu4_unicode_probe_l_english.yml'),$localization,$utf8Bom)
 Copy-Item -LiteralPath (Join-Path $projectRoot 'fixtures\events\unicode_probe.txt') -Destination (Join-Path $modRoot 'events') -Force
+$persistenceEvent = Join-Path $modRoot 'events\unicode_persistence.txt'
+$countryFixture = Join-Path $modRoot 'common\countries\France.txt'
+foreach ($previousFixture in @($persistenceEvent,$countryFixture)) {
+    if (Test-Path -LiteralPath $previousFixture) {
+        if (!(Resolve-Path -LiteralPath $previousFixture).Path.StartsWith($modRoot + '\',[StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Unexpected generated persistence fixture path.'
+        }
+        Remove-Item -LiteralPath $previousFixture -Force
+    }
+}
+if ($PersistenceProbe) {
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'fixtures\events\unicode_persistence.txt') -Destination $persistenceEvent
+    # This vanilla script is CP1252. Convert its private copy explicitly to
+    # UTF-8, then replace only the two native unit-name templates.
+    $country = [Text.Encoding]::GetEncoding(1252).GetString([IO.File]::ReadAllBytes((Join-Path $GameDirectory 'common\countries\France.txt')))
+    $country = [regex]::Replace($country,'(?s)army_names\s*=\s*\{[^}]*\}','army_names = { "中文𠀀测试军" }')
+    $country = [regex]::Replace($country,'(?s)fleet_names\s*=\s*\{[^}]*\}','fleet_names = { "中文😀测试舰队" }')
+    New-Item -ItemType Directory -Path (Split-Path $countryFixture -Parent) -Force | Out-Null
+    [IO.File]::WriteAllText($countryFixture,$country,$utf8)
+}
 # Trigger the dedicated event for the human country when a fixture campaign
 # starts. Preserve every original on_action in this private generated copy.
 $actions = [IO.File]::ReadAllText((Join-Path $GameDirectory 'common\on_actions\00_on_actions.txt'))
 $actions = [regex]::new('on_startup\s*=\s*\{').Replace($actions, "on_startup = {`n if = { limit = { ai = no } country_event = { id = eu4_unicode.1 } }", 1)
+if ($PersistenceProbe) {
+    $actions = [regex]::new('on_startup\s*=\s*\{').Replace($actions, "on_startup = {`n if = { limit = { ai = no NOT = { has_country_flag = eu4_unicode_persistence_initialized } } country_event = { id = eu4_unicode.2 } }", 1)
+}
 [IO.File]::WriteAllText((Join-Path $modRoot 'common\on_actions\00_on_actions.txt'),$actions,$utf8)
 # Reuse installed mod fonts only in the private test fixture. They are not packaged.
 if ($SystemFonts) {

@@ -1,0 +1,278 @@
+{
+  "records": [
+    {
+      "session": "compressed",
+      "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+      "dll_sha256": "3ad4aba84b5b3c917bf5a262a6704d5831136d2ce6bd161b38bc8ad288c03373",
+      "conversions": [
+        {
+          "event": "path-conversion",
+          "value": "ASCII",
+          "encoded": "ASCII",
+          "roundtrip": "ASCII",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "法兰西",
+          "encoded": "法兰西",
+          "roundtrip": "法兰西",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "𐀀",
+          "encoded": "𐀀",
+          "roundtrip": "𐀀",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "𠀀",
+          "encoded": "𠀀",
+          "roundtrip": "𠀀",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "😀",
+          "encoded": "😀",
+          "roundtrip": "😀",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "􏿿",
+          "encoded": "􏿿",
+          "roundtrip": "􏿿",
+          "passed": true
+        },
+        {
+          "event": "path-capacity",
+          "passed": true,
+          "capacity": 5,
+          "value": "𠀀"
+        }
+      ],
+      "file_opens": [
+        {
+          "filename": "持久化𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "持久化𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "持久化𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "法兰西𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "法兰西1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "aae1444_11_11a.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "UTF8𠀀1444_11_11.tmp",
+          "access": 1073741824,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "UTF8𠀀1444_11_11.tmp",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "UTF8𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "UTF8𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "持久化𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "法兰西𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "法兰西1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "aae1444_11_11a.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        }
+      ]
+    },
+    {
+      "session": "plaintext",
+      "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+      "dll_sha256": "73ba3e94337184a1e8d83eeeb8184e04e4c4223dbe9e46d4baaa3f617826b799",
+      "conversions": [
+        {
+          "event": "path-conversion",
+          "value": "ASCII",
+          "encoded": "ASCII",
+          "roundtrip": "ASCII",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "法兰西",
+          "encoded": "法兰西",
+          "roundtrip": "法兰西",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "𐀀",
+          "encoded": "𐀀",
+          "roundtrip": "𐀀",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "𠀀",
+          "encoded": "𠀀",
+          "roundtrip": "𠀀",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "😀",
+          "encoded": "😀",
+          "roundtrip": "😀",
+          "passed": true
+        },
+        {
+          "event": "path-conversion",
+          "value": "􏿿",
+          "encoded": "􏿿",
+          "roundtrip": "􏿿",
+          "passed": true
+        },
+        {
+          "event": "path-capacity",
+          "passed": true,
+          "capacity": 5,
+          "value": "𠀀"
+        }
+      ],
+      "file_opens": [
+        {
+          "filename": "UTF8𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "UTF8𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "UTF8𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "UTF8𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "UTF8𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "UTF8𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "持久化𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "法兰西𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "法兰西1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "aae1444_11_11a.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        },
+        {
+          "filename": "持久化𠀀1444_11_11.eu4",
+          "access": 2147483648,
+          "successful": true,
+          "caller": "0x1a06914"
+        }
+      ]
+    }
+  ],
+  "save_records_verified": [
+    "persistence-compressed.json",
+    "persistence-plaintext.json"
+  ],
+  "generation_fixture_removed_before_reload": true,
+  "compressed_to_plaintext_native_resave_verified": true,
+  "plaintext_restart_reload_verified": true,
+  "native_load_game_without_frida_verified": true,
+  "native_load_game_dll_sha256": "73ba3e94337184a1e8d83eeeb8184e04e4c4223dbe9e46d4baaa3f617826b799",
+  "original_read_claim_withdrawn": true
+}

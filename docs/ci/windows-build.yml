@@ -19,3 +19,5 @@ jobs:
         run: ./tools/test-guards.ps1 -Configuration RelWithDebInfo
       - name: Legacy localization migration
         run: python tests/migration_tests.py
+      - name: Persistence evidence validation
+        run: python tests/persistence_tests.py

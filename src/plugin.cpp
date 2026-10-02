@@ -184,6 +184,7 @@ std::uintptr_t g_map_kern_call;
 std::uintptr_t g_input_return;
 std::uintptr_t g_text_limit_return;
 std::uintptr_t g_font_allocate,g_font_duplicate,g_font_store_return,g_font_initialize,g_font_skip,g_engine_new;
+std::uintptr_t g_path_pair_return;
 void main_draw_hook(); void main_copy_hook(); void main_measure_hook();
 void bitmap_measure_hook(); void bitmap_split_hook();
 void heap_zero_hook();
@@ -200,6 +201,7 @@ void map_vertex_count_hook();
 void input_hook();
 void text_limit_hook();
 void font_lookup_hook(); void font_store_hook();
+void path_pair_hook();
 void font_allocate_hook();
 void* allocate_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept {
     auto record=eu4unicode::allocate_unicode_glyph(table,scalar);
@@ -407,7 +409,9 @@ bool initialize(HMODULE module) {
         ,{0x1174e95,"e8e6025900"}
         ,{0x13b9567,"e814bc3400"}
         ,{0x117519e,"e8ddff5800"}
+        ,{0x1175c2c,"e84ff55800"}
         ,{0x1705180,"8b411085c00f840c010000"}
+        ,{0x19fc097,"8bca4983c302c1e10a0bc885c97417"}
     };
     for(const auto& site:sites) if(!check(site)) return false;
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
@@ -463,6 +467,7 @@ bool initialize(HMODULE module) {
     g_font_initialize=address(0x1595cb7);
     g_font_skip=address(0x1595f01);
     g_engine_new=address(0x1a332d4);
+    g_path_pair_return=address(0x19fc0a6);
     repeat_text=reinterpret_cast<RepeatText>(address(0x90320));
     append_text=reinterpret_cast<AppendText>(address(0x932f0));
     register_text=reinterpret_cast<RegisterText>(address(0x16fa8d0));
@@ -503,7 +508,8 @@ bool initialize(HMODULE module) {
         {0x15989d8,reinterpret_cast<void*>(text_limit_hook)},
         {0x1595c9b,reinterpret_cast<void*>(font_lookup_hook)},
         {0x1595cad,reinterpret_cast<void*>(font_allocate_hook)},
-        {0x1595ceb,reinterpret_cast<void*>(font_store_hook)} };
+        {0x1595ceb,reinterpret_cast<void*>(font_store_hook)},
+        {0x19fc097,reinterpret_cast<void*>(path_pair_hook)} };
     for(const auto& hook:hooks) {
         if(MH_CreateHook(image+hook.rva,hook.callback,nullptr)!=MH_OK) {
             log("Hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
@@ -525,12 +531,13 @@ bool initialize(HMODULE module) {
     // Allocate all patch/rollback buffers before modifying any instruction.
     const DataPatch constants[]={ {0x1595c88,bytes("ff000000"),bytes("ffff1000")},
         {0x16c2cba,bytes("00000001"),bytes("00000004")},
-        // Save-name builders and the save button call the CP1252 transliterator.
+        // Save-name builders and save/load selection call the CP1252 transliterator.
         // Skip only those calls: their strings already contain UTF-8. The
         // later filename-character validation and other callers stay native.
         {0x1174e95,bytes("e8e6025900"),bytes("9090909090")},
         {0x13b9567,bytes("e814bc3400"),bytes("9090909090")},
-        {0x117519e,bytes("e8ddff5800"),bytes("9090909090")} };
+        {0x117519e,bytes("e8ddff5800"),bytes("9090909090")},
+        {0x1175c2c,bytes("e84ff55800"),bytes("9090909090")} };
     std::size_t applied=0;
     bool constants_ok=true;
     for(const auto& patch:constants) {

@@ -2,6 +2,7 @@
   "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
   "dll_sha256": "943458411da9d56c3d97868fd38e4194adcb7e1b7366ff6a8686e2b92095cf31",
   "evidence_method": "Native UI observations in isolated game without Frida; generated filenames from localization, not IME or clipboard input.",
+  "correction": "The previous restart read claim was based only on entering the world. U+20000 paths were converted to U+10000 and failed to open; the game initialized the default world. This artifact proves writes only. See persistence.md for the corrected path and data-roundtrip evidence.",
   "records": [
     {
       "filename": "法兰西1444_11_11.eu4",
@@ -15,7 +16,8 @@
       ],
       "corrupt_member": null,
       "native_manual_save": true,
-      "restart_continue_loaded": true
+      "restart_continue_loaded": null,
+      "read_verification": "World observed; unique persisted fields were not checked."
     },
     {
       "filename": "法兰西𠀀1444_11_11.eu4",
@@ -29,7 +31,8 @@
       ],
       "corrupt_member": null,
       "native_manual_save": true,
-      "restart_continue_loaded": true
+      "restart_continue_loaded": false,
+      "read_verification": "Claim withdrawn: native supplementary path conversion opened a nonexistent U+10000 filename."
     }
   ]
 }

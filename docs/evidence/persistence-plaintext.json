@@ -1,0 +1,14 @@
+{
+  "filename": "UTF8𠀀1444_11_11.eu4",
+  "format": "plaintext",
+  "size": 34250903,
+  "sha256": "ec0c24d370613307e7184dbcb15986a7901723f67beec234a947184ad4292621",
+  "names": {
+    "province": "巴黎𠀀",
+    "capital": "中文😀",
+    "army": "中文𠀀测试军",
+    "navy": "中文😀测试舰队"
+  },
+  "initialization_flag": true,
+  "native_records_checked": true
+}

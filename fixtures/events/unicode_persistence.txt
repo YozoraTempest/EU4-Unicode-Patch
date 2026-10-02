@@ -1,0 +1,17 @@
+namespace = eu4_unicode
+
+country_event = {
+    id = eu4_unicode.2
+    title = EU4_UNICODE_PERSISTENCE_TITLE
+    desc = EU4_UNICODE_PERSISTENCE_DESC
+    picture = DIPLOMACY_eventPicture
+    is_triggered_only = yes
+    option = {
+        name = EU4_UNICODE_PERSISTENCE_OPTION
+        capital_scope = {
+            change_province_name = "巴黎𠀀"
+            rename_capital = "中文😀"
+        }
+        set_country_flag = eu4_unicode_persistence_initialized
+    }
+}

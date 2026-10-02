@@ -22,7 +22,7 @@ target_link_libraries(fontpack PRIVATE unicode_layout)
 add_subdirectory(vendor/minhook)
 add_library(glyph_registry STATIC src/glyph_registry.cpp)
 target_include_directories(glyph_registry PUBLIC include)
-add_library(eu4_unicode_probe SHARED src/plugin.cpp src/text_hooks.asm src/map_hooks.asm src/font_hooks.asm)
+add_library(eu4_unicode_probe SHARED src/plugin.cpp src/text_hooks.asm src/map_hooks.asm src/font_hooks.asm src/path_hooks.asm)
 set_source_files_properties(src/text_hooks.asm src/map_hooks.asm src/font_hooks.asm
     PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/hook_context.inc")
 target_include_directories(eu4_unicode_probe PRIVATE src)
