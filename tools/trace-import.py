@@ -17,12 +17,38 @@ EXPECTED_HASH = "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771
 
 SCRIPT = r"""
 const base=Process.mainModule.base;
+Process.setExceptionHandler(details => {
+  // OutputDebugString uses a first-chance system exception for every message.
+  // It is routine debugger traffic, not a native memory fault.
+  if(details.type==='system') return false;
+  const context={};
+  for(const key of ['rip','rax','rbx','rcx','rdx','rsi','rdi','rbp','rsp','r8','r9','r10','r11','r12','r13','r14','r15'])
+    if(details.context[key]) context[key]=details.context[key].toString();
+  send({event:'native-exception',kind:details.type,rva:details.address.sub(base).toString(),context});
+  return false;
+});
 function text(p) {
   const n=p.add(16).readU64().toNumber();
   const data=p.add(24).readU64().compare(16)<0?p:p.readPointer();
   return {length:n,bytes:Array.from(new Uint8Array(data.readByteArray(Math.min(n,512))))};
 }
 const seen=new Set();
+const vertexBudgets=new Map();
+const vertexSeen=new Set();
+Interceptor.attach(base.add(0xfd74a7),{onEnter(){
+  vertexBudgets.set(Process.getCurrentThreadId(),{capacity:this.context.rdi.toUInt32()*6,
+    value:text(this.context.r8)});
+}});
+Interceptor.attach(base.add(0xfd74ac),{onEnter(){
+  const thread=Process.getCurrentThreadId(),record=vertexBudgets.get(thread);
+  vertexBudgets.delete(thread);
+  if(!record) return;
+  const vertices=this.context.rax.toUInt32();
+  if(vertices>record.capacity) send({event:'vertex-overflow',vertices,...record});
+  else if(record.value.bytes.some(byte=>byte>=128)&&!vertexSeen.has(record.value.bytes.join(','))) {
+    vertexSeen.add(record.value.bytes.join(','));send({event:'vertex-budget',vertices,...record});
+  }
+}});
 Interceptor.attach(base.add(0x16fd650), {onEnter(args) {
   const key=text(args[0]);
   const name=String.fromCharCode(...key.bytes);
@@ -142,6 +168,8 @@ def main():
                 time.sleep(0.5)
         if errors:
             raise RuntimeError("Runtime trace reported script errors")
+        if process.poll() is not None:
+            raise RuntimeError(f"Isolated game exited before trace completed: {process.returncode:#x}")
     finally:
         # End this dedicated process before releasing hot text hooks.
         # Interactive tests use start-test.ps1 and have no Frida agent.

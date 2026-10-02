@@ -17,3 +17,5 @@ jobs:
         run: ctest --test-dir build -C RelWithDebInfo --output-on-failure
       - name: Reject unrelated hosts
         run: ./tools/test-guards.ps1 -Configuration RelWithDebInfo
+      - name: Legacy localization migration
+        run: python tests/migration_tests.py

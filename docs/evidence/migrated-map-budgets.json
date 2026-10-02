@@ -1,0 +1,758 @@
+{
+  "artifact": {
+    "event": "artifact",
+    "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+    "dll_sha256": "52478c1e38240debcfa49b2322d6a092e2dd1f64e1dae266a5c7e8136e87baa8",
+    "font_backend": "workshop"
+  },
+  "translated_files": 146,
+  "converted_sequences": 2781965,
+  "unicode_map_labels": 186,
+  "overflow": 0,
+  "budgets": [
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 42,
+      "vertices": 42
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 48,
+      "vertices": 48
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 42,
+      "vertices": 42
+    },
+    {
+      "capacity": 54,
+      "vertices": 54
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 48,
+      "vertices": 48
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 42,
+      "vertices": 42
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 54,
+      "vertices": 54
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 42,
+      "vertices": 42
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 42,
+      "vertices": 42
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 12,
+      "vertices": 12
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 36,
+      "vertices": 36
+    },
+    {
+      "capacity": 66,
+      "vertices": 66
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 42,
+      "vertices": 42
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 24,
+      "vertices": 24
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    },
+    {
+      "capacity": 42,
+      "vertices": 42
+    },
+    {
+      "capacity": 42,
+      "vertices": 42
+    },
+    {
+      "capacity": 30,
+      "vertices": 30
+    },
+    {
+      "capacity": 18,
+      "vertices": 18
+    }
+  ]
+}

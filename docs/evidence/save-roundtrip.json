@@ -1,0 +1,35 @@
+{
+  "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+  "dll_sha256": "943458411da9d56c3d97868fd38e4194adcb7e1b7366ff6a8686e2b92095cf31",
+  "evidence_method": "Native UI observations in isolated game without Frida; generated filenames from localization, not IME or clipboard input.",
+  "records": [
+    {
+      "filename": "法兰西1444_11_11.eu4",
+      "utf8_hex": "e6b395e585b0e8a5bf313434345f31315f31312e657534",
+      "size": 3530139,
+      "sha256": "f4d8736d12843754f024e44198e6f9494b51960a5b61a14562e63832a67d5030",
+      "members": [
+        "gamestate",
+        "meta",
+        "ai"
+      ],
+      "corrupt_member": null,
+      "native_manual_save": true,
+      "restart_continue_loaded": true
+    },
+    {
+      "filename": "法兰西𠀀1444_11_11.eu4",
+      "utf8_hex": "e6b395e585b0e8a5bff0a08080313434345f31315f31312e657534",
+      "size": 3530096,
+      "sha256": "e091d4d15d568a0c959b48bf3c84e2889a383f741a8a2f519db8d85f7f0f7a83",
+      "members": [
+        "gamestate",
+        "meta",
+        "ai"
+      ],
+      "corrupt_member": null,
+      "native_manual_save": true,
+      "restart_continue_loaded": true
+    }
+  ]
+}

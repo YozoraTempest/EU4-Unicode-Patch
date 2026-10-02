@@ -3,6 +3,7 @@
 #include <MinHook.h>
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
+#include "unicode_editor.hpp"
 #include "glyph_registry.hpp"
 #include <array>
 #include <atomic>
@@ -10,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <intrin.h>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -42,6 +44,17 @@ struct EngineString {
     const char* data() const { return capacity<16?storage.small:storage.pointer; }
 };
 static_assert(sizeof(EngineString)==32);
+using Transliterate=void(*)(EngineString*);
+Transliterate original_transliterate=nullptr;
+void transliterate_save_path(EngineString* text) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
+    // Preserve only the observed save-games filesystem path. The virtual
+    // filesystem still performs its ordinary illegal-path validation.
+    if(caller==0x5ca24b && value.substr(0,11)=="save games/" && eu4unicode::valid_utf8(value)) return;
+    original_transliterate(text);
+}
 struct LoadContext { int line; bool replace; char padding[11]; void* collection; };
 static_assert(offsetof(LoadContext,collection)==16);
 using RegisterText=void(*)(void*,const char*,const char*,int,int,bool);
@@ -63,24 +76,33 @@ bool editor_key(void* widget,const KeyEvent* event) {
         return original_editor_key(widget,event);
     const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
     if(!eu4unicode::valid_utf8(value)) return original_editor_key(widget,event);
-    std::size_t start=*column,end=*column;
+    eu4unicode::EditPlan plan{};
     try {
-        if(event->key==8 || event->key==0x40000050) start=eu4unicode::previous_grapheme(value,start);
-        else if(event->key==127 || event->key==0x4000004f) end=eu4unicode::next_grapheme(value,end);
-        else return original_editor_key(widget,event);
+        eu4unicode::EditKey key;
+        switch(event->key) {
+        case 8: key=eu4unicode::EditKey::backspace; break;
+        case 127: key=eu4unicode::EditKey::forward_delete; break;
+        case 0x40000050: key=eu4unicode::EditKey::left; break;
+        case 0x4000004f: key=eu4unicode::EditKey::right; break;
+        default: return original_editor_key(widget,event);
+        }
+        plan=eu4unicode::plan_edit(value,*column,key);
     } catch(...) { log("Unicode editing boundary failed; key ignored."); return true; }
-    const auto length=end-start;
-    if(length<=1) return original_editor_key(widget,event);
     if(event->key==8 || event->key==127) {
+        const auto start=plan.erase_begin,end=plan.erase_end;
+        const auto length=end-start;
+        if(length<=1) return original_editor_key(widget,event);
         // Remove all but the cluster's first byte before invoking the native
         // one-byte deletion. The engine then emits its ordinary change event
         // only after the complete grapheme has been removed.
         auto data=const_cast<char*>(text->data());
         std::memmove(data+start+1,data+end,static_cast<std::size_t>(text->size)-end+1);
         text->size-=length-1;
-        if(event->key==8) *column=static_cast<std::uint16_t>(start+1);
+        *column=static_cast<std::uint16_t>(event->key==8?start+1:start);
         return original_editor_key(widget,event);
     }
+    const auto length=plan.caret>*column?plan.caret-*column:*column-plan.caret;
+    if(length<=1) return original_editor_key(widget,event);
     bool handled=false;
     for(std::size_t i=0;i<length;++i) handled=original_editor_key(widget,event)||handled;
     return handled;
@@ -157,6 +179,7 @@ std::uintptr_t g_bitmap_format_return,g_bitmap_plain_entry,g_bitmap_icon_end_ret
 std::uintptr_t g_map_copy_return,g_map_measure_return,g_map_draw_return,g_map_kern_return;
 std::uintptr_t g_map_justify_draw_return,g_map_justify_measure_return,g_map_justify_advance_return;
 std::uintptr_t g_map_adjust_copy_return,g_map_adjust_glyph_return,g_map_upper_return,g_map_lower_return;
+std::uintptr_t g_map_vertex_count_return;
 std::uintptr_t g_map_kern_call;
 std::uintptr_t g_input_return;
 std::uintptr_t g_text_limit_return;
@@ -173,6 +196,7 @@ void bitmap_format_hook(); void bitmap_icon_end_hook();
 void map_copy_hook(); void map_measure_hook(); void map_draw_hook(); void map_kern_hook();
 void map_justify_draw_hook(); void map_justify_measure_hook(); void map_justify_advance_hook();
 void map_adjust_copy_hook(); void map_adjust_glyph_hook(); void map_upper_hook(); void map_lower_hook();
+void map_vertex_count_hook();
 void input_hook();
 void text_limit_hook();
 void font_lookup_hook(); void font_store_hook();
@@ -375,10 +399,15 @@ bool initialize(HMODULE module) {
         ,{0xfd53c4,"ffc689b5e807000048ffc148898d18010000"}
         ,{0xfd6680,"488d85900000004983fd10480f43c60fb60418884500"}
         ,{0xfd6bc0,"488d85900000004983fd10480f43c60fb60408498b14c6"}
+        ,{0xfd7330,"488d43104983f9107204488b43100fb60401498b94c420010000"}
         ,{0x14ba825,"0fbe0c28488d1c28e836065900ffc788038bc7"}
         ,{0x1550425,"0fbe0c28488d1c28e80aaa4f00ffc788038bc7"}
         ,{0x1569f91,"8b45bc32db3c8073050fb6d8eb12"}
         ,{0x15366c0,"48895c240848896c24184889742420574883ec40"}
+        ,{0x1174e95,"e8e6025900"}
+        ,{0x13b9567,"e814bc3400"}
+        ,{0x117519e,"e8ddff5800"}
+        ,{0x1705180,"8b411085c00f840c010000"}
     };
     for(const auto& site:sites) if(!check(site)) return false;
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
@@ -423,6 +452,7 @@ bool initialize(HMODULE module) {
     g_map_justify_advance_return=address(0xfd53d6);
     g_map_adjust_copy_return=address(0xfd66ab);
     g_map_adjust_glyph_return=address(0xfd6bd7);
+    g_map_vertex_count_return=address(0xfd734a);
     g_map_upper_return=address(0x14ba838);
     g_map_lower_return=address(0x1550438);
     g_input_return=address(0x156a22a);
@@ -467,6 +497,7 @@ bool initialize(HMODULE module) {
         {0xfd53c4,reinterpret_cast<void*>(map_justify_advance_hook)},
         {0xfd6680,reinterpret_cast<void*>(map_adjust_copy_hook)},
         {0xfd6bc0,reinterpret_cast<void*>(map_adjust_glyph_hook)},
+        {0xfd7330,reinterpret_cast<void*>(map_vertex_count_hook)},
         {0x14ba825,reinterpret_cast<void*>(map_upper_hook)},
         {0x1550425,reinterpret_cast<void*>(map_lower_hook)},
         {0x15989d8,reinterpret_cast<void*>(text_limit_hook)},
@@ -478,6 +509,10 @@ bool initialize(HMODULE module) {
             log("Hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
         }
     }
+    if(MH_CreateHook(image+0x1705180,reinterpret_cast<void*>(transliterate_save_path),
+        reinterpret_cast<void**>(&original_transliterate))!=MH_OK) {
+        log("Save path hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
     if(experimental_input) {
         if(MH_CreateHook(image+0x1569f91,reinterpret_cast<void*>(input_hook),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x15366c0,reinterpret_cast<void*>(editor_key),
@@ -486,20 +521,30 @@ bool initialize(HMODULE module) {
         }
         log("Experimental UTF-8 input and single-line grapheme editing enabled.");
     }
-    struct ConstantPatch { std::size_t rva; std::uint32_t before,after; };
-    const ConstantPatch constants[]={ {0x1595c88,0xff,0x10ffff},
-        {0x16c2cba,0x1000000,0x4000000} };
+    struct DataPatch { std::size_t rva; std::vector<std::byte> before,after; };
+    // Allocate all patch/rollback buffers before modifying any instruction.
+    const DataPatch constants[]={ {0x1595c88,bytes("ff000000"),bytes("ffff1000")},
+        {0x16c2cba,bytes("00000001"),bytes("00000004")},
+        // Save-name builders and the save button call the CP1252 transliterator.
+        // Skip only those calls: their strings already contain UTF-8. The
+        // later filename-character validation and other callers stay native.
+        {0x1174e95,bytes("e8e6025900"),bytes("9090909090")},
+        {0x13b9567,bytes("e814bc3400"),bytes("9090909090")},
+        {0x117519e,bytes("e8ddff5800"),bytes("9090909090")} };
     std::size_t applied=0;
     bool constants_ok=true;
     for(const auto& patch:constants) {
         ++applied;
-        if(!write(patch.rva,&patch.after,4)) { constants_ok=false; break; }
+        if(!write(patch.rva,patch.after.data(),patch.after.size())) { constants_ok=false; break; }
     }
     const bool enabled=constants_ok && MH_EnableHook(MH_ALL_HOOKS)==MH_OK;
     if(!enabled) {
         log("Patch activation failed; restoring original instructions and constants.");
         MH_DisableHook(MH_ALL_HOOKS);
-        while(applied) { const auto& patch=constants[--applied]; write(patch.rva,&patch.before,4); }
+        while(applied) {
+            const auto& patch=constants[--applied];
+            write(patch.rva,patch.before.data(),patch.before.size());
+        }
         MH_Uninitialize();
         return false;
     }

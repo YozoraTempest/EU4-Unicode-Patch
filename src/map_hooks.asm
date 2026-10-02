@@ -13,11 +13,31 @@ EXTERN g_map_justify_measure_return:QWORD
 EXTERN g_map_justify_advance_return:QWORD
 EXTERN g_map_adjust_copy_return:QWORD
 EXTERN g_map_adjust_glyph_return:QWORD
+EXTERN g_map_vertex_count_return:QWORD
 EXTERN g_map_upper_return:QWORD
 EXTERN g_map_lower_return:QWORD
 include hook_context.inc
 
 .CODE
+map_vertex_count_hook PROC
+    lea rax, [rbx+10h]
+    cmp r9, 10h
+    jb map_vertex_count_inline
+    mov rax, [rbx+10h]
+map_vertex_count_inline:
+    SAVE_CONTEXT
+    add rcx, rax
+    call decode_z
+    mov r10, rax
+    shr r10, 32
+    add [rsp+88h], r10
+    mov eax, eax
+    mov [rsp+80h], rax
+    RESTORE_CONTEXT
+    LOOKUP_GLYPH rdx, r12, rax, 120h
+    jmp qword ptr [g_map_vertex_count_return]
+map_vertex_count_hook ENDP
+
 map_copy_hook PROC
     SAVE_CONTEXT
     lea rdx, [r15+rax]

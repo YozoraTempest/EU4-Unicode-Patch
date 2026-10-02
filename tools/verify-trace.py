@@ -8,6 +8,8 @@ ROOT=Path(__file__).resolve().parents[1]
 messages=[json.loads(line) for line in (ROOT/"private/import-trace.jsonl").read_text(encoding="utf-8").splitlines()]
 assert not any(message.get("type")=="error" for message in messages),"Runtime trace contains script errors"
 events=[message["payload"] for message in messages if message.get("type")=="send"]
+assert not any(event["event"]=="native-exception" for event in events),"Game reported a native exception"
+assert not any(event["event"]=="vertex-overflow" for event in events),"Native map vertices exceeded allocation"
 expected={
     "FE_SINGLE_PLAYER":"单人游戏 UTF8",
     "FE_MULTI_PLAYER":"中文与 English",

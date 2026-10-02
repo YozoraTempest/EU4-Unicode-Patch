@@ -1,7 +1,9 @@
 param(
     [string]$GameDirectory = 'D:\SteamLibrary\steamapps\common\Europa Universalis IV',
     [string]$FontDirectory = 'D:\SteamLibrary\steamapps\workshop\content\236850\2976470733\gfx\fonts',
-    [switch]$SystemFonts
+    [switch]$SystemFonts,
+    [switch]$SupplementarySaveProbe,
+    [string]$MigratedLocalisationDirectory
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
@@ -11,13 +13,52 @@ $runtimeExe = Join-Path $projectRoot 'private\runtime\eu4.exe'
 if (Get-CimInstance Win32_Process -Filter "Name='eu4.exe'" | Where-Object { $_.ExecutablePath -eq $runtimeExe }) {
     throw 'Exit the isolated game before changing its localization or font fixture.'
 }
+$migratedFiles = @()
+if ($SupplementarySaveProbe -and !$SystemFonts) {
+    throw 'The supplementary save-name probe needs the system font atlas.'
+}
+if ($MigratedLocalisationDirectory) {
+    $migrationRoot = (Resolve-Path -LiteralPath $MigratedLocalisationDirectory).Path
+    $report = Get-Content -LiteralPath (Join-Path $migrationRoot 'unicode-migration.json') -Raw | ConvertFrom-Json
+    if ($report.format -ne 'EU4dll-escaped-CP1252-in-UTF8') { throw 'Unknown localization migration report.' }
+    foreach ($record in $report.records) {
+        $path = [IO.Path]::GetFullPath((Join-Path $migrationRoot $record.file))
+        if (!$path.StartsWith($migrationRoot + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or
+            [IO.Path]::GetExtension($path) -ne '.yml' -or
+            (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $record.utf8_sha256) {
+            throw 'Migrated localization path or checksum mismatch.'
+        }
+        $migratedFiles += @{ Path=$path; Relative=$record.file }
+    }
+    if ($SystemFonts) { throw 'Full migrated localization needs its existing font coverage; system atlas mode currently covers the probe only.' }
+}
 foreach ($relative in @('localisation\replace','gfx\fonts','interface','events','common\on_actions')) {
     New-Item -ItemType Directory -Path (Join-Path $modRoot $relative) -Force | Out-Null
 }
 New-Item -ItemType Directory -Path (Join-Path $testRoot 'mod') -Force | Out-Null
+# This localization directory belongs exclusively to the generated test mod.
+# Clear files from a previous optional migration so returning to probe mode is
+# reproducible. Never remove files from the source mod or user directories.
+$localizationRoot = Join-Path $modRoot 'localisation'
+if ((Resolve-Path -LiteralPath $localizationRoot).Path -ne [IO.Path]::GetFullPath($localizationRoot)) {
+    throw 'Unexpected generated localization directory.'
+}
+Get-ChildItem -LiteralPath $localizationRoot -Recurse -File -Filter '*.yml' | ForEach-Object {
+    if (!$_.FullName.StartsWith($localizationRoot + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected generated localization file.' }
+    Remove-Item -LiteralPath $_.FullName -Force
+}
+foreach ($file in $migratedFiles) {
+    $target = [IO.Path]::GetFullPath((Join-Path $localizationRoot $file.Relative))
+    if (!$target.StartsWith($localizationRoot + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Migrated file escapes the generated localization directory.' }
+    New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+    Copy-Item -LiteralPath $file.Path -Destination $target -Force
+}
 $utf8Bom = [Text.UTF8Encoding]::new($true)
 $utf8 = [Text.UTF8Encoding]::new($false)
 $localization = [IO.File]::ReadAllText((Join-Path $projectRoot 'fixtures\localisation\eu4_unicode_probe_l_english.yml'))
+if ($SupplementarySaveProbe) {
+    $localization = $localization.Replace(' FRA:0 "法兰西"',' FRA:0 "法兰西𠀀"')
+}
 [IO.File]::WriteAllText((Join-Path $modRoot 'localisation\replace\eu4_unicode_probe_l_english.yml'),$localization,$utf8Bom)
 Copy-Item -LiteralPath (Join-Path $projectRoot 'fixtures\events\unicode_probe.txt') -Destination (Join-Path $modRoot 'events') -Force
 # Trigger the dedicated event for the human country when a fixture campaign
@@ -27,7 +68,7 @@ $actions = [regex]::new('on_startup\s*=\s*\{').Replace($actions, "on_startup = {
 [IO.File]::WriteAllText((Join-Path $modRoot 'common\on_actions\00_on_actions.txt'),$actions,$utf8)
 # Reuse installed mod fonts only in the private test fixture. They are not packaged.
 if ($SystemFonts) {
-    & (Join-Path $projectRoot 'build\fontpack.exe') (Join-Path $projectRoot 'fixtures\localisation\eu4_unicode_probe_l_english.yml') (Join-Path $modRoot 'gfx\fonts')
+    & (Join-Path $projectRoot 'build\fontpack.exe') (Join-Path $modRoot 'localisation\replace\eu4_unicode_probe_l_english.yml') (Join-Path $modRoot 'gfx\fonts')
     if ($LASTEXITCODE -ne 0) { throw 'System font atlas generation failed.' }
 } else {
     foreach ($size in @(14,16,18,24,'map')) {

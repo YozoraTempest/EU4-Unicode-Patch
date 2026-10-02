@@ -12,6 +12,14 @@ New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
 foreach ($folder in @('include','src','tests','tools','fixtures','docs','third-party')) {
     Copy-Item (Join-Path $projectRoot $folder) $packageRoot -Recurse -Force
 }
+# Python test imports can create ignored caches in source directories.
+# Only remove their copies inside the verified generated package.
+Get-ChildItem -LiteralPath $packageRoot -Recurse -Directory -Filter '__pycache__' | ForEach-Object {
+    if (!$_.FullName.StartsWith($packageRoot + '\',[StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Unexpected package cache path.'
+    }
+    Remove-Item -LiteralPath $_.FullName -Recurse -Force
+}
 foreach ($file in @('README.md','LICENSE','THIRD_PARTY_NOTICES.md','CMakeLists.txt','.gitmodules','.gitignore')) {
     Copy-Item (Join-Path $projectRoot $file) $packageRoot -Force
 }
