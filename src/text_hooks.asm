@@ -1,5 +1,7 @@
 EXTERN decode_z:PROC
 EXTERN copy_scalar:PROC
+EXTERN prepare_wrap_context:PROC
+EXTERN unicode_wrap_before:PROC
 EXTERN previous_slot:PROC
 EXTERN g_main_draw_return:QWORD
 EXTERN g_main_copy_return:QWORD
@@ -20,58 +22,53 @@ EXTERN g_button_end:QWORD
 EXTERN g_alternate_measure_return:QWORD
 EXTERN g_wrap_return:QWORD
 EXTERN g_wrap_branch:QWORD
+EXTERN format_scalar:PROC
+EXTERN reset_button_extra:PROC
+EXTERN append_icon_tail:PROC
+EXTERN g_main_measure_entry:QWORD
+EXTERN g_main_format_return:QWORD
+EXTERN g_main_plain_entry:QWORD
+EXTERN g_main_icon_copy_return:QWORD
+EXTERN g_main_icon_draw_return:QWORD
+EXTERN g_button_format_return:QWORD
+EXTERN g_button_plain_entry:QWORD
+EXTERN g_button_icon_copy_return:QWORD
+EXTERN g_button_icon_draw_return:QWORD
+EXTERN g_button_draw_format_return:QWORD
+EXTERN g_button_draw_plain_entry:QWORD
+EXTERN g_bitmap_format_return:QWORD
+EXTERN g_bitmap_plain_entry:QWORD
+EXTERN g_bitmap_icon_end_return:QWORD
+EXTERN dispatch_utf8:PROC
+EXTERN g_input_return:QWORD
+EXTERN bounded_text_length:PROC
+EXTERN g_text_limit_return:QWORD
 
-; Each hook enters at an instruction boundary with RSP 16-byte aligned.
-; Save all volatile GPRs, flags and SIMD registers before calling C++.
-SAVE_CONTEXT MACRO
-    pushfq
-    sub rsp, 0e8h
-    movdqu [rsp+20h], xmm0
-    movdqu [rsp+30h], xmm1
-    movdqu [rsp+40h], xmm2
-    movdqu [rsp+50h], xmm3
-    movdqu [rsp+60h], xmm4
-    movdqu [rsp+70h], xmm5
-    mov [rsp+80h], rax
-    mov [rsp+88h], rcx
-    mov [rsp+90h], rdx
-    mov [rsp+98h], r8
-    mov [rsp+0a0h], r9
-    mov [rsp+0a8h], r10
-    mov [rsp+0b0h], r11
-ENDM
-RESTORE_CONTEXT MACRO
-    movdqu xmm0, [rsp+20h]
-    movdqu xmm1, [rsp+30h]
-    movdqu xmm2, [rsp+40h]
-    movdqu xmm3, [rsp+50h]
-    movdqu xmm4, [rsp+60h]
-    movdqu xmm5, [rsp+70h]
-    mov rax, [rsp+80h]
-    mov rcx, [rsp+88h]
-    mov rdx, [rsp+90h]
-    mov r8, [rsp+98h]
-    mov r9, [rsp+0a0h]
-    mov r10, [rsp+0a8h]
-    mov r11, [rsp+0b0h]
-    add rsp, 0e8h
-    popfq
-ENDM
-LOOKUP_GLYPH MACRO result, font, slot, table_offset
-    LOCAL selected
-    mov result, [font+slot*8+table_offset]
-    test result, result
-    jnz selected
-    cmp slot, 20h
-    jb selected
-    mov result, [font+10130h+table_offset]
-    test result, result
-    jnz selected
-    mov result, [font+1f8h+table_offset]
-selected:
-ENDM
+include hook_context.inc
 
 .CODE
+text_limit_hook PROC
+    SAVE_CONTEXT
+    mov rcx, rdi
+    mov edx, r15d
+    call bounded_text_length
+    mov r15d, eax
+    RESTORE_CONTEXT
+    mov eax, 7d00h
+    jmp qword ptr [g_text_limit_return]
+text_limit_hook ENDP
+
+input_hook PROC
+    SAVE_CONTEXT
+    mov rcx, r15
+    mov rdx, r14
+    lea r8, [rbp-44h]
+    mov r9d, [rbp-3ch]
+    call dispatch_utf8
+    RESTORE_CONTEXT
+    jmp qword ptr [g_input_return]
+input_hook ENDP
+
 main_draw_hook PROC
     SAVE_CONTEXT
     add rcx, r9
@@ -94,10 +91,17 @@ main_copy_hook PROC
     movsxd rcx, esi
     mov r11, g_copy_buffer
     SAVE_CONTEXT
-    mov rcx, r9
+    test edi, edi
+    jnz main_copy_context_ready
+    mov rcx, [rsp+0a0h]
+    mov rdx, [r12+10h]
+    call prepare_wrap_context
+main_copy_context_ready:
+    mov rcx, [rsp+0a0h]
     mov rdx, [r12+10h]
     sub rdx, rdi
-    lea r8, [r11+rsi]
+    mov r8, [rsp+0b0h]
+    add r8, rsi
     mov r9d, 7d00h
     sub r9d, esi
     call copy_scalar
@@ -110,8 +114,174 @@ main_copy_hook PROC
     mov eax, eax
     mov [rsp+80h], rax
     RESTORE_CONTEXT
+    cmp eax, 0ffh
+    ja main_copy_plain
     jmp qword ptr [g_main_copy_return]
+main_copy_plain:
+    jmp qword ptr [g_main_measure_entry]
 main_copy_hook ENDP
+
+main_format_hook PROC
+    lea r8, [rcx+r9]
+    SAVE_CONTEXT
+    mov rcx, r8
+    call format_scalar
+    cmp eax, 0ffh
+    ja main_format_plain
+    mov r10, rax
+    shr r10, 32
+    add r15d, r10d
+    add [rsp+88h], r10
+    add [rsp+98h], r10
+    mov eax, eax
+    mov [rsp+80h], rax
+    RESTORE_CONTEXT
+    cmp al, 0a7h
+    jmp qword ptr [g_main_format_return]
+main_format_plain:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_main_plain_entry]
+main_format_hook ENDP
+
+main_icon_copy_hook PROC
+    cmp byte ptr [r9], 0c2h
+    jne main_icon_copy_end
+    cmp byte ptr [r9+1], 0a3h
+    jne main_icon_copy_end
+    mov byte ptr [r8], 0a3h
+    inc edi
+    inc esi
+main_icon_copy_end:
+    mov byte ptr [rbp+rdx+1d0h], 0
+    jmp qword ptr [g_main_icon_copy_return]
+main_icon_copy_hook ENDP
+
+main_icon_draw_hook PROC
+    cmp byte ptr [r8], 0c2h
+    jne main_icon_draw_end
+    cmp byte ptr [r8+1], 0a3h
+    jne main_icon_draw_end
+    inc r15d
+main_icon_draw_end:
+    mov byte ptr [rbp+rcx+1d0h], 0
+    jmp qword ptr [g_main_icon_draw_return]
+main_icon_draw_hook ENDP
+
+button_format_hook PROC
+    lea rax, [rbp-38h]
+    cmp r15, 10h
+    cmovae rax, r12
+    SAVE_CONTEXT
+    lea rcx, [rax+rbx]
+    call format_scalar
+    cmp eax, 0ffh
+    ja button_format_plain
+    mov r10, rax
+    shr r10, 32
+    add r14d, r10d
+    add rbx, r10
+    test r10, r10
+    jz button_format_single
+    call reset_button_extra
+button_format_single:
+    RESTORE_CONTEXT
+    cmp byte ptr [rbx+rax], 0a7h
+    jmp qword ptr [g_button_format_return]
+button_format_plain:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_button_plain_entry]
+button_format_hook ENDP
+
+button_draw_format_hook PROC
+    lea rax, [rbp-60h]
+    cmp r12, 10h
+    cmovae rax, r13
+    mov ecx, r15d
+    SAVE_CONTEXT
+    add rcx, rax
+    call format_scalar
+    cmp eax, 0ffh
+    ja button_draw_format_plain
+    shr rax, 32
+    add r15d, eax
+    add [rsp+88h], rax
+    RESTORE_CONTEXT
+    cmp byte ptr [rax+rcx], 0a7h
+    lea rax, [rbp-60h]
+    jmp qword ptr [g_button_draw_format_return]
+button_draw_format_plain:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_button_draw_plain_entry]
+button_draw_format_hook ENDP
+
+bitmap_format_hook PROC
+    mov r9, [rbx+18h]
+    mov rcx, rbx
+    cmp r9, 10h
+    jb bitmap_format_inline
+    mov rcx, [rbx]
+bitmap_format_inline:
+    SAVE_CONTEXT
+    add rcx, rdi
+    call format_scalar
+    cmp eax, 0ffh
+    ja bitmap_format_plain
+    shr rax, 32
+    add edi, eax
+    RESTORE_CONTEXT
+    cmp byte ptr [rdi+rcx], 0a7h
+    jmp qword ptr [g_bitmap_format_return]
+bitmap_format_plain:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_bitmap_plain_entry]
+bitmap_format_hook ENDP
+
+bitmap_icon_end_hook PROC
+    ; RDX still addresses the source string at this loop exit.
+    cmp byte ptr [rdx+rdi], 0c2h
+    jne bitmap_icon_end
+    cmp byte ptr [rdx+rdi+1], 0a3h
+    jne bitmap_icon_end
+    inc edi
+bitmap_icon_end:
+    mov rax, [r14]
+    lea rdx, [rsp+20h]
+    mov byte ptr [rsp+rcx+20h], 0
+    jmp qword ptr [g_bitmap_icon_end_return]
+bitmap_icon_end_hook ENDP
+
+button_icon_copy_hook PROC
+    SAVE_CONTEXT
+    lea rdx, [rbp-38h]
+    cmp qword ptr [rbp-20h], 10h
+    jb button_icon_copy_inline
+    mov rdx, [rdx]
+button_icon_copy_inline:
+    add rdx, r14
+    lea rcx, [rsp+168h]
+    call append_icon_tail
+    test al, al
+    jz button_icon_copy_end
+    inc r14d
+button_icon_copy_end:
+    RESTORE_CONTEXT
+    mov byte ptr [rbp+rdx+0a0h], 0
+    jmp qword ptr [g_button_icon_copy_return]
+button_icon_copy_hook ENDP
+
+button_icon_draw_hook PROC
+    lea rax, [rbp-60h]
+    cmp r12, 10h
+    cmovae rax, r13
+    cmp byte ptr [rax+r15], 0c2h
+    jne button_icon_draw_end
+    cmp byte ptr [rax+r15+1], 0a3h
+    jne button_icon_draw_end
+    inc r15d
+button_icon_draw_end:
+    mov byte ptr [rbp+rdx+0a0h], 0
+    jmp qword ptr [g_button_icon_draw_return]
+button_icon_draw_hook ENDP
 
 main_measure_hook PROC
     SAVE_CONTEXT
@@ -243,7 +413,15 @@ main_wrap_hook PROC
     jne wrap_original
     jmp wrap_allow
 wrap_unicode:
+    mov ecx, edi
+    call unicode_wrap_before
+    test al, al
+    jz wrap_unicode_blocked
     RESTORE_CONTEXT
+    jmp wrap_allow
+wrap_unicode_blocked:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_wrap_branch]
 wrap_allow:
     lea eax, [rbx+rbx]
     movd xmm1, eax

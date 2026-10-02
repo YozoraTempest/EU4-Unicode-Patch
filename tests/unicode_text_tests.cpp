@@ -20,6 +20,15 @@ int main() {
     }
     check(remaining.empty(),"consume entire mixed text");
     check(valid_utf8(mixed),"valid mixed UTF-8");
+    for (std::size_t limit = 0; limit <= mixed.size(); ++limit) {
+        const auto end = scalar_prefix(mixed, limit);
+        check(end <= limit && valid_utf8(std::string_view(mixed).substr(0, end)),
+            "bounded buffers retain only complete UTF-8 scalars");
+        check(end == mixed.size() || end + decode(std::string_view(mixed).substr(end)).bytes > limit,
+            "bounded prefix uses all available space");
+    }
+    check(scalar_prefix(std::string(31999, 'A') + u8"𠀀Z", 32000) == 31999,
+        "engine text limit does not cut a supplementary scalar");
     for(const auto& bad:std::vector<std::string>{"\xc0\xaf","\xed\xa0\x80",
         "\xf4\x90\x80\x80","\xf0\x9f","\xe4\xb8","\x80"}) {
         check(!valid_utf8(bad),"reject invalid encoding");

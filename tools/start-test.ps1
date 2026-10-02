@@ -1,3 +1,4 @@
+param([switch]$ExperimentalInput)
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $runtimeRoot=Join-Path $projectRoot 'private\runtime'
@@ -12,4 +13,6 @@ if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9ad3efe1a
 if (Test-Path (Join-Path $runtimeRoot 'plugins\plugin64.dll')) { throw 'Remove the legacy plugin from this isolated fixture before testing.' }
 New-Item -ItemType Directory -Path (Join-Path $runtimeRoot 'plugins') -Force | Out-Null
 Copy-Item (Join-Path $projectRoot 'build\eu4_unicode_probe.dll') (Join-Path $runtimeRoot 'plugins\eu4_unicode_probe.dll')
+$inputValue = if ($ExperimentalInput) { 1 } else { 0 }
+[IO.File]::WriteAllText((Join-Path $runtimeRoot 'plugins\eu4_unicode_probe.ini'),"[experimental]`nunicode_input=$inputValue`n",[Text.Encoding]::ASCII)
 Start-Process -FilePath $exe -WorkingDirectory $runtimeRoot -ArgumentList '-debug' -WindowStyle Hidden

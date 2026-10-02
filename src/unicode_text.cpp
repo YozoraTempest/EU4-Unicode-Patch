@@ -15,6 +15,16 @@ Scalar decode(std::string_view text) noexcept {
 bool valid_utf8(std::string_view text) noexcept {
     return utf8::is_valid(text.begin(), text.end());
 }
+std::size_t scalar_prefix(std::string_view text, std::size_t limit) noexcept {
+    if (text.size() <= limit) return text.size();
+    std::size_t end = limit;
+    // A UTF-8 scalar occupies at most four bytes. Find the possible leading
+    // byte, then keep it only if its complete encoding fits in the buffer.
+    while (end && limit - end < 3 &&
+           (static_cast<unsigned char>(text[end]) & 0xc0) == 0x80) --end;
+    const auto scalar = decode(text.substr(end));
+    return scalar.valid && end + scalar.bytes > limit ? end : limit;
+}
 std::uint32_t bitmap_slot(std::uint32_t cp) noexcept {
     // The old engine embeds fields inside slots U+0100..U+09FF. The local
     // Chinese BMFont moves these glyph IDs by E000; text retains its code point.

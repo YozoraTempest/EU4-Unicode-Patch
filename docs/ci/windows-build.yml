@@ -1,0 +1,19 @@
+name: Windows build and Unicode checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: cmake -S . -B build -A x64
+      - name: Build
+        run: cmake --build build --config RelWithDebInfo
+      - name: Unicode tests
+        run: ctest --test-dir build -C RelWithDebInfo --output-on-failure
+      - name: Reject unrelated hosts
+        run: ./tools/test-guards.ps1 -Configuration RelWithDebInfo

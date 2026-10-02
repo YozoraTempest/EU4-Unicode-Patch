@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $testRoot = Join-Path $projectRoot 'private\test-userdir'
 $modRoot = Join-Path $projectRoot 'private\test-mod'
-foreach ($relative in @('localisation\replace','gfx\fonts','interface')) {
+foreach ($relative in @('localisation\replace','gfx\fonts','interface','events','common\on_actions')) {
     New-Item -ItemType Directory -Path (Join-Path $modRoot $relative) -Force | Out-Null
 }
 New-Item -ItemType Directory -Path (Join-Path $testRoot 'mod') -Force | Out-Null
@@ -14,8 +14,14 @@ $utf8Bom = [Text.UTF8Encoding]::new($true)
 $utf8 = [Text.UTF8Encoding]::new($false)
 $localization = [IO.File]::ReadAllText((Join-Path $projectRoot 'fixtures\localisation\eu4_unicode_probe_l_english.yml'))
 [IO.File]::WriteAllText((Join-Path $modRoot 'localisation\replace\eu4_unicode_probe_l_english.yml'),$localization,$utf8Bom)
+Copy-Item -LiteralPath (Join-Path $projectRoot 'fixtures\events\unicode_probe.txt') -Destination (Join-Path $modRoot 'events') -Force
+# Trigger the dedicated event for the human country when a fixture campaign
+# starts. Preserve every original on_action in this private generated copy.
+$actions = [IO.File]::ReadAllText((Join-Path $GameDirectory 'common\on_actions\00_on_actions.txt'))
+$actions = [regex]::new('on_startup\s*=\s*\{').Replace($actions, "on_startup = {`n if = { limit = { ai = no } country_event = { id = eu4_unicode.1 } }", 1)
+[IO.File]::WriteAllText((Join-Path $modRoot 'common\on_actions\00_on_actions.txt'),$actions,$utf8)
 # Reuse installed mod fonts only in the private test fixture. They are not packaged.
-foreach ($size in @(14,16,18,24)) {
+foreach ($size in @(14,16,18,24,'map')) {
     foreach ($extension in @('fnt','dds')) {
         Copy-Item -LiteralPath (Join-Path $FontDirectory "zh-hans-$size.$extension") -Destination (Join-Path $modRoot 'gfx\fonts')
     }
@@ -32,17 +38,38 @@ foreach ($size in @(14,16,18,24)) {
 }
 # Keep the game's existing font definitions and change only the test font paths.
 $coreGfx = [IO.File]::ReadAllText((Join-Path $GameDirectory 'interface\core.gfx'))
-$coreGfx = [regex]::Replace($coreGfx, 'gfx/fonts/(vic_(18|22|29|36)[^"\r\n]*|garamond_(14|16|24)[^"\r\n]*|Arial12)', {
+$coreGfx = [regex]::Replace($coreGfx, 'gfx/fonts/(Mapfont|standard[^"\r\n]*|tahoma_20_bold|vic_(18|22|29|36)[^"\r\n]*|garamond_(14|16|24)[^"\r\n]*|Arial12)', {
     param($match)
     $size = switch ($match.Groups[2].Value + $match.Groups[3].Value) {
         '18' { 16 }; '22' { 18 }; '29' { 24 }; '36' { 24 }
         '16' { 16 }; '24' { 24 }; default { 14 }
     }
+    if ($match.Groups[1].Value -eq 'Mapfont') { $size = 'map' }
     "gfx/fonts/zh-hans-$size"
 })
 [IO.File]::WriteAllText((Join-Path $modRoot 'interface\core.gfx'),$coreGfx,$utf8)
 $frontend = [IO.File]::ReadAllText((Join-Path $GameDirectory 'interface\frontend.gui'))
 $probePanel = @'
+instantTextBoxType = {
+ name = "unicode_format_probe"
+ position = { x = 470 y = 485 }
+ font = "vic_22"
+ text = "EU4_UNICODE_FORMAT_PROBE"
+ maxWidth = 700
+ maxHeight = 32
+ fixedsize = yes
+ alwaystransparent = yes
+}
+instantTextBoxType = {
+ name = "unicode_collision_probe"
+ position = { x = 470 y = 525 }
+ font = "vic_22"
+ text = "EU4_UNICODE_COLLISION_PROBE"
+ maxWidth = 700
+ maxHeight = 32
+ fixedsize = yes
+ alwaystransparent = yes
+}
 instantTextBoxType = {
  name = "unicode_plain_probe"
  position = { x = 470 y = 250 }

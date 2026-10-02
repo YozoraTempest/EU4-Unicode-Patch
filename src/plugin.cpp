@@ -2,20 +2,31 @@
 #include <bcrypt.h>
 #include <MinHook.h>
 #include "unicode_text.hpp"
+#include "unicode_services.hpp"
 #include <array>
+#include <atomic>
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace {
 HANDLE log_file=INVALID_HANDLE_VALUE;
 std::byte* image=nullptr;
+std::atomic<bool> patch_enabled{false};
 thread_local std::uint32_t last_slot=0;
 thread_local std::uint32_t button_extra=0;
+thread_local std::uint32_t last_scalar_bytes=1;
+using BreakPositions=std::vector<std::size_t>;
+thread_local std::shared_ptr<const BreakPositions> active_line_breaks;
+thread_local std::unordered_map<std::string,std::shared_ptr<const BreakPositions>> line_break_cache;
+thread_local std::size_t line_cache_bytes=0;
 void log(const char* message) {
     if(log_file==INVALID_HANDLE_VALUE) return;
     DWORD written=0;
@@ -36,6 +47,43 @@ using RegisterText=void(*)(void*,const char*,const char*,int,int,bool);
 RegisterText register_text=nullptr;
 using RepeatText=char*(*)(EngineString*,std::uint64_t,unsigned char);
 RepeatText repeat_text=nullptr;
+using AppendText=void*(*)(EngineString*,const char*,std::uint64_t);
+AppendText append_text=nullptr;
+struct KeyEvent { std::uint32_t key,unused,modifiers; };
+using EditorKey=bool(*)(void*,const KeyEvent*);
+EditorKey original_editor_key=nullptr;
+bool editor_key(void* widget,const KeyEvent* event) {
+    auto base=static_cast<std::byte*>(widget);
+    auto text=reinterpret_cast<EngineString*>(base+0x30);
+    auto column=reinterpret_cast<std::uint16_t*>(base+0x54);
+    const auto row=*reinterpret_cast<std::uint16_t*>(base+0x56);
+    const auto selection=*reinterpret_cast<std::uint64_t*>(base+0x80);
+    if(event->modifiers || row || selection || *column>text->size)
+        return original_editor_key(widget,event);
+    const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
+    if(!eu4unicode::valid_utf8(value)) return original_editor_key(widget,event);
+    std::size_t start=*column,end=*column;
+    try {
+        if(event->key==8 || event->key==0x40000050) start=eu4unicode::previous_grapheme(value,start);
+        else if(event->key==127 || event->key==0x4000004f) end=eu4unicode::next_grapheme(value,end);
+        else return original_editor_key(widget,event);
+    } catch(...) { log("Unicode editing boundary failed; key ignored."); return true; }
+    const auto length=end-start;
+    if(length<=1) return original_editor_key(widget,event);
+    if(event->key==8 || event->key==127) {
+        // Remove all but the cluster's first byte before invoking the native
+        // one-byte deletion. The engine then emits its ordinary change event
+        // only after the complete grapheme has been removed.
+        auto data=const_cast<char*>(text->data());
+        std::memmove(data+start+1,data+end,static_cast<std::size_t>(text->size)-end+1);
+        text->size-=length-1;
+        if(event->key==8) *column=static_cast<std::uint16_t>(start+1);
+        return original_editor_key(widget,event);
+    }
+    bool handled=false;
+    for(std::size_t i=0;i<length;++i) handled=original_editor_key(widget,event)||handled;
+    return handled;
+}
 void import_text(const EngineString* key,const EngineString* value,int version,
                  int /*unused*/,const LoadContext* context) {
     const auto text=std::string_view(value->data(),static_cast<std::size_t>(value->size));
@@ -100,11 +148,34 @@ std::uintptr_t g_bitmap_measure_return,g_bitmap_split_return,g_copy_buffer;
 std::uintptr_t g_heap_pointer,g_heap_alloc,g_heap_return;
 std::uintptr_t g_button_copy_return,g_button_measure_return,g_button_draw_return,g_button_loop,g_button_end;
 std::uintptr_t g_alternate_measure_return,g_wrap_return,g_wrap_branch;
+std::uintptr_t g_main_measure_entry,g_main_format_return,g_main_plain_entry;
+std::uintptr_t g_main_icon_copy_return,g_main_icon_draw_return;
+std::uintptr_t g_button_format_return,g_button_plain_entry,g_button_draw_format_return,g_button_draw_plain_entry;
+std::uintptr_t g_button_icon_copy_return,g_button_icon_draw_return;
+std::uintptr_t g_bitmap_format_return,g_bitmap_plain_entry,g_bitmap_icon_end_return;
+std::uintptr_t g_map_copy_return,g_map_measure_return,g_map_draw_return,g_map_kern_return;
+std::uintptr_t g_map_justify_draw_return,g_map_justify_measure_return,g_map_justify_advance_return;
+std::uintptr_t g_map_adjust_copy_return,g_map_adjust_glyph_return,g_map_upper_return,g_map_lower_return;
+std::uintptr_t g_map_kern_call;
+std::uintptr_t g_input_return;
+std::uintptr_t g_text_limit_return;
 void main_draw_hook(); void main_copy_hook(); void main_measure_hook();
 void bitmap_measure_hook(); void bitmap_split_hook();
 void heap_zero_hook();
 void button_copy_hook(); void button_measure_hook(); void button_draw_hook(); void button_advance_hook();
 void alternate_measure_hook(); void main_wrap_hook();
+void main_format_hook(); void main_icon_copy_hook(); void main_icon_draw_hook();
+void button_format_hook(); void button_draw_format_hook();
+void button_icon_copy_hook(); void button_icon_draw_hook();
+void bitmap_format_hook(); void bitmap_icon_end_hook();
+void map_copy_hook(); void map_measure_hook(); void map_draw_hook(); void map_kern_hook();
+void map_justify_draw_hook(); void map_justify_measure_hook(); void map_justify_advance_hook();
+void map_adjust_copy_hook(); void map_adjust_glyph_hook(); void map_upper_hook(); void map_lower_hook();
+void input_hook();
+void text_limit_hook();
+std::size_t bounded_text_length(const char* source,std::size_t length) noexcept {
+    return eu4unicode::scalar_prefix({source,length},32000);
+}
 std::uint64_t decode_z(const char* text) noexcept {
     std::size_t length=0;
     while(length<4 && text[length]) ++length;
@@ -118,9 +189,33 @@ std::uint64_t decode_z(const char* text) noexcept {
 std::uint64_t copy_scalar(const char* source,std::size_t remaining,char* destination,std::size_t available) noexcept {
     auto scalar=eu4unicode::decode({source,remaining});
     const auto consumed=scalar.bytes?scalar.bytes:1;
+    last_scalar_bytes=static_cast<std::uint32_t>(consumed);
     last_slot=scalar.valid?eu4unicode::bitmap_slot(scalar.value):static_cast<unsigned char>(*source);
     if(consumed<=available) std::memcpy(destination,source,consumed);
     return last_slot | (static_cast<std::uint64_t>(consumed-1)<<32);
+}
+void prepare_wrap_context(const char* source,std::size_t length) noexcept {
+    active_line_breaks.reset();
+    const auto value=std::string_view(source,bounded_text_length(source,length));
+    if(!eu4unicode::valid_utf8(value)) return;
+    try {
+        std::string key(value);
+        auto found=line_break_cache.find(key);
+        if(found!=line_break_cache.end()) { active_line_breaks=found->second; return; }
+        auto positions=std::make_shared<const BreakPositions>(eu4unicode::line_boundaries(value));
+        const auto cost=value.size()+positions->size()*sizeof(std::size_t);
+        if(line_break_cache.size()>=256 || line_cache_bytes+cost>1024*1024) {
+            line_break_cache.clear(); line_cache_bytes=0;
+        }
+        line_cache_bytes+=cost;
+        line_break_cache.emplace(std::move(key),positions);
+        active_line_breaks=std::move(positions);
+    } catch(...) { log("Unicode line boundary preparation failed."); }
+}
+bool unicode_wrap_before(std::uint32_t last_byte) noexcept {
+    if(!active_line_breaks || last_byte+1<last_scalar_bytes) return false;
+    const auto offset=last_byte+1-last_scalar_bytes;
+    return std::binary_search(active_line_breaks->begin(),active_line_breaks->end(),offset);
 }
 std::uint64_t previous_slot() noexcept { return last_slot; }
 std::uint64_t previous_extra() noexcept { return button_extra; }
@@ -131,6 +226,71 @@ char* construct_scalar(EngineString* target,const char* source) {
     auto destination=repeat_text(target,size,static_cast<unsigned char>(*source));
     std::memcpy(destination,source,size);
     return destination;
+}
+std::uint64_t format_scalar(const char* source) noexcept {
+    const auto packed=decode_z(source);
+    const auto slot=static_cast<std::uint32_t>(packed);
+    // Only the engine's actual format introducers advance before its parser.
+    // Ordinary Unicode characters proceed to the UTF-8 glyph iterator.
+    return (slot==0xa7 || slot==0xa3 || slot==0xa4) ? packed : slot;
+}
+void reset_button_extra() noexcept { button_extra=0; }
+bool append_icon_tail(EngineString* target,const char* source) {
+    if(static_cast<unsigned char>(source[0])!=0xc2 || static_cast<unsigned char>(source[1])!=0xa3) return false;
+    append_text(target,source+1,1);
+    return true;
+}
+char* construct_map_scalar(EngineString* target,const char* source) {
+    const auto packed=decode_z(source);
+    const auto size=static_cast<std::uint32_t>(packed>>32)+1;
+    auto destination=repeat_text(target,size,static_cast<unsigned char>(*source));
+    std::memcpy(destination,source,size);
+    return destination;
+}
+std::uint64_t map_scalar_size(const EngineString* source,std::size_t offset) noexcept {
+    if(offset>=source->size) return 1;
+    const auto scalar=eu4unicode::decode({source->data()+offset,static_cast<std::size_t>(source->size)-offset});
+    return scalar.bytes?scalar.bytes:1;
+}
+std::uint64_t map_scalar_gaps(const EngineString* source) noexcept {
+    auto remaining=std::string_view(source->data(),static_cast<std::size_t>(source->size));
+    std::uint64_t count=0;
+    while(!remaining.empty()) { const auto scalar=eu4unicode::decode(remaining); remaining.remove_prefix(scalar.bytes); ++count; }
+    // A single scalar has no inter-character spacing. Keep the denominator
+    // nonzero; its only position is the beginning of the map label path.
+    return count>1?count-1:1;
+}
+void dispatch_utf8(void* window,void* receiver,const char* payload,std::uint32_t event_value) {
+    std::size_t length=0;
+    while(length<32 && payload[length]) ++length;
+    if(length==32 || !eu4unicode::valid_utf8({payload,length})) {
+        log("Rejected malformed SDL UTF-8 text input."); return;
+    }
+    struct NativeTextEvent {
+        std::byte prefix[16];
+        unsigned char byte;
+        std::byte padding[31];
+        std::uint64_t reserved;
+        std::uint64_t text_kind;
+        std::byte reserved_text[16];
+        std::uint32_t type;
+        std::uint16_t flags;
+        std::uint16_t trailing;
+    };
+    static_assert(offsetof(NativeTextEvent,text_kind)==0x38 && offsetof(NativeTextEvent,type)==0x50);
+    static_assert(sizeof(NativeTextEvent)==0x58);
+    using WindowEvent=void(*)(void*,int,std::uint32_t,int);
+    using TextEvent=void(*)(void*,NativeTextEvent*);
+    auto window_vtable=*static_cast<void***>(window);
+    auto receiver_vtable=*static_cast<void***>(receiver);
+    for(std::size_t index=0;index<length;++index) {
+        reinterpret_cast<WindowEvent>(window_vtable[4])(window,0x303,event_value,0);
+        NativeTextEvent event{};
+        event.byte=static_cast<unsigned char>(payload[index]);
+        event.text_kind=3;
+        event.type=2;
+        reinterpret_cast<TextEvent>(receiver_vtable[3])(receiver,&event);
+    }
 }
 }
 
@@ -153,7 +313,10 @@ bool initialize(HMODULE module) {
         log("Refused: legacy text patch is present."); return false;
     }
     image=reinterpret_cast<std::byte*>(GetModuleHandleW(nullptr));
+    const bool experimental_input=GetPrivateProfileIntW(L"experimental",L"unicode_input",0,
+        (std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_probe.ini").c_str())!=0;
     const Site sites[]={
+        {0x15989d8,"b8007d0000443bf8440f4df8"},
         {0x16fd650,"48895c240848896c2410488974241848"},
         {0x15995b0,"4c63cf488b55f84c03ca4863ce410fb6014c8d1d08a7e90042880419ffc6"},
         {0x1599728,"410fb601498b8cc62001000048894d004885c9"},
@@ -169,6 +332,28 @@ bool initialize(HMODULE module) {
         {0x15974cb,"41ffc6443b75d80f8c59f3ffff448bbdc8210000"},
         {0x159b91a,"0fb6142b498d8f200100004c8b1cd14d85db"},
         {0x15997a9,"66837906000f85130100008d041b660f6ec8"}
+        ,{0x159a240,"4e8d0409410fb6003ca77573"}
+        ,{0x15996b1,"c68415d001000000498b06"}
+        ,{0x159a45f,"c6840dd001000000498b06"}
+        ,{0x15968e1,"488d45c84983ff10490f43c4803c03a7"}
+        ,{0x1596e83,"c68415a000000000488b07"}
+        ,{0x1598110,"c68415a000000000488b07"}
+        ,{0x1597d7d,"488d45a04983fc10490f43c5418bcf803c08a7488d45a0"}
+        ,{0x159b539,"4c8b4b18488bcb4983f9107203488b0b803c0fa7"}
+        ,{0x159b61e,"498b06488d542420c6440c2000"}
+        ,{0x159db79,"450fb60407ba01000000488d4c2458"}
+        ,{0x159dc03,"410fb604074d8b9cc1200100004d85db"}
+        ,{0x159df89,"f30f115da0410fb60401498b14c74885d2"}
+        ,{0x159e436,"488d4c24784883fb10480f43ce440fb60408"}
+        ,{0xfd3f40,"0fb60401888508080000f3440f10a2480800004c8b34c24d85f6"}
+        ,{0xfd4144,"660f6ef60f5bf6488b8568010000ffc8660f6ec8"}
+        ,{0xfd53c4,"ffc689b5e807000048ffc148898d18010000"}
+        ,{0xfd6680,"488d85900000004983fd10480f43c60fb60418884500"}
+        ,{0xfd6bc0,"488d85900000004983fd10480f43c60fb60408498b14c6"}
+        ,{0x14ba825,"0fbe0c28488d1c28e836065900ffc788038bc7"}
+        ,{0x1550425,"0fbe0c28488d1c28e80aaa4f00ffc788038bc7"}
+        ,{0x1569f91,"8b45bc32db3c8073050fb6d8eb12"}
+        ,{0x15366c0,"48895c240848896c24184889742420574883ec40"}
     };
     for(const auto& site:sites) if(!check(site)) return false;
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
@@ -189,7 +374,36 @@ bool initialize(HMODULE module) {
     g_alternate_measure_return=address(0x159b92c);
     g_wrap_return=address(0x15997bb);
     g_wrap_branch=address(0x15998c7);
+    g_main_measure_entry=address(0x1599728);
+    g_main_format_return=address(0x159a24a);
+    g_main_plain_entry=address(0x159a791);
+    g_main_icon_copy_return=address(0x15996b9);
+    g_main_icon_draw_return=address(0x159a467);
+    g_button_format_return=address(0x15968f1);
+    g_button_plain_entry=address(0x1597059);
+    g_button_icon_copy_return=address(0x1596e8b);
+    g_button_icon_draw_return=address(0x1598118);
+    g_button_draw_format_return=address(0x1597d94);
+    g_button_draw_plain_entry=address(0x159838a);
+    g_bitmap_format_return=address(0x159b54d);
+    g_bitmap_plain_entry=address(0x159b677);
+    g_bitmap_icon_end_return=address(0x159b62b);
+    g_map_copy_return=address(0x159db8d);
+    g_map_measure_return=address(0x159dc13);
+    g_map_draw_return=address(0x159df9a);
+    g_map_kern_return=address(0x159e45e);
+    g_map_kern_call=address(0x15943d0);
+    g_map_justify_draw_return=address(0xfd3f5a);
+    g_map_justify_measure_return=address(0xfd4158);
+    g_map_justify_advance_return=address(0xfd53d6);
+    g_map_adjust_copy_return=address(0xfd66ab);
+    g_map_adjust_glyph_return=address(0xfd6bd7);
+    g_map_upper_return=address(0x14ba838);
+    g_map_lower_return=address(0x1550438);
+    g_input_return=address(0x156a22a);
+    g_text_limit_return=address(0x15989e4);
     repeat_text=reinterpret_cast<RepeatText>(address(0x90320));
+    append_text=reinterpret_cast<AppendText>(address(0x932f0));
     register_text=reinterpret_cast<RegisterText>(address(0x16fa8d0));
     if(MH_Initialize()!=MH_OK) { log("MinHook initialization failed."); return false; }
     struct Hook { std::size_t rva; void* callback; };
@@ -203,11 +417,40 @@ bool initialize(HMODULE module) {
         {0x15983a1,reinterpret_cast<void*>(button_draw_hook)},
         {0x15974cb,reinterpret_cast<void*>(button_advance_hook)},
         {0x159b91a,reinterpret_cast<void*>(alternate_measure_hook)},
-        {0x15997a9,reinterpret_cast<void*>(main_wrap_hook)} };
+        {0x15997a9,reinterpret_cast<void*>(main_wrap_hook)},
+        {0x159a240,reinterpret_cast<void*>(main_format_hook)},
+        {0x15996b1,reinterpret_cast<void*>(main_icon_copy_hook)},
+        {0x159a45f,reinterpret_cast<void*>(main_icon_draw_hook)},
+        {0x15968e1,reinterpret_cast<void*>(button_format_hook)},
+        {0x1596e83,reinterpret_cast<void*>(button_icon_copy_hook)},
+        {0x1598110,reinterpret_cast<void*>(button_icon_draw_hook)},
+        {0x1597d7d,reinterpret_cast<void*>(button_draw_format_hook)},
+        {0x159b539,reinterpret_cast<void*>(bitmap_format_hook)},
+        {0x159b61e,reinterpret_cast<void*>(bitmap_icon_end_hook)},
+        {0x159db79,reinterpret_cast<void*>(map_copy_hook)},
+        {0x159dc03,reinterpret_cast<void*>(map_measure_hook)},
+        {0x159df89,reinterpret_cast<void*>(map_draw_hook)},
+        {0x159e436,reinterpret_cast<void*>(map_kern_hook)},
+        {0xfd3f40,reinterpret_cast<void*>(map_justify_draw_hook)},
+        {0xfd4144,reinterpret_cast<void*>(map_justify_measure_hook)},
+        {0xfd53c4,reinterpret_cast<void*>(map_justify_advance_hook)},
+        {0xfd6680,reinterpret_cast<void*>(map_adjust_copy_hook)},
+        {0xfd6bc0,reinterpret_cast<void*>(map_adjust_glyph_hook)},
+        {0x14ba825,reinterpret_cast<void*>(map_upper_hook)},
+        {0x1550425,reinterpret_cast<void*>(map_lower_hook)},
+        {0x15989d8,reinterpret_cast<void*>(text_limit_hook)} };
     for(const auto& hook:hooks) {
         if(MH_CreateHook(image+hook.rva,hook.callback,nullptr)!=MH_OK) {
             log("Hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
         }
+    }
+    if(experimental_input) {
+        if(MH_CreateHook(image+0x1569f91,reinterpret_cast<void*>(input_hook),nullptr)!=MH_OK ||
+           MH_CreateHook(image+0x15366c0,reinterpret_cast<void*>(editor_key),
+             reinterpret_cast<void**>(&original_editor_key))!=MH_OK) {
+            log("Input hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+        }
+        log("Experimental UTF-8 input and single-line grapheme editing enabled.");
     }
     struct ConstantPatch { std::size_t rva; std::uint32_t before,after; };
     const ConstantPatch constants[]={ {0x1595c88,0xff,0xffff},
@@ -227,9 +470,13 @@ bool initialize(HMODULE module) {
         MH_Uninitialize();
         return false;
     }
-    log("UTF-8 import, main drawing, main measurement and bitmap iterators enabled.");
+    patch_enabled.store(true,std::memory_order_release);
+    log("UTF-8 import, UI, format, map and bitmap iterators enabled.");
     return true;
 }
+}
+extern "C" __declspec(dllexport) int Eu4UnicodeProbeEnabled() noexcept {
+    return patch_enabled.load(std::memory_order_acquire)?1:0;
 }
 BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
