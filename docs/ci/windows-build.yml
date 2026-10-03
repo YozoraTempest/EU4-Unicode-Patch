@@ -35,3 +35,5 @@ jobs:
         run: python tests/clipboard_evidence_tests.py
       - name: Native copy and cut roundtrip evidence validation
         run: python tests/clipboard_roundtrip_evidence_tests.py
+      - name: Native caret and SDL input rectangle evidence validation
+        run: python tests/ime_rect_evidence_tests.py

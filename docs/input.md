@@ -159,3 +159,31 @@ SDL 的 `SDL_GetClipboardText` 返回需要调用方释放的 UTF-8 缓冲。本
 ..\EU4MenuPatch\.venv\Scripts\python.exe tools\verify-clipboard.py private\native-clipboard-roundtrip.jsonl --roundtrip
 ..\EU4MenuPatch\.venv\Scripts\python.exe tests\clipboard_roundtrip_evidence_tests.py
 ```
+
+## 光标与 SDL 输入矩形
+
+实验输入将正常原生绘制 `1534250` 之后的光标精灵位置传给 `SDL_SetTextInputRect`。位置包括原生文本起点、滚动、对齐和字体偏移；字体行高来自该控件实际字体，矩形限制在当前 SDL 窗口内。只接受同时满足原生聚焦标志和输入管理器活动回调的控件。同一控件、窗口和坐标不重复调用；原生聚焦 `1535250` 清除缓存，保证重新聚焦会刷新。
+
+原生聚焦函数会立即调用一次绘制，此时父级变换仍可能是上一帧的值。实际观察中首次位置为 `(640,328)`，下一正常帧才是该搜索框的 `(328,485)`。补丁保留同步绘制，只延后 SDL 位置提交到正常帧；修复后的首次矩形为 `(328,485,1,16)`，没有中间错误提交。重新聚焦也只提交一次当前光标矩形。
+
+九个案例包括空串、ASCII 起点/末尾、中文、U+20000、组合重音、旗帜、家庭 emoji 和续字节碰撞字符。专用探针只用原生函数准备文本和光标，等待自然 UI 绘制，并记录实际完成的 SDL 调用、调用线程、聚焦拥有者、精灵位置、前缀测宽和字体行高。九个结果都与绘制光标一致；失焦后没有调用；由实际鼠标重新聚焦后恰好刷新一次。范围为该真实单行控件、1280×720、GUI scale 1，不能推及其他控件或复杂文字排版。见[原始记录](evidence/native-ime-rect.jsonl)和[独立报告](evidence/native-ime-rect.json)。
+
+游戏报告的内置 SDL 版本为 2.0.4。[该版本 Windows 输入法实现](https://github.com/libsdl-org/SDL/blob/release-2.0.4/src/video/windows/SDL_windowskeyboard.c)使用输入矩形定位组合窗口，其候选 UI 和 TSF 处理与新版 SDL 不同；不能直接添加新版输入法 UI 提示项就宣称解决。这里验收的是 [SDL 输入矩形接口](https://wiki.libsdl.org/SDL2/SDL_SetTextInputRect) 的真实调用，物理候选窗、预编辑和输入法提交仍需实际输入法操作确认。
+
+```powershell
+.\tools\start-test.ps1 -ExperimentalInput
+..\EU4MenuPatch\.venv\Scripts\python.exe tools\trace-ime-rect.py
+```
+
+进入隔离战局的外交页并点击搜索框，然后在另一终端启用案例：
+
+```powershell
+[IO.File]::WriteAllText('D:\Astra-Paradox\repos\EU4UnicodePatch\private\ime-rect-arm.txt','run')
+```
+
+看到 `ime-rect-awaiting-refocus` 后重新点击搜索框。正常结束或失败时先关闭专用进程，再释放跟踪器。校验器及十三项证据检查只依赖 Python 标准库和声明的夹具，不需要 Frida：
+
+```powershell
+python tools\verify-ime-rect.py private\native-ime-rect.jsonl
+python tests\ime_rect_evidence_tests.py
+```

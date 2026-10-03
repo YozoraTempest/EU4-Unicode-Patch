@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <intrin.h>
 #include <filesystem>
 #include <fstream>
@@ -120,6 +121,57 @@ using EditorKey=bool(*)(void*,const KeyEvent*);
 EditorKey original_editor_key=nullptr;
 using EditorAction=void(*)(void*);
 EditorAction original_editor_left=nullptr,original_editor_right=nullptr,original_editor_selection=nullptr;
+EditorAction original_editor_paint=nullptr,original_editor_focus=nullptr;
+struct InputRect { int x,y,w,h; };
+struct EditorImeRectState { void* window=nullptr; void* owner=nullptr; InputRect rect{}; };
+thread_local EditorImeRectState editor_ime_rect_state{};
+thread_local unsigned editor_focus_depth=0;
+void focus_editor_ime_rect(void* outer) {
+    editor_ime_rect_state={};
+    struct FocusScope {
+        FocusScope() { ++editor_focus_depth; }
+        ~FocusScope() { --editor_focus_depth; }
+    } scope;
+    original_editor_focus(outer);
+}
+void paint_editor_ime_rect(void* outer) {
+    original_editor_paint(outer);
+    // Focus performs an immediate paint before the next UI frame has supplied
+    // the editor's current parent transform. Publish only normal frame geometry.
+    if(editor_focus_depth) return;
+    const auto base=static_cast<std::byte*>(outer);
+    const auto manager=*reinterpret_cast<std::byte**>(image+0x23494f0);
+    if(!manager||base[0x260]!=std::byte{1}||
+       *reinterpret_cast<void**>(manager+0x210)!=base+0x1d0) return;
+    const auto sprite=*reinterpret_cast<void**>(base+0x1f0);
+    const auto font=*reinterpret_cast<void**>(base+0xc8+0x98);
+    if(!sprite||!font) return;
+    using WindowFocus=void*(*)();
+    const auto window=reinterpret_cast<WindowFocus>(image+0x17345f0)();
+    if(!window) return;
+    int width=0,height=0;
+    reinterpret_cast<void(*)(void*,int*,int*)>(image+0x17349f0)(window,&width,&height);
+    if(width<=0||height<=0) return;
+    struct Position { float x,y; } position{};
+    using SpritePosition=Position*(*)(void*,Position*);
+    reinterpret_cast<SpritePosition>((*static_cast<void***>(sprite))[0x178/8])(sprite,&position);
+    if(!std::isfinite(position.x)||!std::isfinite(position.y)) return;
+    using FontHeight=int(*)(void*);
+    const auto line_height=reinterpret_cast<FontHeight>((*static_cast<void***>(font))[0x68/8])(font);
+    if(line_height<=0) return;
+    // The cursor sprite already includes the native text origin, scrolling,
+    // alignment and font offsets. Its coordinates use SDL client pixels.
+    InputRect rect{
+        static_cast<int>(std::clamp(position.x,0.0f,static_cast<float>(width-1))),
+        static_cast<int>(std::clamp(position.y,0.0f,static_cast<float>(height-1))),1,
+        0};
+    rect.h=std::min(line_height,height-rect.y);
+    const auto& previous=editor_ime_rect_state.rect;
+    if(window==editor_ime_rect_state.window&&outer==editor_ime_rect_state.owner&&
+       rect.x==previous.x&&rect.y==previous.y&&rect.w==previous.w&&rect.h==previous.h) return;
+    reinterpret_cast<void(*)(const InputRect*)>(image+0x1735940)(&rect);
+    editor_ime_rect_state={window,outer,rect};
+}
 struct EditorPoint { int x,y; };
 using EditorPointHit=void(*)(void*,const EngineString*,const EditorPoint*);
 using EditorWidthFit=int(*)(void*,const EngineString*);
@@ -709,6 +761,11 @@ bool initialize(HMODULE module) {
         ,{0x1537210,"48895c240848896c2410488974241848897c2420"}
         ,{0x1539820,"48895c241848896c242057415441574883ec204c"}
         ,{0x1539240,"40534883ec40488bd9c6819000000000e83bb21f00"}
+        ,{0x1534250,"48895c242055565741564157488bec4883ec40"}
+        ,{0x1535250,"40574883ec3080b96102000000488bf9"}
+        ,{0x17345f0,"48ff25a1bf8700"}
+        ,{0x17349f0,"48ff2541c58700"}
+        ,{0x1735940,"48ff25b9ac8700"}
         ,{0x1734490,"48ff2559bd8700"}
         ,{0x1735e00,"48ff2599ac8700"}
         ,{0x15a04f0,"40534883ec60488bda4533c0"}
@@ -872,6 +929,10 @@ bool initialize(HMODULE module) {
            MH_CreateHook(image+0x1539820,reinterpret_cast<void*>(editor_word_break),
              reinterpret_cast<void**>(&original_editor_word_break))!=MH_OK ||
            MH_CreateHook(image+0x1539240,reinterpret_cast<void*>(paste_editor_clipboard),nullptr)!=MH_OK ||
+           MH_CreateHook(image+0x1534250,reinterpret_cast<void*>(paint_editor_ime_rect),
+             reinterpret_cast<void**>(&original_editor_paint))!=MH_OK ||
+           MH_CreateHook(image+0x1535250,reinterpret_cast<void*>(focus_editor_ime_rect),
+             reinterpret_cast<void**>(&original_editor_focus))!=MH_OK ||
            MH_CreateHook(image+0x95110,reinterpret_cast<void*>(assign_editor_prefix),
              reinterpret_cast<void**>(&original_assign_text))!=MH_OK ||
            MH_CreateHook(image+0xb19590,reinterpret_cast<void*>(filter_editor_text),
