@@ -10,7 +10,7 @@ $info=Get-ReleaseInfo $Channel $BuildDate
 $root=Get-BuildRoot $BuildDirectory
 $validation=Get-Content -LiteralPath (Join-Path $root 'automated-validation.json') -Raw | ConvertFrom-Json
 if ($validation.source_commit -ne $info.SourceCommit -or $validation.passed -ne $true -or
-    @($validation.ctest).Count -ne 11 -or $validation.loader_guards -ne $true -or $validation.optional_fonts -ne $true -or
+    @($validation.ctest).Count -ne 12 -or $validation.loader_guards -ne $true -or $validation.optional_fonts -ne $true -or
     $validation.patch_dll_sha256 -ne (Get-Sha256 (Join-Path $root 'eu4_unicode_patch.dll')) -or
     $validation.loader_sha256 -ne (Get-Sha256 (Join-Path $root 'VERSION.dll'))) {
     throw 'Automated validation is incomplete or belongs to another build.'
