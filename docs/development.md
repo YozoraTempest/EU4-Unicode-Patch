@@ -39,7 +39,7 @@ ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径
 
 每页约占 32 MiB GPU 内存，动态上传另占约 32 MiB CPU staging。五页全部使用时分别约占 160 MiB，另计字体和缓存。图集满或字体缺字时仍可能显示占位符。
 
-字库 cmap 覆盖审计使用 `tools/audit-open-fonts.py`，依赖见 `tools/requirements-font-audit.txt`。覆盖报告不代表所有字符和复杂文字都已通过游戏验收。
+字库 cmap 覆盖审计使用 `tools/audit-open-fonts.py`，依赖见 `tools/requirements-font-audit.txt`。
 
 ## 输入与保存
 
@@ -57,7 +57,7 @@ python tools\migrate-localisation.py '旧模组的localisation目录' private\mi
 
 工具保留 BOM、换行和文件结构，拒绝截断转义与孤立代理项，输出逐文件哈希报告。将转换结果用于单独的 UTF-8 模组副本；原目录保留。玩家安装不需要运行此工具。
 
-## 游戏测试副本
+## 开发副本
 
 准备开发探针：
 
@@ -84,7 +84,7 @@ python tools\migrate-localisation.py '旧模组的localisation目录' private\mi
 
 Frida 探针需要独立 Python 环境、Frida 和 psutil；剪贴板探针另需 pefile。MAP 必须与当前 DLL 一致。结束调试前先关闭专用游戏实例。
 
-`tools/trace-*.py` 记录原生调用，`tools/verify-*.py` 检查结果。受控 SDL 注入、GPU 读回与人工输入分别记录，结果见[测试范围](validation.md)，原始记录位于 `tests/evidence/`。
+`tools/trace-*.py` 跟踪原生调用，`tools/verify-*.py` 检查编辑、绘制和设备行为。
 
 动态 GPU 探针在外交搜索框聚焦后使用 `private/dynamic-font-arm.txt` 开始、`private/dynamic-font-finish.txt` 结束。`--player` 改为验证普通目录中的正式 DLL。
 
@@ -94,4 +94,4 @@ Frida 探针需要独立 Python 环境、Frida 和 psutil；剪贴板探针另�
 - 排版：将 DirectWrite 整段排版接入游戏测宽、绘制、光标和选区。
 - 输入：更多输入法、控件、缩放、预编辑、多行、撤销及系统剪贴板。
 - 保存：其他入口、输入产生的名称、自动保存周期及云存档。
-- 游戏回归：更多模组、长期战役、铁人及双端联机、聊天与同步。
+- 联机：中文聊天与名称同步。

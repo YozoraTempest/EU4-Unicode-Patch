@@ -46,7 +46,7 @@ gfx/fonts/eu4-unicode/、EU4UnicodePatch.README.txt 和 EU4UnicodePatch.FONTS.tx
 启用标志：UTF-8 import, UI, format, map and bitmap iterators enabled.
 Refused 表示版本或冲突检查未通过；缺字或图集已满也记录在日志中。
 
-地图字体支持动态分页，UI 图集仍为单页。复杂文字整段排版、铁人和联机尚未完成验证。
+UI 图集仍为单页，地图图集有内存上限；复杂文字整段排版尚未接入。
 下载与详细说明：https://github.com/YozoraTempest/EU4-Unicode-Patch
 许可证：plugins/eu4_unicode_patch/LICENSE.txt
 

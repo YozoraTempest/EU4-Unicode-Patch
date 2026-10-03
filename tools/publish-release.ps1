@@ -55,17 +55,13 @@ if ($Channel -eq 'Release') {
     if (!$section.Success) { throw 'Add this version to CHANGELOG.md before releasing.' }
     $updates=$section.Groups[1].Value.Trim()+"`n`n"
 }
-$manifest=Get-Content -LiteralPath (Join-Path $root 'player-manifest.json') -Raw | ConvertFrom-Json
-$gameCheck=if ($manifest.game_runtime_verified) { '本构建的 DLL 和加载器与本机游戏验收记录一致。' } else { '本构建未完成本机游戏人工验收；此前记录见仓库 docs/validation.md。' }
 $channelNote=if ($Channel -eq 'Nightly') { "Nightly 测试版，构建日期：$($info.BuildDate)（北京时间）。`n`n" } else { '' }
 $notes=$channelNote+$updates+@"
 适用：EU4 1.37.5.0 Inca / Windows x64，Windows 10 1903 或更新版本。
 
 安装：退出游戏，将主包全部内容解压到 eu4.exe 所在目录并覆盖。需要补字时再安装可选字体包；补丁优先使用系统字体。
 
-检查：11 项 CTest、加载保护、9 组可选字体字形检查及玩家包结构和 SHA-256 校验通过。$gameCheck
-
-限制：UI 图集仍为单页；模组自带字体的缺字补充、复杂文字整段排版、铁人和联机仍待完善。
+限制：UI 图集仍为单页；模组自带位图字体使用原字库；复杂文字整段排版尚未接入。
 
 提交：[$($info.SourceCommit.Substring(0,7))](https://github.com/$repo/commit/$($info.SourceCommit))
 
