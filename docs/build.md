@@ -49,9 +49,11 @@ Get-ChildItem tests\*.py | ForEach-Object {
 .\tools\package.ps1
 ```
 
-生成主包 `dist/EU4UnicodePatch-1.37.5-v0.1.3-experimental-drop-in.zip`、可选字体包 `dist/EU4UnicodePatch-fonts-v0.1.3-experimental.zip` 和 `dist/SHA256SUMS.txt`。两个 ZIP 均直接覆盖进游戏目录，源码、测试模组和游戏资源不进入玩家包。
+生成主包 `dist/EU4UnicodePatch-1.37.5-v0.1.4-experimental-drop-in.zip`、可选字体包 `dist/EU4UnicodePatch-fonts-v0.1.4-experimental.zip` 和 `dist/SHA256SUMS.txt`。两个 ZIP 均直接覆盖进游戏目录，源码、测试模组和游戏资源不进入玩家包。
 
-打包脚本核对正式 DLL、加载器、已验收图集及固定字体的 SHA-256。主包的 `manifest.json` 和字体包的 `font-manifest.json` 记录源提交与文件校验值，互不覆盖。发布说明见 [GitHub Release](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.3-experimental)。
+打包脚本核对正式 DLL、加载器、已验收图集及固定字体的 SHA-256。主包的打包记录写入 `build/player-manifest.json`；字体包保留 `font-manifest.json`。发布说明见 [GitHub Release](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.4-experimental)。
+
+主包包含 14 个文件，许可证合并为 `plugins/eu4_unicode_patch/LICENSE.txt`。字体包的许可证合并为 `FONT_LICENSES.txt`，两包互不覆盖。UTFCPP 的许可文本保留在源码中，纯二进制玩家包使用 Boost 许可证的分发例外。
 
 ## 版本校验
 

@@ -11,4 +11,4 @@
 
 项目代码采用 MIT 许可证，© 2026 VulonLok。第三方组件遵循各自的许可证。字体及生成的图集按 SIL Open Font License 1.1 分发；可选字体包保留字体原有名称和内容。
 
-完整的版权和许可证文件随对应发行包附于 `plugins/eu4_unicode_patch/licenses/`，源码中也保留了对应文件。
+主包的版权和许可证汇总于 `plugins/eu4_unicode_patch/LICENSE.txt`，可选字体包汇总于 `plugins/eu4_unicode_patch/FONT_LICENSES.txt`。源码保留各项目的原始许可证。

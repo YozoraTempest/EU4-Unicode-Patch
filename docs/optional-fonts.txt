@@ -1,4 +1,4 @@
-EU4 Unicode Patch 可选字体包
+EU4 Unicode Patch v0.1.4-experimental 可选字体包
 打包维护：VulonLok
 
 用于补充系统字体缺少的汉字。包含思源黑体 SC Regular 与遍黑 P1/P2 Regular。
@@ -17,7 +17,7 @@ EU4 Unicode Patch 可选字体包
 思源黑体：Adobe，2.005R。
 遍黑：Fitzgerald P. Köeingsegg，V2.9.5795。
 字体保留原有名称和内容，采用 SIL Open Font License 1.1。
-完整许可证位于 plugins/eu4_unicode_patch/licenses/。
+完整许可证位于 plugins/eu4_unicode_patch/FONT_LICENSES.txt。
 
 项目：https://github.com/YozoraTempest/EU4-Unicode-Patch
 QQ 交流群：欧陆风云 · 永夜的星月回廊

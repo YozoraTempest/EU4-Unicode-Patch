@@ -4,13 +4,13 @@
 
 作者：**VulonLok**。
 
-适用于 **EU4 1.37.5.0 Inca / Windows x64**。当前版本：**v0.1.3-experimental**。
+适用于 **EU4 1.37.5.0 Inca / Windows x64**。当前版本：**v0.1.4-experimental**。
 
-[下载补丁](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.3-experimental/EU4UnicodePatch-1.37.5-v0.1.3-experimental-drop-in.zip) · [可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.3-experimental/EU4UnicodePatch-fonts-v0.1.3-experimental.zip) · [发布说明](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.3-experimental) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
+[下载补丁](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.4-experimental/EU4UnicodePatch-1.37.5-v0.1.4-experimental-drop-in.zip) · [可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.4-experimental/EU4UnicodePatch-fonts-v0.1.4-experimental.zip) · [发布说明](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.4-experimental) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
 
-## v0.1.3 更新
+## v0.1.4 更新
 
-加入 VulonLok 署名。字体仍优先使用玩家系统字体，思源黑体 SC 和遍黑体单独提供为可选包。
+精简玩家包，合并许可证并整理项目文档。字体仍优先使用玩家系统字体，完整字库单独提供为可选包。
 
 本版仍为实验版。支持 UTF-8 文字，不附带完整汉化；复杂文字排版、铁人和多人联机尚未完成验证。
 
@@ -31,7 +31,7 @@ Europa Universalis IV/
 ├── plugins/
 │   ├── eu4_unicode_patch.dll
 │   └── eu4_unicode_patch/
-│       └── licenses/
+│       └── LICENSE.txt
 └── gfx/fonts/eu4-unicode/
 ```
 

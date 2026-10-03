@@ -713,7 +713,7 @@ bool initialize(HMODULE module) {
         log("Refused: executable is outside the isolated research fixture."); return false;
     }
 #else
-    log("EU4 Unicode Patch v0.1.3-experimental initializing; author=VulonLok.");
+    log("EU4 Unicode Patch v0.1.4-experimental initializing; author=VulonLok.");
 #endif
     if(!hash_matches(exe)) { log("Refused: executable hash mismatch."); return false; }
     if(GetModuleHandleW(L"plugin64.dll")

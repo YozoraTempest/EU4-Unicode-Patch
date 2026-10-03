@@ -8,7 +8,7 @@ if (Test-Path -LiteralPath $stageRoot) {
     Remove-Item -LiteralPath $stageRoot -Recurse -Force
 }
 $data=Join-Path $stageRoot 'plugins/eu4_unicode_patch'
-New-Item -ItemType Directory -Path (Join-Path $data 'fonts'),(Join-Path $data 'licenses') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $data 'fonts') -Force | Out-Null
 $fontManifest=Get-Content -LiteralPath (Join-Path $projectRoot 'fixtures/open-fonts.json') -Raw | ConvertFrom-Json
 foreach ($font in $fontManifest.files) {
     $source=Join-Path $projectRoot "private/open-fonts/$($font.name)"
@@ -18,8 +18,6 @@ foreach ($font in $fontManifest.files) {
     }
     Copy-Item -LiteralPath $source -Destination (Join-Path $data 'fonts')
 }
-foreach ($name in @('SourceHanSans-OFL.txt','Plangothic-OFL.txt')) {
-    Copy-Item -LiteralPath (Join-Path $projectRoot "third-party/$name") -Destination (Join-Path $data 'licenses')
-}
+& (Join-Path $PSScriptRoot 'write-package-license.ps1') -Package Fonts -OutputPath (Join-Path $data 'FONT_LICENSES.txt')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/optional-fonts.txt') -Destination (Join-Path $stageRoot 'EU4UnicodePatch.FONTS.txt')
 $stageRoot

@@ -4,7 +4,7 @@
 
 ## 玩家包
 
-v0.1.3 通过九个 CTest、加载保护及两种字体安装方式的普通目录启动检查，记录了 18px 中文字形上传。旧双字节插件未加载，MenuPatch 同时加载。[报告](../tests/evidence/player-attribution.json) · [主包日志](../tests/evidence/player-attribution-startup.log) · [可选字库日志](../tests/evidence/player-attribution-optional-startup.log)
+v0.1.4 通过九个 CTest、加载保护及两种字体安装方式的普通目录启动检查，记录了 18px 中文字形上传。主包包含 14 个文件，测试副本未保留旧包的清单和许可证目录。旧双字节插件未加载，MenuPatch 同时加载。[报告](../tests/evidence/player-package-cleanup.json) · [主包日志](../tests/evidence/player-package-cleanup-startup.log) · [可选字库日志](../tests/evidence/player-package-cleanup-optional-startup.log)
 
 字体实现未改动，设备检查沿用 v0.1.2：14、16、18、24、88px 的实际 D3D9 alpha 字节比较，以及工作线程仅生成 CPU 数据、旧区域保留、Reset、稳定指针和释放。安装可选字库后，常用汉字仍使用系统字体，系统缺少的 U+323B0 由字库补充。[报告](../tests/evidence/player-system-fonts.json) · [系统字体设备日志](../tests/evidence/player-system-atlas-device.log) · [可选字库设备日志](../tests/evidence/player-optional-atlas-device.log)
 

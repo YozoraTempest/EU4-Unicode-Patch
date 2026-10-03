@@ -16,7 +16,7 @@ if (Test-Path -LiteralPath $stageRoot) {
 }
 $plugins=Join-Path $stageRoot 'plugins'
 $data=Join-Path $plugins 'eu4_unicode_patch'
-New-Item -ItemType Directory -Path $plugins,(Join-Path $data 'licenses') -Force | Out-Null
+New-Item -ItemType Directory -Path $plugins,$data -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot 'build/VERSION.dll') -Destination $stageRoot
 Copy-Item -LiteralPath $dll -Destination $plugins
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/direct-install.txt') -Destination (Join-Path $stageRoot 'EU4UnicodePatch.README.txt')
@@ -27,15 +27,5 @@ foreach ($name in @('zh-hans-14','zh-hans-16','zh-hans-18','zh-hans-24','zh-hans
         Copy-Item -LiteralPath (Join-Path $projectRoot "build/player-assets/gfx/fonts/eu4-unicode/$name.$extension") -Destination $atlasTarget
     }
 }
-$licenses=@{
-    'LICENSE'='EU4UnicodePatch-MIT.txt'
-    'third-party/SourceHanSans-OFL.txt'='SourceHanSans-OFL.txt'
-    'third-party/EU4dll-LICENSE.txt'='EU4dll-MIT.txt'
-    'vendor/utfcpp/LICENSE'='UTFCPP-Boost.txt'
-    'vendor/minhook/LICENSE.txt'='MinHook-BSD.txt'
-}
-foreach ($source in $licenses.Keys) {
-    Copy-Item -LiteralPath (Join-Path $projectRoot $source) -Destination (Join-Path $data "licenses/$($licenses[$source])")
-}
-Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD_PARTY_NOTICES.md') -Destination $data
+& (Join-Path $PSScriptRoot 'write-package-license.ps1') -Package Player -OutputPath (Join-Path $data 'LICENSE.txt')
 $stageRoot

@@ -1,9 +1,9 @@
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$patchVersion='0.1.3-experimental'
+$patchVersion='0.1.4-experimental'
 $packageName="EU4UnicodePatch-1.37.5-v$patchVersion-drop-in.zip"
 $fontPackageName="EU4UnicodePatch-fonts-v$patchVersion.zip"
-$validation=Get-Content -LiteralPath (Join-Path $projectRoot 'tests/evidence/player-attribution.json') -Raw | ConvertFrom-Json
+$validation=Get-Content -LiteralPath (Join-Path $projectRoot 'tests/evidence/player-package-cleanup.json') -Raw | ConvertFrom-Json
 foreach ($entry in @(
     @{Path='build/eu4_unicode_patch.dll';Hash=$validation.dll_sha256},
     @{Path='build/VERSION.dll';Hash=$validation.loader_sha256}
@@ -61,7 +61,7 @@ $manifest=[ordered]@{
     validation_limits='Latest player physical IME and complete controlled SDL/GPU sequence pending; complex shaping, multi-page atlases, Ironman and multiplayer unverified'
     files=$packageFiles
 }
-$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stageRoot 'plugins/eu4_unicode_patch/manifest.json') -Encoding utf8NoBOM
+$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $projectRoot 'build/player-manifest.json') -Encoding utf8NoBOM
 $distRoot=Join-Path $projectRoot 'dist'
 New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
 $archive=Join-Path $distRoot $packageName
