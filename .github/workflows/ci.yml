@@ -19,14 +19,14 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        shell: pwsh
+        shell: sh -e {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
       - name: Build, test and check player packages
-        run: ./tools/ci.ps1
+        run: pwsh -NoProfile -File ./tools/ci.ps1
       - name: Save packages and diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

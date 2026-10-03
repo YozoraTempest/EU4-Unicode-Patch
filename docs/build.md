@@ -57,6 +57,8 @@ Get-ChildItem tests\*.py | ForEach-Object {
 
 `main` 为正式分支，`develop` 为开发分支。提交和 PR 会运行 CI；Actions 中手动运行 **Nightly**，默认构建 `develop`，也可填写该分支上的提交 SHA。
 
+工作流的 `run` 步骤使用 `sh`，Windows 构建和打包调用现有 PowerShell 7 脚本。
+
 | 渠道 | 标签 | 主包 |
 | --- | --- | --- |
 | Nightly | `v版本-nightly-yyyyMMdd-短SHA` | `EU4UnicodePatch-1.37.5-nightly-yyyyMMdd-短SHA.zip` |
