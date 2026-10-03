@@ -2,7 +2,10 @@ EXTERN decode_z:PROC
 EXTERN copy_scalar:PROC
 EXTERN construct_map_scalar:PROC
 EXTERN map_scalar_size:PROC
-EXTERN map_scalar_gaps:PROC
+EXTERN map_scalar_count:PROC
+EXTERN format_scalar:PROC
+EXTERN map_last_scalar_offset:PROC
+EXTERN copy_last_map_scalar:PROC
 EXTERN mark_map_font_glyph:PROC
 EXTERN remember_map_font_glyph:PROC
 EXTERN mark_current_map_font_glyph:PROC
@@ -13,6 +16,8 @@ EXTERN g_map_kern_return:QWORD
 EXTERN g_map_kern_call:QWORD
 EXTERN g_map_justify_draw_return:QWORD
 EXTERN g_map_justify_measure_return:QWORD
+EXTERN g_map_justify_count_return:QWORD
+EXTERN g_map_justify_single_return:QWORD
 EXTERN g_map_justify_advance_return:QWORD
 EXTERN g_map_adjust_copy_return:QWORD
 EXTERN g_map_adjust_glyph_return:QWORD
@@ -21,9 +26,111 @@ EXTERN g_map_upper_return:QWORD
 EXTERN g_map_lower_return:QWORD
 EXTERN g_map_page_tag_return:QWORD
 EXTERN g_map_justify_page_tag_return:QWORD
+EXTERN g_map_fit_format_return:QWORD
+EXTERN g_map_fit_plain_entry:QWORD
+EXTERN g_map_fit_measure_return:QWORD
+EXTERN g_map_fit_kern_return:QWORD
+EXTERN g_map_fit_icon_end_return:QWORD
+EXTERN g_map_adjust_gap_end_return:QWORD
+EXTERN g_map_adjust_last_return:QWORD
 include hook_context.inc
 
 .CODE
+map_fit_format_hook PROC
+    mov rax, rbx
+    mov r8, [rbx+18h]
+    cmp r8, 10h
+    jb map_fit_format_inline
+    mov rax, [rbx]
+map_fit_format_inline:
+    mov edx, edi
+    SAVE_CONTEXT
+    lea rcx, [rax+rdx]
+    call format_scalar
+    cmp eax, 0ffh
+    ja map_fit_format_plain
+    shr rax, 32
+    add edi, eax
+    RESTORE_CONTEXT
+    mov edx, edi
+    jmp qword ptr [g_map_fit_format_return]
+map_fit_format_plain:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_map_fit_plain_entry]
+map_fit_format_hook ENDP
+
+map_fit_measure_hook PROC
+    SAVE_CONTEXT
+    lea rcx, [rax+rdx]
+    call decode_z
+    mov r10, rax
+    shr r10, 32
+    add edi, r10d
+    add [rsp+90h], r10
+    mov eax, eax
+    mov [rsp+80h], rax
+    RESTORE_CONTEXT
+    LOOKUP_GLYPH r11, r13, rax, 120h
+    movss xmm1, dword ptr [r13+968h]
+    test r11, r11
+    jmp qword ptr [g_map_fit_measure_return]
+map_fit_measure_hook ENDP
+
+map_fit_kern_hook PROC
+    cmp edx, 80h
+    jae map_fit_kern_none
+    cmp r8d, 80h
+    jae map_fit_kern_none
+    call qword ptr [g_map_kern_call]
+    jmp map_fit_kern_done
+map_fit_kern_none:
+    xorps xmm0, xmm0
+map_fit_kern_done:
+    addss xmm6, xmm0
+    addss xmm7, xmm0
+    mov ecx, dword ptr [rbp+1070h]
+    jmp qword ptr [g_map_fit_kern_return]
+map_fit_kern_hook ENDP
+
+map_fit_icon_end_hook PROC
+    mov rax, rbx
+    cmp qword ptr [rbx+18h], 10h
+    jb map_fit_icon_end_inline
+    mov rax, [rbx]
+map_fit_icon_end_inline:
+    cmp byte ptr [rax+rdi], 0c2h
+    jne map_fit_icon_end_done
+    cmp byte ptr [rax+rdi+1], 0a3h
+    jne map_fit_icon_end_done
+    inc edi
+map_fit_icon_end_done:
+    mov byte ptr [rsp+rcx+40h], r12b
+    mov rax, [r13]
+    lea rdx, [rsp+40h]
+    mov rcx, r13
+    jmp qword ptr [g_map_fit_icon_end_return]
+map_fit_icon_end_hook ENDP
+
+map_adjust_gap_end_hook PROC
+    SAVE_CONTEXT
+    lea rcx, [rbp+90h]
+    call map_last_scalar_offset
+    mov [rsp+80h], rax
+    RESTORE_CONTEXT
+    mov r12, rax
+    jmp qword ptr [g_map_adjust_gap_end_return]
+map_adjust_gap_end_hook ENDP
+
+map_adjust_last_hook PROC
+    SAVE_CONTEXT
+    lea rcx, [rbp+90h]
+    lea rdx, [rbp]
+    call copy_last_map_scalar
+    mov [rsp+98h], rax
+    RESTORE_CONTEXT
+    jmp qword ptr [g_map_adjust_last_return]
+map_adjust_last_hook ENDP
+
 map_vertex_count_hook PROC
     lea rax, [rbx+10h]
     cmp r9, 10h
@@ -156,16 +263,31 @@ map_justify_marker_done:
     jmp qword ptr [g_map_justify_draw_return]
 map_justify_draw_hook ENDP
 
-map_justify_measure_hook PROC
+map_justify_count_hook PROC
     SAVE_CONTEXT
     mov rcx, rdi
-    call map_scalar_gaps
+    call map_scalar_count
     mov [rsp+80h], rax
     RESTORE_CONTEXT
+    ; Layout uses scalar count; the iterator still needs the byte length.
+    mov rcx, [rdi+10h]
+    mov [rbp+168h], rax
+    lea eax, [rax-2]
+    jmp qword ptr [g_map_justify_count_return]
+map_justify_count_hook ENDP
+
+map_justify_measure_hook PROC
+    cmp qword ptr [rbp+168h], 1
+    jbe map_justify_single
+    mov eax, dword ptr [rbp+168h]
+    dec eax
     movd xmm6, esi
     cvtdq2ps xmm6, xmm6
     movd xmm1, eax
     jmp qword ptr [g_map_justify_measure_return]
+map_justify_single:
+    ; Preserve the native single-character spacing initialized to 1.
+    jmp qword ptr [g_map_justify_single_return]
 map_justify_measure_hook ENDP
 
 map_justify_advance_hook PROC

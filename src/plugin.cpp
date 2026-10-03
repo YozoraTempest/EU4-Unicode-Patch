@@ -588,10 +588,13 @@ std::uintptr_t g_button_icon_copy_return,g_button_icon_draw_return;
 std::uintptr_t g_bitmap_format_return,g_bitmap_plain_entry,g_bitmap_icon_end_return;
 std::uintptr_t g_map_copy_return,g_map_measure_return,g_map_draw_return,g_map_kern_return;
 std::uintptr_t g_map_justify_draw_return,g_map_justify_measure_return,g_map_justify_advance_return;
+std::uintptr_t g_map_justify_count_return,g_map_justify_single_return;
 std::uintptr_t g_map_adjust_copy_return,g_map_adjust_glyph_return,g_map_upper_return,g_map_lower_return;
 std::uintptr_t g_map_vertex_count_return;
 std::uintptr_t g_map_page_tag_return,g_map_justify_page_tag_return;
 std::uintptr_t g_map_kern_call;
+std::uintptr_t g_map_fit_format_return,g_map_fit_plain_entry,g_map_fit_measure_return,g_map_fit_kern_return;
+std::uintptr_t g_map_fit_icon_end_return,g_map_adjust_gap_end_return,g_map_adjust_last_return;
 std::uintptr_t g_input_return;
 std::uintptr_t g_editor_fit_return;
 std::uintptr_t g_text_limit_return;
@@ -609,9 +612,12 @@ void button_icon_copy_hook(); void button_icon_draw_hook();
 void bitmap_format_hook(); void bitmap_icon_end_hook();
 void map_copy_hook(); void map_measure_hook(); void map_draw_hook(); void map_kern_hook();
 void map_justify_draw_hook(); void map_justify_measure_hook(); void map_justify_advance_hook();
+void map_justify_count_hook();
 void map_adjust_copy_hook(); void map_adjust_glyph_hook(); void map_upper_hook(); void map_lower_hook();
 void map_vertex_count_hook();
 void map_page_tag_hook();void map_justify_page_tag_hook();
+void map_fit_format_hook();void map_fit_measure_hook();void map_fit_kern_hook();void map_fit_icon_end_hook();
+void map_adjust_gap_end_hook();void map_adjust_last_hook();
 void input_hook();
 void editor_fit_hook();
 void text_limit_hook();
@@ -722,13 +728,22 @@ std::uint64_t map_scalar_size(const EngineString* source,std::size_t offset) noe
     const auto scalar=eu4unicode::decode({source->data()+offset,static_cast<std::size_t>(source->size)-offset});
     return scalar.bytes?scalar.bytes:1;
 }
-std::uint64_t map_scalar_gaps(const EngineString* source) noexcept {
+std::uint64_t map_scalar_count(const EngineString* source) noexcept {
     auto remaining=std::string_view(source->data(),static_cast<std::size_t>(source->size));
     std::uint64_t count=0;
     while(!remaining.empty()) { const auto scalar=eu4unicode::decode(remaining); remaining.remove_prefix(scalar.bytes); ++count; }
-    // A single scalar has no inter-character spacing. Keep the denominator
-    // nonzero; its only position is the beginning of the map label path.
-    return count>1?count-1:1;
+    return count;
+}
+std::size_t map_last_scalar_offset(const EngineString* source) noexcept {
+    const auto value=std::string_view(source->data(),static_cast<std::size_t>(source->size));
+    return value.empty()?0:eu4unicode::scalar_prefix(value,value.size()-1);
+}
+std::size_t copy_last_map_scalar(const EngineString* source,char* destination) noexcept {
+    const auto offset=map_last_scalar_offset(source);
+    const auto size=static_cast<std::size_t>(source->size)-offset;
+    if(size) std::memcpy(destination,source->data()+offset,size);
+    destination[size]=0;
+    return size;
 }
 void dispatch_utf8(void* window,void* receiver,const char* payload,std::uint32_t event_value) {
     std::size_t length=0;
@@ -767,7 +782,7 @@ bool initialize(HMODULE module) {
         log("Refused: executable is outside the isolated research fixture."); return false;
     }
 #else
-    log("EU4 Unicode Patch v0.1.6-experimental initializing; author=VulonLok.");
+    log("EU4 Unicode Patch v0.1.7-experimental initializing; author=VulonLok.");
 #endif
     if(!hash_matches(exe)) { log("Refused: executable hash mismatch."); return false; }
     if(GetModuleHandleW(L"plugin64.dll")
@@ -823,13 +838,20 @@ bool initialize(HMODULE module) {
         ,{0x159df89,"f30f115da0410fb60401498b14c74885d2"}
         ,{0x159e436,"488d4c24784883fb10480f43ce440fb60408"}
         ,{0xfd3f40,"0fb60401888508080000f3440f10a2480800004c8b34c24d85f6"}
-        ,{0xfd4144,"660f6ef60f5bf6488b8568010000ffc8660f6ec8"}
+        ,{0xfd3eea,"488b4f1048898d680100008d41fe"}
+        ,{0xfd413e,"837f10017e1b660f6ef60f5bf6488b8568010000ffc8660f6ec8"}
         ,{0xfd53c4,"ffc689b5e807000048ffc148898d18010000"}
         ,{0xfd6680,"488d85900000004983fd10480f43c60fb60418884500"}
         ,{0xfd6bc0,"488d85900000004983fd10480f43c60fb60408498b14c6"}
         ,{0xfd7330,"488d43104983f9107204488b43100fb60401498b94c420010000"}
         ,{0x159e400,"83c7060fbf420c660f6ec00f5bc0"}
         ,{0xfd53a5,"4183c506488b8d18010000488bbdc8070000"}
+        ,{0x159e60d,"488bc34c8b43184983f8107203488b038bd7"}
+        ,{0x159e75d,"0fb604104d8b9cc520010000f3410f108d680900004d85db"}
+        ,{0x159e7c5,"e8065cfffff30f58f0f30f58f88b8d70100000"}
+        ,{0x159e6f1,"4488640c40498b4500488d542440498bcd"}
+        ,{0xfd6600,"8b85a0000000ffc84c63e0"}
+        ,{0xfd66e4,"488d85900000004983fd10480f43c648638da00000000fb64408ff884500"}
         ,{0xfd7200,"4c89442418488954241048894c2408"}
         ,{0x16d6640,"4885d20f84a60000004889742418"}
         ,{0x14ba825,"0fbe0c28488d1c28e836065900ffc788038bc7"}
@@ -938,12 +960,21 @@ bool initialize(HMODULE module) {
     g_map_kern_call=address(0x15943d0);
     g_map_justify_draw_return=address(0xfd3f5a);
     g_map_justify_measure_return=address(0xfd4158);
+    g_map_justify_count_return=address(0xfd3ef8);
+    g_map_justify_single_return=address(0xfd415f);
     g_map_justify_advance_return=address(0xfd53d6);
     g_map_adjust_copy_return=address(0xfd66ab);
     g_map_adjust_glyph_return=address(0xfd6bd7);
     g_map_vertex_count_return=address(0xfd734a);
     g_map_page_tag_return=address(0x159e40e);
     g_map_justify_page_tag_return=address(0xfd53b7);
+    g_map_fit_format_return=address(0x159e61f);
+    g_map_fit_plain_entry=address(0x159e751);
+    g_map_fit_measure_return=address(0x159e775);
+    g_map_fit_kern_return=address(0x159e7d8);
+    g_map_fit_icon_end_return=address(0x159e702);
+    g_map_adjust_gap_end_return=address(0xfd660b);
+    g_map_adjust_last_return=address(0xfd671a);
     g_map_upper_return=address(0x14ba838);
     g_map_lower_return=address(0x1550438);
     g_input_return=address(0x156a22a);
@@ -988,13 +1019,20 @@ bool initialize(HMODULE module) {
         {0x159df89,reinterpret_cast<void*>(map_draw_hook)},
         {0x159e436,reinterpret_cast<void*>(map_kern_hook)},
         {0xfd3f40,reinterpret_cast<void*>(map_justify_draw_hook)},
-        {0xfd4144,reinterpret_cast<void*>(map_justify_measure_hook)},
+        {0xfd3eea,reinterpret_cast<void*>(map_justify_count_hook)},
+        {0xfd413e,reinterpret_cast<void*>(map_justify_measure_hook)},
         {0xfd53c4,reinterpret_cast<void*>(map_justify_advance_hook)},
         {0xfd6680,reinterpret_cast<void*>(map_adjust_copy_hook)},
         {0xfd6bc0,reinterpret_cast<void*>(map_adjust_glyph_hook)},
         {0xfd7330,reinterpret_cast<void*>(map_vertex_count_hook)},
         {0x159e400,reinterpret_cast<void*>(map_page_tag_hook)},
         {0xfd53a5,reinterpret_cast<void*>(map_justify_page_tag_hook)},
+        {0x159e60d,reinterpret_cast<void*>(map_fit_format_hook)},
+        {0x159e75d,reinterpret_cast<void*>(map_fit_measure_hook)},
+        {0x159e7c5,reinterpret_cast<void*>(map_fit_kern_hook)},
+        {0x159e6f1,reinterpret_cast<void*>(map_fit_icon_end_hook)},
+        {0xfd6600,reinterpret_cast<void*>(map_adjust_gap_end_hook)},
+        {0xfd66e4,reinterpret_cast<void*>(map_adjust_last_hook)},
         {0x14ba825,reinterpret_cast<void*>(map_upper_hook)},
         {0x1550425,reinterpret_cast<void*>(map_lower_hook)},
         {0x15989d8,reinterpret_cast<void*>(text_limit_hook)},
