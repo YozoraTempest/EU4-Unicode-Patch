@@ -1,0 +1,5637 @@
+{
+  "artifact": {
+    "event": "artifact",
+    "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+    "dll_sha256": "8279a643b3008cfb103751469806fed2000a7e3e06d0ae5beeb2ec7e3cb9a775",
+    "fixtures": [
+      {
+        "name": "gfx/fonts/zh-hans-14",
+        "fnt_sha256": "1de08acb62b0e39fda340022823724f9545ab0338b88b755675e5a056b7fcbeb",
+        "unicode_records": 148,
+        "metrics": {
+          "20013": [
+            186,
+            2,
+            17,
+            0,
+            12,
+            0,
+            12,
+            0,
+            1,
+            0,
+            0,
+            0,
+            14,
+            0,
+            0,
+            0
+          ],
+          "128512": [
+            125,
+            2,
+            47,
+            0,
+            15,
+            0,
+            16,
+            0,
+            2,
+            0,
+            254,
+            255,
+            20,
+            0,
+            0,
+            0
+          ],
+          "131072": [
+            141,
+            2,
+            47,
+            0,
+            14,
+            0,
+            12,
+            0,
+            0,
+            0,
+            0,
+            0,
+            14,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "name": "gfx/fonts/zh-hans-16",
+        "fnt_sha256": "05e14ea001832015e3502d8c6d237f77ad3e86cab0ad682164ba63700fa97a09",
+        "unicode_records": 148,
+        "metrics": {
+          "20013": [
+            119,
+            3,
+            19,
+            0,
+            14,
+            0,
+            15,
+            0,
+            1,
+            0,
+            0,
+            0,
+            16,
+            0,
+            0,
+            0
+          ],
+          "128512": [
+            57,
+            0,
+            71,
+            0,
+            18,
+            0,
+            17,
+            0,
+            2,
+            0,
+            255,
+            255,
+            22,
+            0,
+            0,
+            0
+          ],
+          "131072": [
+            76,
+            0,
+            71,
+            0,
+            16,
+            0,
+            14,
+            0,
+            0,
+            0,
+            0,
+            0,
+            16,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "name": "gfx/fonts/zh-hans-18",
+        "fnt_sha256": "1bf8b96233eaa9058bd2d56a11d9ce1865c357b7ce08f5e49e5082325e135cdc",
+        "unicode_records": 148,
+        "metrics": {
+          "20013": [
+            89,
+            0,
+            41,
+            0,
+            16,
+            0,
+            17,
+            0,
+            1,
+            0,
+            255,
+            255,
+            18,
+            0,
+            0,
+            0
+          ],
+          "128512": [
+            24,
+            2,
+            78,
+            0,
+            20,
+            0,
+            20,
+            0,
+            2,
+            0,
+            254,
+            255,
+            25,
+            0,
+            0,
+            0
+          ],
+          "131072": [
+            45,
+            2,
+            78,
+            0,
+            16,
+            0,
+            16,
+            0,
+            1,
+            0,
+            255,
+            255,
+            18,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "name": "gfx/fonts/zh-hans-24",
+        "fnt_sha256": "383e4c170623592ae17ed43894ae6b7650bbce3d8e26cd6113e97dd5c28d4662",
+        "unicode_records": 148,
+        "metrics": {
+          "20013": [
+            98,
+            2,
+            54,
+            0,
+            21,
+            0,
+            24,
+            0,
+            2,
+            0,
+            255,
+            255,
+            24,
+            0,
+            0,
+            0
+          ],
+          "128512": [
+            82,
+            3,
+            132,
+            0,
+            27,
+            0,
+            26,
+            0,
+            3,
+            0,
+            254,
+            255,
+            33,
+            0,
+            0,
+            0
+          ],
+          "131072": [
+            110,
+            3,
+            132,
+            0,
+            22,
+            0,
+            22,
+            0,
+            1,
+            0,
+            255,
+            255,
+            24,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "name": "gfx/fonts/zh-hans-map",
+        "fnt_sha256": "e6226038cf6fb5899b8c1c2d1e0e8352c78d68188242597dba2c6cdc0b43d040",
+        "unicode_records": 148,
+        "metrics": {
+          "20013": [
+            64,
+            3,
+            185,
+            2,
+            75,
+            0,
+            86,
+            0,
+            7,
+            0,
+            252,
+            255,
+            88,
+            0,
+            0,
+            0
+          ],
+          "128512": [
+            183,
+            1,
+            217,
+            6,
+            93,
+            0,
+            94,
+            0,
+            14,
+            0,
+            248,
+            255,
+            121,
+            0,
+            0,
+            0
+          ],
+          "131072": [
+            21,
+            2,
+            217,
+            6,
+            80,
+            0,
+            78,
+            0,
+            4,
+            0,
+            255,
+            255,
+            88,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    ],
+    "method": "Native font constructor, resource/font loader and destructor on UI thread; same font storage reused; copied ASCII table identifies borrowed atlas alias"
+  },
+  "passed": true,
+  "cycles": 64,
+  "baseline": {
+    "fonts": 45,
+    "glyphs": 6660
+  },
+  "unique_atlas_identities": 40,
+  "results": [
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 0,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fcaa050",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 1,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca98f0",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 2,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9c10",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 3,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9cb0",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 4,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9bb0",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 5,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9eb0",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 6,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca99f0",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 7,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9cf0",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 8,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9d10",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 9,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9db0",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 10,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9ab0",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 11,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9990",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 12,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fcaa090",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 13,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9d50",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 14,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9a50",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 15,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9b70",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 16,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9d10",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 17,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9a90",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 18,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9d50",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 19,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9f50",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 20,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9ef0",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 21,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9db0",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 22,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9ef0",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 23,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9a10",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 24,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca99b0",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 25,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9ed0",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 26,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9f10",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 27,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9f30",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 28,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fcaa0b0",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 29,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9b90",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 30,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9c90",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 31,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9bb0",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 32,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9f30",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 33,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9950",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 34,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9d10",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 35,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9910",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 36,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9bb0",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 37,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fcaa030",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 38,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9930",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 39,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9eb0",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 40,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9bd0",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 41,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fcaa050",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 42,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9950",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 43,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9e30",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 44,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9f30",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 45,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9f10",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 46,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9a90",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 47,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9b30",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 48,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fcaa010",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 49,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9f70",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 50,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9a10",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 51,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9eb0",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 52,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fcaa010",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 53,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9cd0",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 54,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca99f0",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 55,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fcaa0d0",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 56,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9950",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 57,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9a50",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 58,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9dd0",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 59,
+      "name": "gfx/fonts/zh-hans-map",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9af0",
+      "texture": 2,
+      "metrics": {
+        "20013": [
+          64,
+          3,
+          185,
+          2,
+          75,
+          0,
+          86,
+          0,
+          7,
+          0,
+          252,
+          255,
+          88,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          183,
+          1,
+          217,
+          6,
+          93,
+          0,
+          94,
+          0,
+          14,
+          0,
+          248,
+          255,
+          121,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          21,
+          2,
+          217,
+          6,
+          80,
+          0,
+          78,
+          0,
+          4,
+          0,
+          255,
+          255,
+          88,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 60,
+      "name": "gfx/fonts/zh-hans-14",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9ef0",
+      "texture": 3,
+      "metrics": {
+        "20013": [
+          186,
+          2,
+          17,
+          0,
+          12,
+          0,
+          12,
+          0,
+          1,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          125,
+          2,
+          47,
+          0,
+          15,
+          0,
+          16,
+          0,
+          2,
+          0,
+          254,
+          255,
+          20,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          141,
+          2,
+          47,
+          0,
+          14,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 61,
+      "name": "gfx/fonts/zh-hans-16",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9b30",
+      "texture": 1,
+      "metrics": {
+        "20013": [
+          119,
+          3,
+          19,
+          0,
+          14,
+          0,
+          15,
+          0,
+          1,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          57,
+          0,
+          71,
+          0,
+          18,
+          0,
+          17,
+          0,
+          2,
+          0,
+          255,
+          255,
+          22,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          76,
+          0,
+          71,
+          0,
+          16,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 62,
+      "name": "gfx/fonts/zh-hans-18",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9ed0",
+      "texture": 4,
+      "metrics": {
+        "20013": [
+          89,
+          0,
+          41,
+          0,
+          16,
+          0,
+          17,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          24,
+          2,
+          78,
+          0,
+          20,
+          0,
+          20,
+          0,
+          2,
+          0,
+          254,
+          255,
+          25,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          45,
+          2,
+          78,
+          0,
+          16,
+          0,
+          16,
+          0,
+          1,
+          0,
+          255,
+          255,
+          18,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    },
+    {
+      "event": "native-font-lifecycle",
+      "cycle": 63,
+      "name": "gfx/fonts/zh-hans-24",
+      "font": "0x1c27539b010",
+      "anchor": "0x1c27fca9eb0",
+      "texture": 5,
+      "metrics": {
+        "20013": [
+          98,
+          2,
+          54,
+          0,
+          21,
+          0,
+          24,
+          0,
+          2,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ],
+        "128512": [
+          82,
+          3,
+          132,
+          0,
+          27,
+          0,
+          26,
+          0,
+          3,
+          0,
+          254,
+          255,
+          33,
+          0,
+          0,
+          0
+        ],
+        "131072": [
+          110,
+          3,
+          132,
+          0,
+          22,
+          0,
+          22,
+          0,
+          1,
+          0,
+          255,
+          255,
+          24,
+          0,
+          0,
+          0
+        ]
+      },
+      "alias_same": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "after_destroy_missing": {
+        "20013": true,
+        "128512": true,
+        "131072": true
+      },
+      "loaded_usage": {
+        "fonts": 46,
+        "glyphs": 6808
+      },
+      "after_usage": {
+        "fonts": 45,
+        "glyphs": 6660
+      },
+      "source_unchanged": true
+    }
+  ],
+  "scope": "Five font sizes, native constructed font lifetimes and reused table/atlas identities; no live in-place hot reload, runtime raster cache, multi-page textures or GPU memory claim"
+}

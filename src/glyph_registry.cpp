@@ -45,4 +45,21 @@ void* find_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept {
         return glyph==font->second.end()?nullptr:glyph->second.get();
     } catch(...) { return nullptr; }
 }
+void release_unicode_font(void* const* table) noexcept {
+    if(!table) return;
+    try {
+        std::unique_lock<std::shared_mutex> lock(font_mutex);
+        const auto anchor=identity(table);
+        fonts.erase(anchor);
+        if(anchor!=table) fonts.erase(table);
+    } catch(...) {}
+}
+GlyphRegistryUsage unicode_glyph_usage() noexcept {
+    try {
+        std::shared_lock<std::shared_mutex> lock(font_mutex);
+        GlyphRegistryUsage usage{fonts.size(),0};
+        for(const auto& font:fonts) usage.glyphs+=font.second.size();
+        return usage;
+    } catch(...) { return {}; }
+}
 }

@@ -35,5 +35,25 @@ int main() {
     reordered[0x41]=reordered_alias[0x41]=&late_anchor;
     check(bind_unicode_font(reordered.data())&&find_unicode_glyph(reordered_alias.data(),0x20000)==early,
         "late atlas binding retains the original pointer and supports font aliases");
+    const auto before=unicode_glyph_usage();
+    release_unicode_font(first.data());
+    check(!find_unicode_glyph(alias.data(),0x20000)&&!find_unicode_glyph(first.data(),0x1f600),
+        "destroying the owning native font invalidates all atlas aliases");
+    check(find_unicode_glyph(second.data(),0x20000)==other,"destroying a font preserves independent fonts");
+    const auto after=unicode_glyph_usage();
+    check(after.fonts+1==before.fonts&&after.glyphs+4==before.glyphs,"font destruction releases every sparse glyph record");
+    auto reused=allocate_unicode_glyph(first.data(),0x20000);
+    check(reused&&reused->advance==0,"reused atlas identity starts with fresh metrics");
+    reused->advance=31;
+    check(find_unicode_glyph(alias.data(),0x20000)==reused&&reused->advance==31,"aliases bind to the new atlas generation");
+    release_unicode_font(first.data());
+    release_unicode_font(second.data());
+    release_unicode_font(reordered.data());
+    release_unicode_font(nullptr);
+    std::array<void*,256> pending{};
+    check(allocate_unicode_glyph(pending.data(),0x20000)!=nullptr,"unbound font can allocate a pending record");
+    release_unicode_font(pending.data());
+    check(!find_unicode_glyph(pending.data(),0x20000),"unbound font destruction releases pending records");
+    check(unicode_glyph_usage().fonts==0&&unicode_glyph_usage().glyphs==0,"complete font lifecycle leaves no registry records");
     std::cout<<"Sparse Unicode glyph and font-alias checks passed.\n";
 }

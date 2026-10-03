@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 
 namespace eu4unicode {
@@ -13,4 +14,9 @@ NativeGlyph* allocate_unicode_glyph(void* const* table,std::uint32_t scalar) noe
 void* find_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept;
 // Bind records loaded before ASCII A becomes available to its atlas identity.
 bool bind_unicode_font(void* const* table) noexcept;
+// Called before the owning native table destroys its ASCII records.
+// Copies that borrowed those native pointers cease to identify a live atlas.
+void release_unicode_font(void* const* table) noexcept;
+struct GlyphRegistryUsage { std::size_t fonts,glyphs; };
+GlyphRegistryUsage unicode_glyph_usage() noexcept;
 }

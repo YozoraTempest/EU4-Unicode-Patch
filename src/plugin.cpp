@@ -119,6 +119,12 @@ using EditorKey=bool(*)(void*,const KeyEvent*);
 EditorKey original_editor_key=nullptr;
 using EditorAction=void(*)(void*);
 EditorAction original_editor_left=nullptr,original_editor_right=nullptr,original_editor_selection=nullptr;
+using FontTableDestroy=void(*)(void* const*);
+FontTableDestroy original_font_table_destroy=nullptr;
+void destroy_font_table(void* const* table) {
+    eu4unicode::release_unicode_font(table);
+    original_font_table_destroy(table);
+}
 bool single_line_editor(void* widget,std::string_view& value) {
     const auto base=static_cast<const std::byte*>(widget);
     const auto text=reinterpret_cast<const EngineString*>(base+0x30);
@@ -605,6 +611,9 @@ bool initialize(HMODULE module) {
         ,{0x1538670,"40534883ec20488b01488bd9ff9068010000"}
         ,{0x153857f,"488b03488bcbff90d8000000"}
         ,{0x153868f,"488b03488bcbff90e8000000"}
+        ,{0x1594360,"48895c24084889742410574883ec20488bf1488bd9bf00010000"}
+        ,{0x1594380,"488b0b4885c9740aba10000000e85e511a00"}
+        ,{0x159487f,"488d8f20010000e8d5faffff"}
         ,{0x1174e95,"e8e6025900"}
         ,{0x13b9567,"e814bc3400"}
         ,{0x117519e,"e8ddff5800"}
@@ -735,6 +744,10 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&original_find_text))!=MH_OK) {
         log("Country search hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
+    if(MH_CreateHook(image+0x1594360,reinterpret_cast<void*>(destroy_font_table),
+        reinterpret_cast<void**>(&original_font_table_destroy))!=MH_OK) {
+        log("Font lifetime hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
     if(experimental_input) {
         if(MH_CreateHook(image+0x1569f91,reinterpret_cast<void*>(input_hook),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x1536e51,reinterpret_cast<void*>(editor_fit_hook),nullptr)!=MH_OK ||
@@ -799,6 +812,12 @@ bool initialize(HMODULE module) {
 }
 extern "C" __declspec(dllexport) int Eu4UnicodeProbeEnabled() noexcept {
     return patch_enabled.load(std::memory_order_acquire)?1:0;
+}
+extern "C" __declspec(dllexport) std::uint64_t Eu4UnicodeProbeGlyphFonts() noexcept {
+    return eu4unicode::unicode_glyph_usage().fonts;
+}
+extern "C" __declspec(dllexport) std::uint64_t Eu4UnicodeProbeGlyphRecords() noexcept {
+    return eu4unicode::unicode_glyph_usage().glyphs;
 }
 BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {

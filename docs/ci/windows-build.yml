@@ -27,3 +27,5 @@ jobs:
         run: python tests/sdl_evidence_tests.py
       - name: Native selection evidence validation
         run: python tests/selection_evidence_tests.py
+      - name: Native font lifetime evidence validation
+        run: python tests/font_lifetime_evidence_tests.py
