@@ -6,6 +6,7 @@
 #include "unicode_editor.hpp"
 #include "native_text_event.hpp"
 #include "unicode_search.hpp"
+#include "native_steam_presence.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
 #include "native_font_atlas.hpp"
@@ -45,13 +46,15 @@ void log(const char* message) {
     WriteFile(log_file,"\r\n",2,&written,nullptr);
     FlushFileBuffers(log_file);
 }
-struct EngineString {
-    union { char inline_bytes[16]; const char* pointer; } storage;
-    std::uint64_t size;
-    std::uint64_t capacity;
-    const char* data() const { return capacity<16?storage.inline_bytes:storage.pointer; }
-};
-static_assert(sizeof(EngineString)==32);
+using eu4unicode::EngineString;
+eu4unicode::NativePresenceConversion original_presence_conversion=nullptr;
+EngineString* convert_steam_presence(EngineString* target,const EngineString* source) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    const auto assign=reinterpret_cast<eu4unicode::NativeStringAssignment>(image+0x95110);
+    return eu4unicode::construct_steam_presence(target,source,caller,
+        original_presence_conversion,assign);
+}
 using Transliterate=void(*)(EngineString*);
 Transliterate original_transliterate=nullptr;
 void transliterate_save_path(EngineString* text) {
@@ -919,6 +922,8 @@ bool initialize(HMODULE module) {
         ,{0xf1615e,"e80dec7e00"}
         ,{0x17061a0,"48895c240848896c24104889742418"}
         ,{0xefc38f,"e80c9e800083f8ff"}
+        ,{0x1706010,"488bc4488958084889681048897018574883ec40"}
+        ,{0xa901fe,"e80d5ec700"}
     };
     for(const auto& site:sites) if(!check(site)) return false;
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
@@ -1051,6 +1056,10 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&original_transliterate))!=MH_OK) {
         log("Save path hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
+    if(MH_CreateHook(image+0x1706010,reinterpret_cast<void*>(convert_steam_presence),
+        reinterpret_cast<void**>(&original_presence_conversion))!=MH_OK) {
+        log("Steam Rich Presence hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
     if(MH_CreateHook(image+0x17061a0,reinterpret_cast<void*>(find_country_name),
         reinterpret_cast<void**>(&original_find_text))!=MH_OK) {
         log("Country search hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
@@ -1150,6 +1159,7 @@ bool initialize(HMODULE module) {
     }
     patch_enabled.store(true,std::memory_order_release);
     log("UTF-8 import, UI, format, map and bitmap iterators enabled.");
+    log("Steam Rich Presence UTF-8 passthrough enabled.");
     return true;
 }
 }

@@ -11,7 +11,7 @@ cd EU4UnicodePatch
 .\tools\test-guards.ps1
 ```
 
-`build.ps1` 查找 MSVC 工具链，构建后运行十一个 CTest。重建前退出测试实例，避免 PDB 被占用。
+`build.ps1` 查找 MSVC 工具链，构建后运行十二个 CTest。重建前退出测试实例，避免 PDB 被占用。
 
 | 输出 | 用途 |
 | --- | --- |
