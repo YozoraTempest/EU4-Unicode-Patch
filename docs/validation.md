@@ -60,6 +60,8 @@
 
 本机字体样本包括中文、日文、韩文、𠀀、😀、希腊文、阿拉伯文、希伯来文、印地文与泰文，缺字数量为 0。系统选择了 Leelawadee UI、Malgun Gothic、Microsoft YaHei UI、Nirmala UI、Segoe UI、Segoe UI Emoji 和 SimSun-ExtB。[诊断图片](evidence/unicode-layout.png)由独立 TextLayout 模块生成，不能作为这些能力已接入 EU4 的证据。其他机器的实际覆盖取决于已安装字体。
 
+独立模块补齐完整 shaped run 后，22 个 run 的实际 mask 与基线另外组图；原布局销毁后的字体寿命、完整源簇覆盖、字形偏移、RTL 负左边界、灰度覆盖、空白宽度和亚像素相位均通过。五种字号重新生成的十份 FNT/DDS 与游戏现用文件逐字节相同；[文件指纹](evidence/shaped-run-validation.json)和[组合诊断图](evidence/unicode-shaped-runs.png)保存结果。该模块尚未接入游戏 GPU，研究 DLL 保持下面的指纹。
+
 构建与语法检查通过。Ninja 正确识别本机中文 include 前缀，公共 MASM 宏使用显式依赖。GitHub Actions 模板定义 Windows x64 构建、全部 CTest 和拒绝宿主测试。当前 OAuth 令牌没有 workflow 写入权限，GitHub 拒绝发布 .github/workflows 文件；模板保存在 docs/ci/windows-build.yml，尚未启用远端自动运行。
 
 ## 输入实验与未验收项

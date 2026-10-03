@@ -1,0 +1,48 @@
+{
+  "scope": "Independent shaped-run module; native fontpack output remains byte-identical to five existing game atlases. No native GPU shaping claim.",
+  "fontpack_files": [
+    {
+      "name": "zh-hans-14.dds",
+      "sha256": "7974afd5e208eb32e8b7730951e325bccadedefe46e1dd168f281042dbebe86e"
+    },
+    {
+      "name": "zh-hans-14.fnt",
+      "sha256": "1de08acb62b0e39fda340022823724f9545ab0338b88b755675e5a056b7fcbeb"
+    },
+    {
+      "name": "zh-hans-16.dds",
+      "sha256": "2c202b81e360e541724c8f81ef3ad5717dbb74dbd13128e559a57e9a7d64c1ad"
+    },
+    {
+      "name": "zh-hans-16.fnt",
+      "sha256": "05e14ea001832015e3502d8c6d237f77ad3e86cab0ad682164ba63700fa97a09"
+    },
+    {
+      "name": "zh-hans-18.dds",
+      "sha256": "f641fe824310485c43d47f3ddfd043fc90218d9d72200a9a1d5ea469d583168f"
+    },
+    {
+      "name": "zh-hans-18.fnt",
+      "sha256": "1bf8b96233eaa9058bd2d56a11d9ce1865c357b7ce08f5e49e5082325e135cdc"
+    },
+    {
+      "name": "zh-hans-24.dds",
+      "sha256": "7bb769db398fe2fb0565d1356e493be3db0eb9021603473bd73a1bcd880c6e70"
+    },
+    {
+      "name": "zh-hans-24.fnt",
+      "sha256": "383e4c170623592ae17ed43894ae6b7650bbce3d8e26cd6113e97dd5c28d4662"
+    },
+    {
+      "name": "zh-hans-map.dds",
+      "sha256": "681707a3c3de776272e773f6b5bd27c83501b0882e3431da3232df3872573c28"
+    },
+    {
+      "name": "zh-hans-map.fnt",
+      "sha256": "e6226038cf6fb5899b8c1c2d1e0e8352c78d68188242597dba2c6cdc0b43d040"
+    }
+  ],
+  "shaped_runs": 22,
+  "font_families": 7,
+  "ctest_passed": 6
+}

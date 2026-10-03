@@ -12,6 +12,25 @@
 
 这个桥接支持收录字符的真实游戏显示。复杂文字必须以整段文本的 shaping、bidi、glyph run、cluster 与命中测试结果为单位接入；逐字符生成的图集仅适用于当前已验收的简单文字路径。后续运行时字形缓存和纹理分配应复用此注册表与系统布局模块，而不改变文本编码。
 
+## 完整 shaped run 与栅格接口
+
+独立布局现在保留 DirectWrite 返回的实际字体对象、字号、视觉基线、书写方向、测量模式、每个字形的 advance/ascender offset，以及从 UTF-8 源范围到字形范围的 cluster 映射。字体对象随 run 共同持有，原布局销毁后仍能使用正确的回退字体；字形编号不再只有一个供诊断的字体族名称。
+
+`rasterize_glyph_run` 直接栅格化这些已经排版的字形，不重新用源文本排版，也不逐码点重建。它返回灰度 alpha 与相对 `floor(baseline_x/y)` 的像素边界，保留基线的小数相位。RTL 字形可以位于基线左边；空白 run 保留前进宽度而不分配位图。栅格上限为单边 16,384 像素和 64 MiB alpha，超限、缺字体、非有限几何或不完整数组均拒绝。
+
+独立测试核对全部源字节/字形的 cluster 覆盖、连字和组合符号、RTL 负左边界、灰度抗锯齿、原布局销毁后的字体寿命、偏移移动与基线相位；整数平移不改变本地 atlas 像素，改变四分之一像素相位会改变覆盖。22 个实际字形 run、七种系统字体的组合诊断图见 [shaped-run 输出](evidence/unicode-shaped-runs.png)。诊断图与 Direct2D 整段文本分别渲染，字形与方向经视觉核对；它们不是逐像素相同的渲染模式。
+
+这项结果补全了 CPU 到纹理桥的布局数据与栅格输入，尚未连接到 EU4 的 GPU 纹理、批次刷新、裁剪、测宽和选区。原有位图路径仍承担已经验收的游戏绘制。运行时按需字形、多页纹理、原位重载与游戏复杂文字仍待完成。
+
+```powershell
+.\build\unicode_layout_tests.exe private\unicode-layout-reference.png private\glyph-run-dump
+python tools\compose-glyph-runs.py private\unicode-layout-reference.png private\glyph-run-dump private\unicode-shaped-runs.png
+```
+
+组合工具需要 Pillow，仅根据实际导出的 mask 和基线组图；参考 PNG 只提供画布大小。依据为 Microsoft 的 [glyph run](https://learn.microsoft.com/en-us/windows/win32/api/dwrite/ns-dwrite-dwrite_glyph_run)、[UTF-16 cluster 描述](https://learn.microsoft.com/en-us/windows/win32/api/dwrite/ns-dwrite-dwrite_glyph_run_description)及 [glyph run analysis](https://learn.microsoft.com/en-us/windows/win32/api/dwrite_2/nf-dwrite_2-idwritefactory2-createglyphrunanalysis) 契约。
+
+本次用更新后的 `fontpack` 重新生成五种字号，全部十份 FNT/DDS 与当前游戏夹具逐字节相同，见 [生成回归记录](evidence/shaped-run-validation.json)。正式游戏与正在进行的物理输入法观察没有改用新的独立栅格接口。
+
 ## 原生字体生命周期
 
 修复前，实际原生字体销毁后仍能从旧别名查到 U+20000 字形；这些稀疏记录没有随原生 ASCII 表清理。修复将清理连接到 `1594360`，保持原生纹理释放、监听器移除和 ASCII/kerning 表析构流程。

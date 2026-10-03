@@ -7,13 +7,35 @@
 #include <vector>
 
 namespace eu4unicode {
+class GlyphFace;
+enum class GlyphMeasure : std::uint32_t { Natural=0,GdiClassic=1,GdiNatural=2 };
+struct GlyphOffset { float advance,ascender; };
+struct GlyphCluster {
+    std::size_t text_start,text_length;
+    std::uint32_t first_glyph,glyph_count;
+};
 struct GlyphRun {
     std::string font_family;
     std::uint32_t bidi_level;
     std::size_t text_start, text_length;
     std::vector<std::uint16_t> glyphs;
     std::vector<float> advances;
+    float baseline_x=0,baseline_y=0,em_size=0;
+    bool sideways=false;
+    std::vector<GlyphOffset> offsets;
+    std::vector<GlyphCluster> clusters;
+    // Retains the exact fallback face; a family name cannot identify glyph IDs.
+    std::shared_ptr<const GlyphFace> face;
+    GlyphMeasure measuring=GlyphMeasure::Natural;
 };
+struct GlyphBitmap {
+    std::uint32_t width,height;
+    // Pixel bounds relative to floor(baseline_x/y), retaining fractional phase.
+    // RTL ink may extend left. A blank run has advance but no bitmap allocation.
+    std::int32_t left,top;
+    std::vector<std::uint8_t> alpha;
+};
+GlyphBitmap rasterize_glyph_run(const GlyphRun& run);
 struct LayoutMetrics { float width,height; std::uint32_t lines; };
 struct HitPosition { std::size_t byte_offset; bool inside; };
 struct RasterImage {

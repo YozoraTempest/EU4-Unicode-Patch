@@ -12,6 +12,11 @@
 #include <stdexcept>
 
 namespace eu4unicode {
+class GlyphFace {
+public:
+    Microsoft::WRL::ComPtr<IDWriteFontFace> native;
+    explicit GlyphFace(IDWriteFontFace* value):native(value) {}
+};
 namespace {
 using Microsoft::WRL::ComPtr;
 void checked(HRESULT status) {
@@ -69,14 +74,43 @@ public:
     HRESULT STDMETHODCALLTYPE IsPixelSnappingDisabled(void*,BOOL* value) override { *value=TRUE; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetCurrentTransform(void*,DWRITE_MATRIX* value) override { *value={1,0,0,1,0,0}; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetPixelsPerDip(void*,FLOAT* value) override { *value=1; return S_OK; }
-    HRESULT STDMETHODCALLTYPE DrawGlyphRun(void*,FLOAT,FLOAT,DWRITE_MEASURING_MODE,
+    HRESULT STDMETHODCALLTYPE DrawGlyphRun(void*,FLOAT x,FLOAT y,DWRITE_MEASURING_MODE measuring,
         const DWRITE_GLYPH_RUN* run,const DWRITE_GLYPH_RUN_DESCRIPTION* description,IUnknown*) override {
         try {
             const auto start=byte_positions.at(description->textPosition);
             const auto end=byte_positions.at(description->textPosition+description->stringLength);
-            runs.push_back({family_name(run->fontFace),run->bidiLevel,start,end-start,
-                {run->glyphIndices,run->glyphIndices+run->glyphCount},
-                {run->glyphAdvances,run->glyphAdvances+run->glyphCount}});
+            GlyphRun result{};
+            result.font_family=family_name(run->fontFace);
+            result.bidi_level=run->bidiLevel;result.text_start=start;result.text_length=end-start;
+            result.glyphs.assign(run->glyphIndices,run->glyphIndices+run->glyphCount);
+            result.advances.assign(run->glyphAdvances,run->glyphAdvances+run->glyphCount);
+            result.baseline_x=x;result.baseline_y=y;result.em_size=run->fontEmSize;
+            result.sideways=run->isSideways!=FALSE;
+            result.face=std::make_shared<GlyphFace>(run->fontFace);
+            result.measuring=static_cast<GlyphMeasure>(measuring);
+            for(UINT32 index=0;index<run->glyphCount;++index) {
+                const auto offset=run->glyphOffsets?run->glyphOffsets[index]:DWRITE_GLYPH_OFFSET{};
+                result.offsets.push_back({offset.advanceOffset,offset.ascenderOffset});
+            }
+            std::vector<UINT32> glyph_starts;
+            for(UINT32 index=0;index<description->stringLength;++index)
+                glyph_starts.push_back(description->clusterMap[index]);
+            glyph_starts.push_back(run->glyphCount);
+            std::sort(glyph_starts.begin(),glyph_starts.end());
+            glyph_starts.erase(std::unique(glyph_starts.begin(),glyph_starts.end()),glyph_starts.end());
+            for(UINT32 index=0;index<description->stringLength;) {
+                const auto first=description->clusterMap[index];
+                auto next=index+1;
+                while(next<description->stringLength&&description->clusterMap[next]==first) ++next;
+                const auto byte_start=byte_positions.at(description->textPosition+index);
+                const auto byte_end=byte_positions.at(description->textPosition+next);
+                const auto last=std::upper_bound(glyph_starts.begin(),glyph_starts.end(),first);
+                if(first>=run->glyphCount||last==glyph_starts.end()||byte_end<=byte_start)
+                    throw std::runtime_error("Invalid DirectWrite cluster mapping");
+                result.clusters.push_back({byte_start,byte_end-byte_start,first,*last-first});
+                index=next;
+            }
+            runs.push_back(std::move(result));
             return S_OK;
         } catch(...) { return E_FAIL; }
     }
@@ -149,6 +183,45 @@ HitPosition TextLayout::hit_test(float x,float y) const {
         else if(position!=boundaries.begin()) offset=*--position;
     }
     return {offset,inside!=FALSE};
+}
+GlyphBitmap rasterize_glyph_run(const GlyphRun& run) {
+    if(!run.face||!std::isfinite(run.em_size)||run.em_size<=0||
+       !std::isfinite(run.baseline_x)||!std::isfinite(run.baseline_y)||
+       static_cast<std::uint32_t>(run.measuring)>2||
+       run.glyphs.size()>UINT32_MAX||run.advances.size()!=run.glyphs.size()||
+       run.offsets.size()!=run.glyphs.size())
+        throw std::invalid_argument("Incomplete shaped glyph run");
+    if(run.em_size>16384) throw std::length_error("Shaped glyph size exceeds raster budget");
+    std::vector<DWRITE_GLYPH_OFFSET> offsets;
+    offsets.reserve(run.offsets.size());
+    for(std::size_t index=0;index<run.glyphs.size();++index) {
+        const auto offset=run.offsets[index];
+        if(!std::isfinite(run.advances[index])||!std::isfinite(offset.advance)||!std::isfinite(offset.ascender))
+            throw std::invalid_argument("Glyph geometry must be finite");
+        offsets.push_back({offset.advance,offset.ascender});
+    }
+    if(run.glyphs.empty()) return {};
+    DWRITE_GLYPH_RUN native{run.face->native.Get(),run.em_size,static_cast<UINT32>(run.glyphs.size()),
+        run.glyphs.data(),run.advances.data(),offsets.data(),run.sideways?TRUE:FALSE,run.bidi_level};
+    ComPtr<IDWriteFactory2> factory;
+    checked(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory2),
+        reinterpret_cast<IUnknown**>(factory.GetAddressOf())));
+    ComPtr<IDWriteGlyphRunAnalysis> analysis;
+    checked(factory->CreateGlyphRunAnalysis(&native,nullptr,DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
+        static_cast<DWRITE_MEASURING_MODE>(run.measuring),DWRITE_GRID_FIT_MODE_DISABLED,DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE,
+        run.baseline_x-std::floor(run.baseline_x),run.baseline_y-std::floor(run.baseline_y),&analysis));
+    RECT bounds{};
+    checked(analysis->GetAlphaTextureBounds(DWRITE_TEXTURE_ALIASED_1x1,&bounds));
+    const auto width=static_cast<std::int64_t>(bounds.right)-bounds.left;
+    const auto height=static_cast<std::int64_t>(bounds.bottom)-bounds.top;
+    if(width<0||height<0||width>16384||height>16384||width*height>64*1024*1024)
+        throw std::length_error("Shaped glyph bitmap exceeds raster budget");
+    GlyphBitmap result{static_cast<std::uint32_t>(width),static_cast<std::uint32_t>(height),bounds.left,bounds.top,{}};
+    result.alpha.resize(static_cast<std::size_t>(width*height));
+    if(!result.alpha.empty())
+        checked(analysis->CreateAlphaTexture(DWRITE_TEXTURE_ALIASED_1x1,&bounds,result.alpha.data(),
+            static_cast<UINT32>(result.alpha.size())));
+    return result;
 }
 RasterImage TextLayout::rasterize() const {
     ComApartment apartment;

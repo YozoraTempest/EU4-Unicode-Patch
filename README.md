@@ -23,7 +23,7 @@
 | 输入实验 | 单行编辑、选区和完整 SDL 提交默认关闭；原生像素定位/宽度截断通过 11 组、727 个像素位置；光标到 SDL 输入矩形通过九个案例及失焦/重新聚焦验收，见 [输入验收](docs/input.md) |
 | 隔离保护 | 目录、EXE 哈希、指令字节和旧插件冲突校验；失败时不启用 |
 | Unicode 服务 | ICU 字素边界、组合字符/ZWJ 序列处理及 NFKC casefold 搜索键，独立测试通过 |
-| 后续字体模块 | DirectWrite 字体回退、复杂文字 shaping、双向文字、测宽及 UTF-8 字素命中测试；独立渲染通过 |
+| 后续字体模块 | DirectWrite 字体回退、复杂文字 shaping、双向文字、测宽及字素命中测试；完整 run 保留实际字体/基线/偏移/源簇并直接栅格化，独立渲染通过 |
 
 运行证据与限制见 [validation.md](docs/validation.md)。游戏截图：[生僻字与更多语言](docs/evidence/utf8-supplementary.jpg)、[系统字体事件](docs/evidence/utf8-system-font-event.jpg)、[主菜单格式](docs/evidence/utf8-format.jpg)、[中文地图](docs/evidence/utf8-map.jpg)。[复杂文字布局截图](docs/evidence/unicode-layout.png)来自独立测试程序，复杂文字排版尚未接入游戏绘制。
 
