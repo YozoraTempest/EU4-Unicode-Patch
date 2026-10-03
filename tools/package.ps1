@@ -1,9 +1,9 @@
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$patchVersion='0.1.2-experimental'
+$patchVersion='0.1.3-experimental'
 $packageName="EU4UnicodePatch-1.37.5-v$patchVersion-drop-in.zip"
 $fontPackageName="EU4UnicodePatch-fonts-v$patchVersion.zip"
-$validation=Get-Content -LiteralPath (Join-Path $projectRoot 'docs/evidence/player-system-fonts.json') -Raw | ConvertFrom-Json
+$validation=Get-Content -LiteralPath (Join-Path $projectRoot 'docs/evidence/player-attribution.json') -Raw | ConvertFrom-Json
 foreach ($entry in @(
     @{Path='build/eu4_unicode_patch.dll';Hash=$validation.dll_sha256},
     @{Path='build/VERSION.dll';Hash=$validation.loader_sha256}
@@ -46,6 +46,7 @@ $packageFiles=@(Get-ChildItem -LiteralPath $stageRoot -Recurse -File | Sort-Obje
 })
 $manifest=[ordered]@{
     patch_version=$patchVersion
+    author='VulonLok'
     status='experimental'
     distribution='player drop-in'
     source_commit=$sourceCommit
@@ -78,6 +79,7 @@ $fontFiles=@(Get-ChildItem -LiteralPath $fontStageRoot -Recurse -File | Sort-Obj
 })
 $fontManifest=[ordered]@{
     patch_version=$patchVersion
+    publisher='VulonLok'
     distribution='optional font pack'
     source_commit=$sourceCommit
     license='SIL-OFL-1.1'

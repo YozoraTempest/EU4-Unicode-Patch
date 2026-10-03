@@ -49,9 +49,9 @@ Get-ChildItem tests\*.py | ForEach-Object {
 .\tools\package.ps1
 ```
 
-生成主包 `dist/EU4UnicodePatch-1.37.5-v0.1.2-experimental-drop-in.zip`、可选字体包 `dist/EU4UnicodePatch-fonts-v0.1.2-experimental.zip` 和 `dist/SHA256SUMS.txt`。两个 ZIP 均直接覆盖进游戏目录，源码、测试模组和游戏资源不进入玩家包。
+生成主包 `dist/EU4UnicodePatch-1.37.5-v0.1.3-experimental-drop-in.zip`、可选字体包 `dist/EU4UnicodePatch-fonts-v0.1.3-experimental.zip` 和 `dist/SHA256SUMS.txt`。两个 ZIP 均直接覆盖进游戏目录，源码、测试模组和游戏资源不进入玩家包。
 
-打包脚本核对正式 DLL、加载器、已验收图集及固定字体的 SHA-256。主包的 `manifest.json` 和字体包的 `font-manifest.json` 记录源提交与文件校验值，互不覆盖。发布说明见 [v0.1.2](releases/v0.1.2-experimental.md)。
+打包脚本核对正式 DLL、加载器、已验收图集及固定字体的 SHA-256。主包的 `manifest.json` 和字体包的 `font-manifest.json` 记录源提交与文件校验值，互不覆盖。发布说明见 [v0.1.3](releases/v0.1.3-experimental.md)。
 
 ## 版本校验
 

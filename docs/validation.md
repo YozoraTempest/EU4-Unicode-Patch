@@ -2,6 +2,12 @@
 
 测试平台：本机 Windows / Steam EU4 1.37.5.0 x64，非铁人。游戏验证使用独立用户目录与自有副本。
 
+## v0.1.3 署名
+
+本版仅调整署名与版本信息。九个 CTest、保护检查和两种字体安装方式的正常启动检查通过，初始化日志包含 `author=VulonLok`。[报告](evidence/player-attribution.json) · [主包日志](evidence/player-attribution-startup.log) · [可选字库日志](evidence/player-attribution-optional-startup.log)
+
+字体实现未改动，设备像素检查沿用下列 v0.1.2 记录。
+
 ## v0.1.2 系统字体与可选字库
 
 主包不附完整字体文件。无字库和装有可选字库两种安装均通过普通目录的游戏启动检查，记录了 18px 中文字形上传。检查使用系统模块枚举和日志，未注入观察工具；字体优先级为系统字体，原版字体定义保持原样。[报告](evidence/player-system-fonts.json) · [主包启动日志](evidence/player-system-fonts-startup.log) · [可选字库启动日志](evidence/player-optional-fonts-startup.log)

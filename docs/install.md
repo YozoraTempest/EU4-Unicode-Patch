@@ -1,6 +1,6 @@
 # 安装与卸载
 
-下载 Release 中的 `EU4UnicodePatch-1.37.5-v0.1.2-experimental-drop-in.zip`。GitHub 自动生成的 Source code 是源码，不是玩家补丁。
+下载 Release 中的 `EU4UnicodePatch-1.37.5-v0.1.3-experimental-drop-in.zip`。GitHub 自动生成的 Source code 是源码，不是玩家补丁。
 
 ## 安装
 
@@ -24,7 +24,7 @@ gfx/fonts/eu4-unicode/zh-hans-map.fnt / .dds
 
 ## 可选字体包
 
-补丁优先使用系统字体。需要生僻字或系统缺少的汉字时，下载 `EU4UnicodePatch-fonts-v0.1.2-experimental.zip`，退出游戏后将其中全部内容复制到同一游戏目录，再重新启动。
+补丁优先使用系统字体。需要生僻字或系统缺少的汉字时，下载 `EU4UnicodePatch-fonts-v0.1.3-experimental.zip`，退出游戏后将其中全部内容复制到同一游戏目录，再重新启动。
 
 三个字体文件放在 `plugins/eu4_unicode_patch/fonts/`，仅供游戏使用。安装后仍优先使用系统字体；删除这个文件夹即可移除可选字库。
 

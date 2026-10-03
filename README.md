@@ -2,15 +2,15 @@
 
 让《欧陆风云 IV》使用标准 **UTF-8** 显示文字，支持中文输入法、整字退格与选区替换。
 
-适用于 **EU4 1.37.5.0 Inca / Windows x64**。当前版本：**v0.1.2-experimental**。
+作者：**VulonLok**。
 
-[下载补丁](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.2-experimental/EU4UnicodePatch-1.37.5-v0.1.2-experimental-drop-in.zip) · [可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.2-experimental/EU4UnicodePatch-fonts-v0.1.2-experimental.zip) · [发布说明](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.2-experimental) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
+适用于 **EU4 1.37.5.0 Inca / Windows x64**。当前版本：**v0.1.3-experimental**。
 
-## v0.1.2 更新
+[下载补丁](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.3-experimental/EU4UnicodePatch-1.37.5-v0.1.3-experimental-drop-in.zip) · [可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.3-experimental/EU4UnicodePatch-fonts-v0.1.3-experimental.zip) · [发布说明](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.3-experimental) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
 
-- 优先使用玩家系统字体，主包不再附带完整字库。
-- 思源黑体 SC 和遍黑体改为可选字体包，用于补充系统缺少的字形。
-- 简化第三方说明。
+## v0.1.3 更新
+
+加入 VulonLok 署名。字体仍优先使用玩家系统字体，思源黑体 SC 和遍黑体单独提供为可选包。
 
 本版仍为实验版。支持 UTF-8 文字，不附带完整汉化；复杂文字排版、铁人和多人联机尚未完成验证。
 
@@ -48,7 +48,7 @@ Europa Universalis IV/
 - **游戏版本：** 仅支持 1.37.5.0 Inca，Windows x64。补丁会检查 EXE 的 SHA-256 和目标指令，校验失败时拒绝应用。
 - **旧双字节补丁：** 包内加载器跳过 `plugins/plugin64.dll` 和旧补丁的自动更新，旧文件保留。其他插件仍正常加载；已测试与 MenuPatch 一起启动。
 - **汉化模组：** 本地化应使用普通 UTF-8。旧双字节转义汉化需要先转换；自定义模组字体不保证支持。
-- **本次测试：** 无字库主包启动，系统字体与可选字库两种模式的五种字号 D3D9 上传。完整输入与候选窗有此前开发版记录，本版尚未完成整套人工复验。
+- **测试情况：** 本版通过构建、九项 CTest、保护检查与两种字体安装方式的启动检查。字体实现未改动，五种字号 D3D9 上传沿用 v0.1.2 测试记录。完整输入与候选窗有此前开发版记录，本版尚未完成整套人工复验。
 - **当前限制：** 每字号一张固定图集；多页图集、阿拉伯文等复杂排版、所有控件及输入法、长期战役、铁人和联机仍待完善。详见[测试记录](docs/validation.md)。
 
 ## 排查问题
@@ -73,4 +73,4 @@ UTF-8 import, UI, format, map and bitmap iterators enabled.
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 EU4UnicodePatch contributors。思源黑体与遍黑体采用 SIL OFL 1.1，见[第三方说明](THIRD_PARTY_NOTICES.md)。
+[MIT](LICENSE) © 2026 VulonLok。思源黑体与遍黑体采用 SIL OFL 1.1，见[第三方说明](THIRD_PARTY_NOTICES.md)。
