@@ -187,3 +187,27 @@ SDL 的 `SDL_GetClipboardText` 返回需要调用方释放的 UTF-8 缓冲。本
 python tools\verify-ime-rect.py private\native-ime-rect.jsonl
 python tests\ime_rect_evidence_tests.py
 ```
+
+## Windows 原生候选窗修补
+
+用户实际操作已观察到拼音预编辑、完整“法兰西” UTF-8 提交和连续三次整字退格；用户报告候选列表不可见。这个单一物理案例只证明该搜索框的提交与整字删除，不能替代选区、不同输入法、多行和其他控件验收。物理输入的原始记录保留在 `private`，不随项目分发。
+
+游戏中的 SDL 实现与上游 2.0.4 有差异：实际 `UIElementSink_BeginUIElement` 在 `1763ab7` 已写入 `TRUE`。该处只校验、不改写。实际 `IME_HandleMessage` 的 `WM_IME_SETCONTEXT` 分支仍在 `1764c7c` 清空 UI 标志；`WIN_SetTextInputRect` 在 `17657c0` 只调用组合窗口定位，没有候选窗定位。
+
+实验输入增加两个受精确 EXE 哈希和指令校验保护的挂钩。窗口消息挂钩先调用原函数，恢复调用者传入的 `WM_IME_SETCONTEXT` UI 标志，并使候选打开、变化、关闭通知继续送到默认 IME 窗口。只处理初始化、启用且可用的原生输入法上下文。组合结果仍由原 SDL 函数处理，不增加另一条文字提交路径。
+
+定位挂钩保留原组合窗口调用，在同一光标矩形上设置 `ImmSetCandidateWindow`，使用 `CFS_EXCLUDE` 排除光标所在行。获取和释放同一个窗口的 IMM 上下文，没有保存借用句柄或更改 Windows 输入法设置。实现采用 [Microsoft 候选窗接口](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immsetcandidatewindow)及[现代 SDL 的定位方式](https://github.com/libsdl-org/SDL/blob/SDL2/src/video/windows/SDL_windowskeyboard.c)。
+
+七个受控原生窗口消息案例通过：四种活动上下文 UI 标志完整保留，三个关闭状态保持原消息契约。正常 UI 帧上的十七次候选定位请求均由 Windows 接受；随后用 `ImmGetCandidateWindow` 读回的索引、排除模式、位置和矩形与实际光标一致。相同 DLL 的二十六个 SDL 完整提交、队列、一次插入和最终通知案例回归通过。见[候选窗原始记录](evidence/native-ime-candidate-contract.jsonl)与[独立报告](evidence/native-ime-candidate-contract.json)。这证明消息与定位 API 契约，候选列表的实际可见性仍待用户使用物理输入法复验。
+
+```powershell
+.\tools\start-test.ps1 -ExperimentalInput
+..\EU4MenuPatch\.venv\Scripts\python.exe tools\observe-ime-candidates.py --contract --duration 600
+```
+
+进入外交页并聚焦搜索框，观察器会记录原生消息和 Windows 候选窗状态。`--contract` 另外在 UI 线程调用七个受控上下文消息；不生成按键或输入法文本。删除该参数即可只观察实际操作。记录输出限制在本项目的 `private` 目录。结束观察前关闭专用实例，或创建 `private/ime-candidates-finish.txt` 使观察器关闭它所附加的独立游戏；不在运行中的高频入口卸载代理。
+
+```powershell
+python tools\verify-ime-candidates.py private\native-ime-candidates.jsonl
+python tests\ime_candidates_evidence_tests.py
+```

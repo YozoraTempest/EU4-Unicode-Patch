@@ -1,0 +1,82 @@
+{"event": "artifact", "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a", "dll_sha256": "d02e0cece69fdf60a7ea29407537b4554b9d4776c56016ee87b81c15acce255d", "method": "Native Windows IME requests and stored forms; physical candidate visibility requires user verification", "contract": true}
+{"type": "send", "payload": {"event": "ready", "contract": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 641, "parameter": "0x1", "incoming": "3221225487", "outgoing": "3221225487", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x2", "incoming": "0", "outgoing": "0", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x8", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x6", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [328, 485], "area": [328, 485, 329, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [328, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [328, 485], "area": [328, 485, 329, 501]}}}
+{"type": "send", "payload": {"event": "ime-policy-case", "name": "active-context", "incoming": 0, "outgoing": 0, "trapped": 0}}
+{"type": "send", "payload": {"event": "ime-policy-case", "name": "active-context", "incoming": 1, "outgoing": 1, "trapped": 0}}
+{"type": "send", "payload": {"event": "ime-policy-case", "name": "active-context", "incoming": 15, "outgoing": 15, "trapped": 0}}
+{"type": "send", "payload": {"event": "ime-policy-case", "name": "active-context", "incoming": 3221225487, "outgoing": 3221225487, "trapped": 0}}
+{"type": "send", "payload": {"event": "ime-policy-case", "name": "disabled-context", "offset": 72, "incoming": 3221225487, "outgoing": 3221225487, "trapped": 0}}
+{"type": "send", "payload": {"event": "ime-policy-case", "name": "disabled-context", "offset": 76, "incoming": 3221225487, "outgoing": 3221225487, "trapped": 0}}
+{"type": "send", "payload": {"event": "ime-policy-case", "name": "disabled-context", "offset": 80, "incoming": 3221225487, "outgoing": 3221225487, "trapped": 0}}
+{"type": "send", "payload": {"event": "ime-policy-complete", "cases": 7}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [357, 485], "area": [357, 485, 358, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [357, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [357, 485], "area": [357, 485, 358, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [360, 485], "area": [360, 485, 361, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [360, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [360, 485], "area": [360, 485, 361, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [344, 485], "area": [344, 485, 345, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [344, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [344, 485], "area": [344, 485, 345, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [374, 485], "area": [374, 485, 375, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [374, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [374, 485], "area": [374, 485, 375, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [378, 485], "area": [378, 485, 379, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [378, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [378, 485], "area": [378, 485, 379, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [448, 485], "area": [448, 485, 449, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [448, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [448, 485], "area": [448, 485, 449, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [406, 485], "area": [406, 485, 407, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [406, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [406, 485], "area": [406, 485, 407, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [360, 485], "area": [360, 485, 361, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [360, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [360, 485], "area": [360, 485, 361, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [328, 485], "area": [328, 485, 329, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [328, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [328, 485], "area": [328, 485, 329, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [456, 485], "area": [456, 485, 457, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [456, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [456, 485], "area": [456, 485, 457, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [472, 485], "area": [472, 485, 473, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [472, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [472, 485], "area": [472, 485, 473, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [356, 485], "area": [356, 485, 357, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [356, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [356, 485], "area": [356, 485, 357, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [340, 485], "area": [340, 485, 341, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [340, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [340, 485], "area": [340, 485, 341, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [328, 485], "area": [328, 485, 329, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [328, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [328, 485], "area": [328, 485, 329, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [388, 485], "area": [388, 485, 389, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [388, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [388, 485], "area": [388, 485, 389, 501]}}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0xb", "incoming": "0", "outgoing": "0", "trapped": 0, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-window-message", "message": 642, "parameter": "0x9", "incoming": "1", "outgoing": "1", "trapped": 1, "enabled": true}}
+{"type": "send", "payload": {"event": "ime-candidate-request", "context": "0x37b1153d", "form": {"index": 0, "style": 128, "position": [356, 485], "area": [356, 485, 357, 501]}, "accepted": true}}
+{"type": "send", "payload": {"event": "ime-candidate-state", "rect": [356, 485, 1, 16], "available": true, "form": {"index": 0, "style": 128, "position": [356, 485], "area": [356, 485, 357, 501]}}}

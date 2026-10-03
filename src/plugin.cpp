@@ -7,6 +7,7 @@
 #include "native_text_event.hpp"
 #include "unicode_search.hpp"
 #include "glyph_registry.hpp"
+#include "native_ime.hpp"
 #include <array>
 #include <atomic>
 #include <algorithm>
@@ -766,6 +767,11 @@ bool initialize(HMODULE module) {
         ,{0x17345f0,"48ff25a1bf8700"}
         ,{0x17349f0,"48ff2541c58700"}
         ,{0x1735940,"48ff25b9ac8700"}
+        ,{0x1764940,"4055564155415641574883ec20488b6c2470"}
+        ,{0x1764c7c,"4d8929"}
+        ,{0x17657c0,"40534883ec40488b99900300004885d2"}
+        ,{0x17657f6,"0f1183f4140000"}
+        ,{0x1763ab7,"c70601000000"}
         ,{0x1734490,"48ff2559bd8700"}
         ,{0x1735e00,"48ff2599ac8700"}
         ,{0x15a04f0,"40534883ec60488bda4533c0"}
@@ -912,7 +918,11 @@ bool initialize(HMODULE module) {
         log("Font lifetime hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
     if(experimental_input) {
-        if(MH_CreateHook(image+0x1569f91,reinterpret_cast<void*>(input_hook),nullptr)!=MH_OK ||
+        if(MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),
+             reinterpret_cast<void**>(&eu4unicode::original_ime_message))!=MH_OK ||
+           MH_CreateHook(image+0x17657c0,reinterpret_cast<void*>(eu4unicode::position_native_ime_candidates),
+             reinterpret_cast<void**>(&eu4unicode::original_ime_rect))!=MH_OK ||
+           MH_CreateHook(image+0x1569f91,reinterpret_cast<void*>(input_hook),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x1536e51,reinterpret_cast<void*>(editor_fit_hook),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x15366c0,reinterpret_cast<void*>(editor_key),
              reinterpret_cast<void**>(&original_editor_key))!=MH_OK ||
@@ -944,6 +954,7 @@ bool initialize(HMODULE module) {
             log("Input hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
         }
         log("Experimental UTF-8 input and single-line grapheme editing enabled.");
+        log("Native Windows IME candidate UI and caret exclusion rectangle enabled.");
     }
     struct DataPatch { std::size_t rva; std::vector<std::byte> before,after; };
     // Allocate all patch/rollback buffers before modifying any instruction.
