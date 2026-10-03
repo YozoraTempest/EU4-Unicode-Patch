@@ -1,0 +1,126 @@
+{
+  "unicode_version": "17.0.0",
+  "tool": "fontTools 4.66.1",
+  "files": [
+    {
+      "file": "SourceHanSansSC-Regular.otf",
+      "sha256": "f1d8611151880c6c336aabeac4640ef434fa13cbfbf1ffe82d0a71b2a5637256",
+      "bytes": 16529832,
+      "family": "Source Han Sans SC",
+      "version": "Version 2.005;addfeatures 5.0.0b21",
+      "copyright": "© 2014-2025 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.",
+      "mapped_scalars": 44853
+    },
+    {
+      "file": "PlangothicP1-Regular.ttf",
+      "sha256": "550b5d0775b15405946b18f4843df439a51e69508d7e6778d94c1f7a53dc5ad6",
+      "bytes": 20410664,
+      "family": "Plangothic P1",
+      "version": "Version 6.400;July 4, 2026;FontCreator 14.0.0.2901 64-bit",
+      "copyright": "Copyright (c) 2024 by Fitzgerald P. Köeingsegg. All rights reserved.",
+      "mapped_scalars": 65440
+    },
+    {
+      "file": "PlangothicP2-Regular.ttf",
+      "sha256": "681933370adfe0fc7253f77735275a82fea09fe4f8adba907bdeb46c110daf8f",
+      "bytes": 12459248,
+      "family": "Plangothic P2",
+      "version": "Version 3.179;July 5, 2026;FontCreator 14.0.0.2901 64-bit",
+      "copyright": "Copyright (c) 2024 by Fitzgerald P. Köeingsegg. All rights reserved.",
+      "mapped_scalars": 42152
+    }
+  ],
+  "union_mapped_scalars": 135063,
+  "sources": {
+    "UnicodeData": {
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt",
+      "sha256": "2e1efc1dcb59c575eedf5ccae60f95229f706ee6d031835247d843c11d96470c"
+    },
+    "Blocks": {
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/Blocks.txt",
+      "sha256": "c0edefaf1a19771e830a82735472716af6bf3c3975f6c2a23ffbe2580fbbcb15"
+    }
+  },
+  "blocks": [
+    {
+      "name": "CJK Unified Ideographs Extension A",
+      "assigned": 6592,
+      "covered": 6592,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs",
+      "assigned": 20992,
+      "covered": 20992,
+      "missing": []
+    },
+    {
+      "name": "CJK Compatibility Ideographs",
+      "assigned": 472,
+      "covered": 472,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs Extension B",
+      "assigned": 42720,
+      "covered": 42720,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs Extension C",
+      "assigned": 4160,
+      "covered": 4160,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs Extension D",
+      "assigned": 222,
+      "covered": 222,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs Extension E",
+      "assigned": 5774,
+      "covered": 5774,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs Extension F",
+      "assigned": 7473,
+      "covered": 7473,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs Extension I",
+      "assigned": 622,
+      "covered": 622,
+      "missing": []
+    },
+    {
+      "name": "CJK Compatibility Ideographs Supplement",
+      "assigned": 542,
+      "covered": 542,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs Extension G",
+      "assigned": 4939,
+      "covered": 4939,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs Extension H",
+      "assigned": 4192,
+      "covered": 4192,
+      "missing": []
+    },
+    {
+      "name": "CJK Unified Ideographs Extension J",
+      "assigned": 4298,
+      "covered": 4298,
+      "missing": []
+    }
+  ],
+  "all_assigned_cjk_covered": true,
+  "scope": "Font cmap coverage only; this does not prove EU4 rendering, shaping, variation selectors or atlas capacity"
+}

@@ -15,15 +15,15 @@ struct Glyph {
     int x=0,y=0,width=1,height=1,x_offset=0,y_offset=0,advance=0;
     std::vector<std::uint8_t> alpha;
 };
-void pack(const std::set<std::uint32_t>& scalars,const std::filesystem::path& destination,int size) {
-    constexpr int atlas_width=1024;
+void pack(const std::set<std::uint32_t>& scalars,const std::filesystem::path& destination,int size,
+          int atlas_width,int reserve_height,const std::shared_ptr<const eu4unicode::TextFonts>& fonts) {
     const int base=static_cast<int>(std::round(size*0.8));
     std::vector<Glyph> glyphs;
     int x=1,y=1,row_height=0;
     std::size_t missing=0;
     for(const auto scalar:scalars) {
         const auto text=eu4unicode::encode(scalar);
-        eu4unicode::TextLayout layout(text,static_cast<float>(size),512,512,L"Microsoft YaHei UI");
+        eu4unicode::TextLayout layout(text,static_cast<float>(size),512,512,L"Microsoft YaHei UI",fonts);
         for(const auto& run:layout.glyph_runs()) missing+=std::count(run.glyphs.begin(),run.glyphs.end(),0);
         const auto image=layout.rasterize();
         int left=static_cast<int>(image.width),top=static_cast<int>(image.height),right=-1,bottom=-1;
@@ -50,6 +50,7 @@ void pack(const std::set<std::uint32_t>& scalars,const std::filesystem::path& de
     }
     int atlas_height=1;
     while(atlas_height<y+row_height+1) atlas_height*=2;
+    atlas_height=(std::max)(atlas_height,reserve_height);
     if(atlas_height>8192) throw std::runtime_error("Font exceeds the single-atlas research budget");
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(atlas_width)*atlas_height*4,size==88?0:255);
     for(std::size_t index=3;index<pixels.size();index+=4) pixels[index]=0;
@@ -79,7 +80,21 @@ void pack(const std::set<std::uint32_t>& scalars,const std::filesystem::path& de
 }
 int wmain(int argc,wchar_t** argv) {
     try {
-        if(argc!=3) throw std::invalid_argument("Usage: fontpack UTF8_SOURCE OUTPUT_DIRECTORY");
+        if(argc<3) throw std::invalid_argument("Usage: fontpack UTF8_SOURCE OUTPUT_DIRECTORY [--font FILE ...] [--atlas-width N] [--atlas-height N]");
+        std::vector<std::filesystem::path> files;
+        int atlas_width=1024,reserve_height=0;
+        for(int index=3;index<argc;index+=2) {
+            if(index+1>=argc) throw std::invalid_argument("Missing fontpack option value");
+            const std::wstring option(argv[index]);
+            if(option==L"--font") files.emplace_back(argv[index+1]);
+            else if(option==L"--atlas-width") atlas_width=std::stoi(argv[index+1]);
+            else if(option==L"--atlas-height") reserve_height=std::stoi(argv[index+1]);
+            else throw std::invalid_argument("Unknown fontpack option");
+        }
+        if(atlas_width<256||atlas_width>8192||(atlas_width&(atlas_width-1))||reserve_height<0||reserve_height>8192||
+           (reserve_height&&(reserve_height&(reserve_height-1)))) throw std::invalid_argument("Atlas dimensions must be bounded powers of two");
+        std::shared_ptr<const eu4unicode::TextFonts> fonts;
+        if(!files.empty()) fonts=std::make_shared<eu4unicode::TextFonts>(files);
         std::ifstream source(argv[1],std::ios::binary);
         if(!source) throw std::runtime_error("Cannot read font character source");
         std::string content((std::istreambuf_iterator<char>(source)),std::istreambuf_iterator<char>());
@@ -94,7 +109,7 @@ int wmain(int argc,wchar_t** argv) {
             remaining.remove_prefix(scalar.bytes);
         }
         std::filesystem::create_directories(argv[2]);
-        for(const auto size:{14,16,18,24,88}) pack(scalars,argv[2],size);
+        for(const auto size:{14,16,18,24,88}) pack(scalars,argv[2],size,atlas_width,reserve_height,fonts);
         return 0;
     } catch(const std::exception& error) { std::cerr<<error.what()<<'\n'; return 1; }
 }

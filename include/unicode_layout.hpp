@@ -7,6 +7,20 @@
 #include <vector>
 
 namespace eu4unicode {
+// A process-local collection and ordered fallback. No installed fonts or
+// registry settings are changed. Runs retain the selected file-backed face.
+class TextFonts {
+public:
+    explicit TextFonts(const std::vector<std::filesystem::path>& files);
+    ~TextFonts();
+    TextFonts(const TextFonts&)=delete;
+    TextFonts& operator=(const TextFonts&)=delete;
+    std::vector<std::string> families() const;
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+    friend class TextLayout;
+};
 class GlyphFace;
 enum class GlyphMeasure : std::uint32_t { Natural=0,GdiClassic=1,GdiNatural=2 };
 struct GlyphOffset { float advance,ascender; };
@@ -49,7 +63,8 @@ struct RasterImage {
 class TextLayout {
 public:
     TextLayout(std::string_view text,float size,float width,float height,
-               std::wstring_view family=L"Segoe UI");
+               std::wstring_view family=L"Segoe UI",
+               std::shared_ptr<const TextFonts> fonts={});
     ~TextLayout();
     TextLayout(TextLayout&&) noexcept;
     TextLayout& operator=(TextLayout&&) noexcept;

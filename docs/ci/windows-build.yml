@@ -41,3 +41,5 @@ jobs:
         run: python tests/ime_candidates_evidence_tests.py
       - name: Physical Chinese IME editing evidence validation
         run: python tools/verify-physical-editor.py docs/evidence/physical-editor-sequence.json
+      - name: Native dynamic font GPU evidence validation
+        run: python tests/dynamic_font_evidence_tests.py

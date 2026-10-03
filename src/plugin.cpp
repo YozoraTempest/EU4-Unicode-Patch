@@ -8,6 +8,7 @@
 #include "unicode_search.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
+#include "native_font_atlas.hpp"
 #include <array>
 #include <atomic>
 #include <algorithm>
@@ -182,7 +183,14 @@ EditorWidthFit original_editor_width_fit=nullptr;
 EditorWordBreak original_editor_word_break=nullptr;
 using FontTableDestroy=void(*)(void* const*);
 FontTableDestroy original_font_table_destroy=nullptr;
+using FontLoad=void(*)(void*);
+FontLoad original_font_load=nullptr;
+void load_font_atlas(void* font) {
+    original_font_load(font);
+    eu4unicode::register_font_atlas(font);
+}
 void destroy_font_table(void* const* table) {
+    eu4unicode::release_font_atlas(table);
     eu4unicode::release_unicode_font(table);
     original_font_table_destroy(table);
 }
@@ -558,10 +566,11 @@ void* allocate_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept {
     return record;
 }
 void* find_supplementary_glyph(void* const* table,std::uint32_t scalar) noexcept {
-    return eu4unicode::find_unicode_glyph(table,scalar);
+    auto glyph=eu4unicode::find_unicode_glyph(table,scalar);
+    return glyph?glyph:eu4unicode::find_dynamic_glyph(table,scalar);
 }
 void* find_loaded_glyph(void* const* table,std::uint32_t scalar) noexcept {
-    return scalar<=0xff?table[scalar]:find_supplementary_glyph(table,scalar);
+    return scalar<=0xff?table[scalar]:eu4unicode::find_unicode_glyph(table,scalar);
 }
 void store_loaded_glyph(void** table,std::uint32_t scalar,void* glyph) noexcept {
     if(scalar<=0xff) {
@@ -781,6 +790,8 @@ bool initialize(HMODULE module) {
         ,{0x153857f,"488b03488bcbff90d8000000"}
         ,{0x153868f,"488b03488bcbff90e8000000"}
         ,{0x1594360,"48895c24084889742410574883ec20488bf1488bd9bf00010000"}
+        ,{0x15953c0,"48895c2408574881ec80000000488bf933db"}
+        ,{0x16c3f10,"405355565741564883ec70488bf985d2"}
         ,{0x1594380,"488b0b4885c9740aba10000000e85e511a00"}
         ,{0x159487f,"488d8f20010000e8d5faffff"}
         ,{0x1174e95,"e8e6025900"}
@@ -916,6 +927,14 @@ bool initialize(HMODULE module) {
     if(MH_CreateHook(image+0x1594360,reinterpret_cast<void*>(destroy_font_table),
         reinterpret_cast<void**>(&original_font_table_destroy))!=MH_OK) {
         log("Font lifetime hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
+    eu4unicode::configure_font_atlases(exe.parent_path().parent_path()/L"test-mod",
+        std::filesystem::path(dll_path).parent_path()/L"fonts",log);
+    if(MH_CreateHook(image+0x15953c0,reinterpret_cast<void*>(load_font_atlas),
+        reinterpret_cast<void**>(&original_font_load))!=MH_OK||
+       MH_CreateHook(image+0x16c3f10,reinterpret_cast<void*>(eu4unicode::synchronize_font_texture),
+        reinterpret_cast<void**>(&eu4unicode::original_texture_lookup))!=MH_OK) {
+        log("Dynamic font atlas hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
     if(experimental_input) {
         if(MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),

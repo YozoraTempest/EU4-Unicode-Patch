@@ -23,6 +23,17 @@ Get-ChildItem -LiteralPath $packageRoot -Recurse -Directory -Filter '__pycache__
 foreach ($file in @('README.md','LICENSE','THIRD_PARTY_NOTICES.md','CMakeLists.txt','.gitmodules','.gitignore')) {
     Copy-Item (Join-Path $projectRoot $file) $packageRoot -Force
 }
+$fontManifest=Get-Content -LiteralPath (Join-Path $projectRoot 'fixtures/open-fonts.json') -Raw | ConvertFrom-Json
+$fontRoot=Join-Path $packageRoot 'fonts'
+New-Item -ItemType Directory -Path $fontRoot -Force | Out-Null
+foreach ($font in $fontManifest.files) {
+    $source=Join-Path $projectRoot "private/open-fonts/$($font.name)"
+    if (!(Test-Path -LiteralPath $source) -or
+        (Get-FileHash -LiteralPath $source).Hash.ToLowerInvariant() -ne $font.sha256) {
+        throw 'Fetch the pinned open fonts before packaging.'
+    }
+    Copy-Item -LiteralPath $source -Destination $fontRoot -Force
+}
 $binaryRoot=Join-Path $packageRoot 'build'
 New-Item -ItemType Directory -Path $binaryRoot -Force | Out-Null
 foreach ($binary in @('eu4_unicode_probe.dll','fontpack.exe')) {

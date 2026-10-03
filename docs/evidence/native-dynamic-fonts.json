@@ -1,0 +1,212 @@
+{
+  "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+  "dll_sha256": "d71bd5fba5d87b40bd7d0506aa2c1f1a2ae030145df3d259dff3ae65f1042f37",
+  "samples": [
+    "中华人民共和国",
+    "孔雀翡翠",
+    "𠮷𰀀𲎰"
+  ],
+  "native_commits": 3,
+  "checked_gpu_glyphs": 14,
+  "exact_alpha": true,
+  "glyphs": [
+    {
+      "scalar": 20013,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        1885,
+        1,
+        14,
+        15,
+        1,
+        0,
+        16
+      ],
+      "alpha_sha256": "6f3db1ef6bf9f8c4e3d9b1312414d17052d7efdd79cd31885250c24da5bd2eb4"
+    },
+    {
+      "scalar": 20154,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        2016,
+        1,
+        16,
+        15,
+        0,
+        -1,
+        16
+      ],
+      "alpha_sha256": "e34516f6e29c084a77cdedb5028f463a8e0802ac5a9848e01275927a24a6d04e"
+    },
+    {
+      "scalar": 20849,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        34,
+        55,
+        16,
+        16,
+        0,
+        -1,
+        16
+      ],
+      "alpha_sha256": "e708c30b886cb7facac2e65cc5386a1822b576b9247a8f569eba5dbc8548c85a"
+    },
+    {
+      "scalar": 21326,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        1,
+        55,
+        16,
+        16,
+        0,
+        -1,
+        16
+      ],
+      "alpha_sha256": "9913dd83dad2f133c8f2f5d194e7832b7307b1bb91c0fab7e934a625f46e8fd2"
+    },
+    {
+      "scalar": 21644,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        51,
+        55,
+        15,
+        16,
+        0,
+        -1,
+        16
+      ],
+      "alpha_sha256": "d4999e22604637d85629642164817216deeaad51bfd7cb838544c06d09fe2694"
+    },
+    {
+      "scalar": 22269,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        483,
+        20,
+        14,
+        14,
+        1,
+        0,
+        16
+      ],
+      "alpha_sha256": "5d678cb6a0f79c68f8f28523a67f5be267bca45881b8fabedb4e11c61fac32a1"
+    },
+    {
+      "scalar": 23380,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        67,
+        55,
+        16,
+        15,
+        0,
+        0,
+        16
+      ],
+      "alpha_sha256": "d5abc90db8f8fabbf200aad4431fc7a870c73696c6221b89cb080798c5774256"
+    },
+    {
+      "scalar": 27665,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        18,
+        55,
+        15,
+        15,
+        1,
+        0,
+        16
+      ],
+      "alpha_sha256": "a98e31b7f7e94d4fc80fc11d2cb4f72d101e2184d0e9d18fb14f24af4a4e1000"
+    },
+    {
+      "scalar": 32736,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        117,
+        55,
+        16,
+        15,
+        0,
+        0,
+        16
+      ],
+      "alpha_sha256": "7108bf0386cdf88a061e34a70f3cff5fcc356f4f19c9bc26918d461b76aae4c9"
+    },
+    {
+      "scalar": 32737,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        101,
+        55,
+        15,
+        14,
+        1,
+        0,
+        16
+      ],
+      "alpha_sha256": "c69d2a68c0db09c3e9409b5e2ad884b9cb11ab5d9f788db75f4c32a5da016f3a"
+    },
+    {
+      "scalar": 38592,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        84,
+        55,
+        16,
+        16,
+        0,
+        -1,
+        16
+      ],
+      "alpha_sha256": "90e85669de271f397158f2908a730e8d87aa99e9cf22f519f15c9d0bec5a0cf8"
+    },
+    {
+      "scalar": 134071,
+      "family": "Source Han Sans SC",
+      "metrics": [
+        134,
+        55,
+        15,
+        15,
+        1,
+        0,
+        16
+      ],
+      "alpha_sha256": "561c08a5709d61a860d1952f8cdbf9e619e8d9379bc59ac3c8840dadbce8042c"
+    },
+    {
+      "scalar": 196608,
+      "family": "Plangothic P2",
+      "metrics": [
+        150,
+        55,
+        14,
+        14,
+        1,
+        0,
+        16
+      ],
+      "alpha_sha256": "f7050df21380cfefd4e0e4e7362c15407acdb1840523f3b98480c4832140d993"
+    },
+    {
+      "scalar": 205744,
+      "family": "Plangothic P2",
+      "metrics": [
+        165,
+        55,
+        12,
+        14,
+        2,
+        0,
+        16
+      ],
+      "alpha_sha256": "aaac1437b7d43638a05a965304d3553355622f728c012ff7772890712dfe0e46"
+    }
+  ],
+  "physical_ime": "This trace uses controlled SDL commits; physical IME confirmation is separate",
+  "scope": "Current native single-line GUI font; single fixed page; complex shaping and multi-page rendering remain pending"
+}

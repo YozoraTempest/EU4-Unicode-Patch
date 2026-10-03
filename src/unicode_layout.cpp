@@ -124,13 +124,74 @@ struct ComApartment {
     ~ComApartment() { if(SUCCEEDED(status)) CoUninitialize(); }
 };
 }
+struct TextFonts::Impl {
+    ComPtr<IDWriteFontCollection1> collection;
+    ComPtr<IDWriteFontFallback> fallback;
+    std::vector<std::wstring> names;
+    explicit Impl(const std::vector<std::filesystem::path>& files) {
+        if(files.empty()) throw std::invalid_argument("Font collection requires files");
+        ComPtr<IDWriteFactory3> factory;
+        checked(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory3),
+            reinterpret_cast<IUnknown**>(factory.GetAddressOf())));
+        ComPtr<IDWriteFontSetBuilder> builder;
+        checked(factory->CreateFontSetBuilder(&builder));
+        for(const auto& file:files) {
+            ComPtr<IDWriteFontFile> native;
+            checked(factory->CreateFontFileReference(std::filesystem::absolute(file).c_str(),nullptr,&native));
+            BOOL supported=FALSE; DWRITE_FONT_FILE_TYPE type{}; DWRITE_FONT_FACE_TYPE face{}; UINT32 count=0;
+            checked(native->Analyze(&supported,&type,&face,&count));
+            if(!supported||!count) throw std::invalid_argument("Unsupported font file");
+            for(UINT32 index=0;index<count;++index) {
+                ComPtr<IDWriteFontFaceReference> reference;
+                checked(factory->CreateFontFaceReference(native.Get(),index,DWRITE_FONT_SIMULATIONS_NONE,&reference));
+                checked(builder->AddFontFaceReference(reference.Get()));
+            }
+        }
+        ComPtr<IDWriteFontSet> set;
+        checked(builder->CreateFontSet(&set));
+        checked(factory->CreateFontCollectionFromFontSet(set.Get(),&collection));
+        // Preserve caller file order for overlapping CJK coverage.
+        for(const auto& file:files) {
+            ComPtr<IDWriteFontFile> native;
+            checked(factory->CreateFontFileReference(std::filesystem::absolute(file).c_str(),nullptr,&native));
+            BOOL supported=FALSE; DWRITE_FONT_FILE_TYPE type{}; DWRITE_FONT_FACE_TYPE face{}; UINT32 count=0;
+            checked(native->Analyze(&supported,&type,&face,&count));
+            for(UINT32 index=0;index<count;++index) {
+                ComPtr<IDWriteFontFace> font;
+                IDWriteFontFile* list[]={native.Get()};
+                checked(factory->CreateFontFace(face,1,list,index,DWRITE_FONT_SIMULATIONS_NONE,&font));
+                const auto name=to_wide(family_name(font.Get()));
+                if(std::find(names.begin(),names.end(),name)==names.end()) names.push_back(name);
+            }
+        }
+        ComPtr<IDWriteFontFallbackBuilder> fallback_builder;
+        checked(factory->CreateFontFallbackBuilder(&fallback_builder));
+        const DWRITE_UNICODE_RANGE range{0,0x10ffff};
+        std::vector<const wchar_t*> targets;
+        for(const auto& name:names) targets.push_back(name.c_str());
+        checked(fallback_builder->AddMapping(&range,1,targets.data(),static_cast<UINT32>(targets.size()),collection.Get()));
+        ComPtr<IDWriteFontFallback> system;
+        checked(factory->GetSystemFontFallback(&system));
+        checked(fallback_builder->AddMappings(system.Get()));
+        checked(fallback_builder->CreateFontFallback(&fallback));
+    }
+};
+TextFonts::TextFonts(const std::vector<std::filesystem::path>& files):impl_(std::make_unique<Impl>(files)) {}
+TextFonts::~TextFonts()=default;
+std::vector<std::string> TextFonts::families() const {
+    std::vector<std::string> result;
+    for(const auto& name:impl_->names) result.push_back(to_utf8(name));
+    return result;
+}
 struct TextLayout::Impl {
     std::string text;
     std::wstring wide;
     std::vector<std::size_t> byte_positions;
     ComPtr<IDWriteFactory2> factory;
     ComPtr<IDWriteTextLayout2> layout;
-    Impl(std::string_view value,float size,float width,float height,std::wstring_view family):text(value),wide(to_wide(value)) {
+    std::shared_ptr<const TextFonts> fonts;
+    Impl(std::string_view value,float size,float width,float height,std::wstring_view family,
+         std::shared_ptr<const TextFonts> custom):text(value),wide(to_wide(value)),fonts(std::move(custom)) {
         if(!std::isfinite(size)||!std::isfinite(width)||!std::isfinite(height)||size<=0||width<=0||height<=0)
             throw std::invalid_argument("Layout dimensions must be positive finite values");
         auto remaining=value;
@@ -145,18 +206,19 @@ struct TextLayout::Impl {
         byte_positions.push_back(offset);
         checked(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory2),reinterpret_cast<IUnknown**>(factory.GetAddressOf())));
         ComPtr<IDWriteTextFormat> format;
-        const std::wstring name(family);
-        checked(factory->CreateTextFormat(name.c_str(),nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,
+        const std::wstring name=fonts?fonts->impl_->names.front():std::wstring(family);
+        checked(factory->CreateTextFormat(name.c_str(),fonts?fonts->impl_->collection.Get():nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,size,L"zh-CN",&format));
         ComPtr<IDWriteTextLayout> base;
         checked(factory->CreateTextLayout(wide.data(),static_cast<UINT32>(wide.size()),format.Get(),width,height,&base));
         checked(base.As(&layout));
         ComPtr<IDWriteFontFallback> fallback;
         checked(factory->GetSystemFontFallback(&fallback));
-        checked(layout->SetFontFallback(fallback.Get()));
+        checked(layout->SetFontFallback(fonts?fonts->impl_->fallback.Get():fallback.Get()));
     }
 };
-TextLayout::TextLayout(std::string_view text,float size,float width,float height,std::wstring_view family):impl_(std::make_unique<Impl>(text,size,width,height,family)) {}
+TextLayout::TextLayout(std::string_view text,float size,float width,float height,std::wstring_view family,
+    std::shared_ptr<const TextFonts> fonts):impl_(std::make_unique<Impl>(text,size,width,height,family,std::move(fonts))) {}
 TextLayout::~TextLayout()=default;
 TextLayout::TextLayout(TextLayout&&) noexcept=default;
 TextLayout& TextLayout::operator=(TextLayout&&) noexcept=default;

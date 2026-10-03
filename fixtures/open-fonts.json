@@ -1,0 +1,38 @@
+{
+  "license": "SIL-OFL-1.1",
+  "files": [
+    {
+      "name": "SourceHanSansSC-Regular.otf",
+      "project": "https://github.com/adobe-fonts/source-han-sans",
+      "version": "2.005R",
+      "commit": "6c709ca72d3d7c46ab42ebecc1a26e7d69595a37",
+      "url": "https://github.com/adobe-fonts/source-han-sans/releases/download/2.005R/09_SourceHanSansSC.zip",
+      "archive": "SourceHanSansSC-2.005R.zip",
+      "archive_sha256": "ef7364f7ac2564be1ae9c1d74276de2653fe38b73449070398c4fc0b7e032ff1",
+      "entry": "OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf",
+      "bytes": 16529832,
+      "sha256": "f1d8611151880c6c336aabeac4640ef434fa13cbfbf1ffe82d0a71b2a5637256",
+      "license_file": "third-party/SourceHanSans-OFL.txt"
+    },
+    {
+      "name": "PlangothicP1-Regular.ttf",
+      "project": "https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic_Project",
+      "version": "V2.9.5795",
+      "commit": "51485203670f18b6f5fa40913ffcde55027ddcb1",
+      "url": "https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic_Project/releases/download/V2.9.5795/PlangothicP1-Regular.ttf",
+      "bytes": 20410664,
+      "sha256": "550b5d0775b15405946b18f4843df439a51e69508d7e6778d94c1f7a53dc5ad6",
+      "license_file": "third-party/Plangothic-OFL.txt"
+    },
+    {
+      "name": "PlangothicP2-Regular.ttf",
+      "project": "https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic_Project",
+      "version": "V2.9.5795",
+      "commit": "51485203670f18b6f5fa40913ffcde55027ddcb1",
+      "url": "https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic_Project/releases/download/V2.9.5795/PlangothicP2-Regular.ttf",
+      "bytes": 12459248,
+      "sha256": "681933370adfe0fc7253f77735275a82fea09fe4f8adba907bdeb46c110daf8f",
+      "license_file": "third-party/Plangothic-OFL.txt"
+    }
+  ]
+}

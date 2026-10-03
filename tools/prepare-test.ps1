@@ -2,12 +2,14 @@ param(
     [string]$GameDirectory = 'D:\SteamLibrary\steamapps\common\Europa Universalis IV',
     [string]$FontDirectory = 'D:\SteamLibrary\steamapps\workshop\content\236850\2976470733\gfx\fonts',
     [switch]$SystemFonts,
+    [switch]$OpenFonts,
     [switch]$SupplementarySaveProbe,
     [switch]$PersistenceProbe,
     [switch]$SearchProbe,
     [string]$MigratedLocalisationDirectory
 )
 $ErrorActionPreference = 'Stop'
+if ($OpenFonts) { $SystemFonts=$true }
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $testRoot = Join-Path $projectRoot 'private\test-userdir'
 $modRoot = Join-Path $projectRoot 'private\test-mod'
@@ -109,7 +111,14 @@ if ($PersistenceProbe) {
 [IO.File]::WriteAllText((Join-Path $modRoot 'common\on_actions\00_on_actions.txt'),$actions,$utf8)
 # Reuse installed mod fonts only in the private test fixture. They are not packaged.
 if ($SystemFonts) {
-    & (Join-Path $projectRoot 'build\fontpack.exe') (Join-Path $modRoot 'localisation\replace\eu4_unicode_probe_l_english.yml') (Join-Path $modRoot 'gfx\fonts')
+    $fontOptions=@()
+    if ($OpenFonts) {
+        & (Join-Path $PSScriptRoot 'fetch-open-fonts.ps1')
+        $manifest=Get-Content -LiteralPath (Join-Path $projectRoot 'fixtures/open-fonts.json') -Raw | ConvertFrom-Json
+        foreach ($font in $manifest.files) { $fontOptions+=@('--font',(Join-Path $projectRoot "private/open-fonts/$($font.name)")) }
+        $fontOptions+=@('--atlas-width','2048','--atlas-height','4096')
+    }
+    & (Join-Path $projectRoot 'build\fontpack.exe') (Join-Path $modRoot 'localisation\replace\eu4_unicode_probe_l_english.yml') (Join-Path $modRoot 'gfx\fonts') @fontOptions
     if ($LASTEXITCODE -ne 0) { throw 'System font atlas generation failed.' }
 } else {
     foreach ($size in @(14,16,18,24,'map')) {
