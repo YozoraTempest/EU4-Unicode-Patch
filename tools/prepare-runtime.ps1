@@ -16,6 +16,6 @@ New-Item -ItemType Directory -Path $runtimeRoot,$testRoot -Force | Out-Null
 if ($LASTEXITCODE -gt 7) { throw "Runtime copy failed: $LASTEXITCODE" }
 New-Item -ItemType Directory -Path (Join-Path $runtimeRoot 'plugins') -Force | Out-Null
 $utf8=[Text.UTF8Encoding]::new($false)
-[IO.File]::WriteAllText((Join-Path $runtimeRoot 'userdir.txt'),$testRoot.Replace('\','/')+"`n",$utf8)
-[IO.File]::WriteAllText((Join-Path $runtimeRoot 'steam_appid.txt'),"236850`n",$utf8)
+[IO.File]::WriteAllText((Join-Path $runtimeRoot 'userdir.txt'),$testRoot.Replace('\','/'),$utf8)
+[IO.File]::WriteAllText((Join-Path $runtimeRoot 'steam_appid.txt'),'236850',$utf8)
 'Isolated runtime prepared. Source game files were only read.'

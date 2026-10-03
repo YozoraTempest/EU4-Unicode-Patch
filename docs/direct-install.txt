@@ -1,0 +1,45 @@
+EU4 Unicode Patch v0.1.1-experimental
+适用：EU4 1.37.5.0 Inca，Windows x64，Windows 10 1903 或更新版本。
+
+安装
+1. 退出游戏。若已安装其他加载器，备份游戏目录的 VERSION.dll。
+2. 将 ZIP 内全部内容复制到 eu4.exe 所在目录，合并文件夹并覆盖同名文件。
+3. 正常从 Steam/启动器启动游戏。中文输入及输入法候选窗默认启用。
+
+正确位置
+eu4.exe
+VERSION.dll
+plugins/eu4_unicode_patch.dll
+plugins/eu4_unicode_patch/fonts/三个开源字体原文件
+gfx/fonts/eu4-unicode/五套 .fnt 和 .dds
+
+不需要运行脚本、编译、复制游戏或安装系统字体。
+
+旧双字节补丁
+本包的加载器跳过 plugins/plugin64.dll、开发探针 eu4_unicode_probe.dll
+及旧补丁的自动更新脚本，保留这些旧文件。其他插件仍按 plugins 目录加载。
+不要再覆盖回旧 VERSION.dll，否则旧双字节插件可能再次加载，与 Unicode 补丁冲突。
+
+汉化
+本包提供编码、字体和输入支持，不附带完整中文翻译。
+汉化本地化必须是普通 UTF-8；旧双字节转义汉化需要先迁移。
+自定义图标字体及未识别的模组字体保持其原有资源。
+
+更新
+退出游戏后用新玩家包覆盖同一游戏目录。存档与用户设置保留。
+
+卸载
+退出游戏，删除 plugins/eu4_unicode_patch.dll、plugins/eu4_unicode_patch/、
+gfx/fonts/eu4-unicode/、EU4UnicodePatch.README.txt。
+曾备份 VERSION.dll 时恢复备份；若本包是首次安装的加载器，删除本包的 VERSION.dll。
+恢复旧加载器后，留下的旧双字节插件及其自动更新会恢复原来的行为。
+
+日志：plugins/eu4_unicode_patch.log
+启用标志：UTF-8 import, UI, format, map and bitmap iterators enabled.
+Refused 表示版本、冲突或包内文件检查未通过；缺字或图集已满也记录在日志中。
+
+这是实验版。多页图集、复杂文字整段排版、铁人和联机尚未完成验证。
+下载与详细说明：https://github.com/YozoraTempest/EU4-Unicode-Patch
+
+QQ 交流群：欧陆风云 · 永夜的星月回廊
+https://qm.qq.com/q/Csnqqd8rUO

@@ -16,15 +16,22 @@ struct Glyph {
     std::vector<std::uint8_t> alpha;
 };
 void pack(const std::set<std::uint32_t>& scalars,const std::filesystem::path& destination,int size,
-          int atlas_width,int reserve_height,const std::shared_ptr<const eu4unicode::TextFonts>& fonts) {
+          int atlas_width,int reserve_height,const std::shared_ptr<const eu4unicode::TextFonts>& fonts,bool require_files) {
     const int base=static_cast<int>(std::round(size*0.8));
     std::vector<Glyph> glyphs;
     int x=1,y=1,row_height=0;
     std::size_t missing=0;
+    const auto allowed=fonts?fonts->families():std::vector<std::string>{};
+    if(require_files&&allowed.empty()) throw std::invalid_argument("Bundled atlas generation requires font files");
     for(const auto scalar:scalars) {
         const auto text=eu4unicode::encode(scalar);
         eu4unicode::TextLayout layout(text,static_cast<float>(size),512,512,L"Microsoft YaHei UI",fonts);
-        for(const auto& run:layout.glyph_runs()) missing+=std::count(run.glyphs.begin(),run.glyphs.end(),0);
+        for(const auto& run:layout.glyph_runs()) {
+            const auto zeros=std::count(run.glyphs.begin(),run.glyphs.end(),0);
+            missing+=zeros;
+            if(require_files&&(zeros||std::find(allowed.begin(),allowed.end(),run.font_family)==allowed.end()))
+                throw std::runtime_error("Bundled atlas contains a missing glyph or an unbundled system font: "+run.font_family);
+        }
         const auto image=layout.rasterize();
         int left=static_cast<int>(image.width),top=static_cast<int>(image.height),right=-1,bottom=-1;
         for(std::uint32_t iy=0;iy<image.height;++iy) for(std::uint32_t ix=0;ix<image.width;++ix) {
@@ -69,7 +76,7 @@ void pack(const std::set<std::uint32_t>& scalars,const std::filesystem::path& de
     texture.write(reinterpret_cast<const char*>(pixels.data()),static_cast<std::streamsize>(pixels.size()));
     if(!texture) throw std::runtime_error("Cannot write font texture");
     std::ofstream font(destination/(name+".fnt"));
-    font<<"info face=\"DirectWrite system fallback\" size="<<size<<" bold=0 italic=0 charset=\"\" stretchH=100 smooth=1 aa=1 padding=0,0,0,0 spacing=1,1\n";
+    font<<"info face=\""<<(fonts?"EU4 Unicode open fonts":"DirectWrite system fallback")<<"\" size="<<size<<" bold=0 italic=0 charset=\"\" stretchH=100 smooth=1 aa=1 padding=0,0,0,0 spacing=1,1\n";
     font<<"common lineHeight="<<size<<" base="<<base<<" scaleW="<<atlas_width<<" scaleH="<<atlas_height<<" pages=1\n";
     for(const auto& glyph:glyphs)
         font<<"char id="<<glyph.scalar<<" x="<<glyph.x<<" y="<<glyph.y<<" width="<<glyph.width<<" height="<<glyph.height
@@ -80,15 +87,17 @@ void pack(const std::set<std::uint32_t>& scalars,const std::filesystem::path& de
 }
 int wmain(int argc,wchar_t** argv) {
     try {
-        if(argc<3) throw std::invalid_argument("Usage: fontpack UTF8_SOURCE OUTPUT_DIRECTORY [--font FILE ...] [--atlas-width N] [--atlas-height N]");
+        if(argc<3) throw std::invalid_argument("Usage: fontpack UTF8_SOURCE OUTPUT_DIRECTORY [--font FILE ...] [--atlas-width N] [--atlas-height N] [--require-font-files 1]");
         std::vector<std::filesystem::path> files;
         int atlas_width=1024,reserve_height=0;
+        bool require_files=false;
         for(int index=3;index<argc;index+=2) {
             if(index+1>=argc) throw std::invalid_argument("Missing fontpack option value");
             const std::wstring option(argv[index]);
             if(option==L"--font") files.emplace_back(argv[index+1]);
             else if(option==L"--atlas-width") atlas_width=std::stoi(argv[index+1]);
             else if(option==L"--atlas-height") reserve_height=std::stoi(argv[index+1]);
+            else if(option==L"--require-font-files") require_files=std::wstring_view(argv[index+1])==L"1";
             else throw std::invalid_argument("Unknown fontpack option");
         }
         if(atlas_width<256||atlas_width>8192||(atlas_width&(atlas_width-1))||reserve_height<0||reserve_height>8192||
@@ -109,7 +118,7 @@ int wmain(int argc,wchar_t** argv) {
             remaining.remove_prefix(scalar.bytes);
         }
         std::filesystem::create_directories(argv[2]);
-        for(const auto size:{14,16,18,24,88}) pack(scalars,argv[2],size,atlas_width,reserve_height,fonts);
+        for(const auto size:{14,16,18,24,88}) pack(scalars,argv[2],size,atlas_width,reserve_height,fonts,require_files);
         return 0;
     } catch(const std::exception& error) { std::cerr<<error.what()<<'\n'; return 1; }
 }

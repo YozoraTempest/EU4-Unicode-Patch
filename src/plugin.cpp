@@ -9,6 +9,7 @@
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
 #include "native_font_atlas.hpp"
+#include "font_assets.hpp"
 #include <array>
 #include <atomic>
 #include <algorithm>
@@ -186,6 +187,15 @@ FontTableDestroy original_font_table_destroy=nullptr;
 using FontLoad=void(*)(void*);
 FontLoad original_font_load=nullptr;
 void load_font_atlas(void* font) {
+#ifndef EU4_UNICODE_RESEARCH
+    auto path=reinterpret_cast<EngineString*>(static_cast<std::byte*>(font)+0xe0);
+    const auto replacement=eu4unicode::player_font_path({path->data(),static_cast<std::size_t>(path->size)});
+    if(!replacement.empty()) {
+        // Use the engine's allocator and assignment routine; never borrow a
+        // pointer in an engine string or mix DLL/engine heap ownership.
+        reinterpret_cast<AssignText>(image+0x95110)(path,replacement.data(),replacement.size());
+    }
+#endif
     original_font_load(font);
     eu4unicode::register_font_atlas(font);
 }
@@ -689,21 +699,52 @@ bool initialize(HMODULE module) {
     GetModuleFileNameW(nullptr,exe_path,32768);
     GetModuleFileNameW(module,dll_path,32768);
     auto exe=std::filesystem::path(exe_path);
-    log_file=CreateFileW((std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_probe.log").c_str(),
+#ifdef EU4_UNICODE_RESEARCH
+    constexpr auto log_name=L"eu4_unicode_probe.log";
+#else
+    constexpr auto log_name=L"eu4_unicode_patch.log";
+#endif
+    log_file=CreateFileW((std::filesystem::path(dll_path).parent_path()/log_name).c_str(),
         GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
+#ifdef EU4_UNICODE_RESEARCH
     log("EU4 UTF-8 research prototype initializing.");
-    // This first prototype is intentionally restricted to the isolated fixture.
     if(exe.parent_path().filename()!=L"runtime" || exe.parent_path().parent_path().filename()!=L"private" ||
        exe.parent_path().parent_path().parent_path().filename()!=L"EU4UnicodePatch") {
         log("Refused: executable is outside the isolated research fixture."); return false;
     }
+#else
+    log("EU4 Unicode Patch v0.1.1-experimental initializing.");
+#endif
     if(!hash_matches(exe)) { log("Refused: executable hash mismatch."); return false; }
-    if(GetModuleHandleW(L"plugin64.dll") || std::filesystem::exists(exe.parent_path()/L"plugins"/L"plugin64.dll")) {
+    if(GetModuleHandleW(L"plugin64.dll")
+#ifdef EU4_UNICODE_RESEARCH
+       || std::filesystem::exists(exe.parent_path()/L"plugins"/L"plugin64.dll")
+#endif
+    ) {
         log("Refused: legacy text patch is present."); return false;
     }
+#ifndef EU4_UNICODE_RESEARCH
+    const auto assets=exe.parent_path()/L"gfx"/L"fonts"/L"eu4-unicode";
+    const auto fonts=std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_patch"/L"fonts";
+    for(const auto name:{L"zh-hans-14",L"zh-hans-16",L"zh-hans-18",L"zh-hans-24",L"zh-hans-map"}) {
+        if(!std::filesystem::is_regular_file(assets/(std::wstring(name)+L".fnt"))||
+           !std::filesystem::is_regular_file(assets/(std::wstring(name)+L".dds"))) {
+            log("Refused: bundled font atlases are missing; copy the complete player package.");return false;
+        }
+    }
+    for(const auto name:{L"SourceHanSansSC-Regular.otf",L"PlangothicP1-Regular.ttf",L"PlangothicP2-Regular.ttf"}) {
+        if(!std::filesystem::is_regular_file(fonts/name)) {
+            log("Refused: bundled open fonts are missing; copy the complete player package.");return false;
+        }
+    }
+#endif
     image=reinterpret_cast<std::byte*>(GetModuleHandleW(nullptr));
+#ifdef EU4_UNICODE_RESEARCH
     const bool experimental_input=GetPrivateProfileIntW(L"experimental",L"unicode_input",0,
         (std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_probe.ini").c_str())!=0;
+#else
+    constexpr bool experimental_input=true;
+#endif
     const Site sites[]={
         {0x15989d8,"b8007d0000443bf8440f4df8"},
         {0x1595c9b,"488b85301100004883bcf82001000000"},
@@ -928,8 +969,12 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&original_font_table_destroy))!=MH_OK) {
         log("Font lifetime hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
+#ifdef EU4_UNICODE_RESEARCH
     eu4unicode::configure_font_atlases(exe.parent_path().parent_path()/L"test-mod",
         std::filesystem::path(dll_path).parent_path()/L"fonts",log);
+#else
+    eu4unicode::configure_font_atlases(exe.parent_path(),fonts,log,"gfx/fonts/eu4-unicode/");
+#endif
     if(MH_CreateHook(image+0x15953c0,reinterpret_cast<void*>(load_font_atlas),
         reinterpret_cast<void**>(&original_font_load))!=MH_OK||
        MH_CreateHook(image+0x16c3f10,reinterpret_cast<void*>(eu4unicode::synchronize_font_texture),
@@ -1026,7 +1071,7 @@ extern "C" __declspec(dllexport) std::uint64_t Eu4UnicodeProbeGlyphRecords() noe
 BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
         // thread_local is intentionally retained; do not disable thread notifications.
-        try { initialize(module); } catch(...) { log("Initialization exception; prototype disabled."); }
+        try { initialize(module); } catch(...) { log("Initialization exception; patch disabled."); }
     }
     return TRUE;
 }

@@ -40,7 +40,9 @@ std::vector<std::uint8_t> readback(IDirect3DDevice9* device,IDirect3DTexture9* t
 int wmain(int argc,wchar_t** argv) {
     HWND window=nullptr;
     try {
-        if(argc!=3) throw std::invalid_argument("Usage: native_font_atlas_tests FIXTURE_DIRECTORY FONT_DIRECTORY");
+        if(argc!=3&&argc!=4) throw std::invalid_argument("Usage: native_font_atlas_tests ASSET_DIRECTORY FONT_DIRECTORY [--player]");
+        const bool player=argc==4&&std::wstring_view(argv[3])==L"--player";
+        if(argc==4&&!player) throw std::invalid_argument("Unknown atlas test option");
         require(MH_Initialize()==MH_OK,"MinHook initialization failed");
         WNDCLASSW type{};type.lpfnWndProc=DefWindowProcW;type.hInstance=GetModuleHandleW(nullptr);type.lpszClassName=L"EU4UnicodeFontGpuTests";
         require(RegisterClassW(&type)!=0,"Cannot register GPU test window");
@@ -60,14 +62,14 @@ int wmain(int argc,wchar_t** argv) {
         eu4unicode::NativeGlyph anchor{};table[0x41]=&anchor;
         *reinterpret_cast<std::byte**>(f+0x48)=context.data();
         *reinterpret_cast<void**>(context.data()+0x480)=&wrapper;
-        const char* path="gfx/fonts/zh-hans-16";
+        const char* path=player?"gfx/fonts/eu4-unicode/zh-hans-16":"gfx/fonts/zh-hans-16";
         *reinterpret_cast<const char**>(f+0xe0)=path;
         *reinterpret_cast<std::uint64_t*>(f+0xf0)=std::strlen(path);
         *reinterpret_cast<std::uint64_t*>(f+0xf8)=31;
         *reinterpret_cast<int*>(f+0x970)=1;*reinterpret_cast<int*>(f+0x978)=2048;*reinterpret_cast<int*>(f+0x97c)=4096;
         eu4unicode::original_texture_lookup=lookup;
         graphics_thread=GetCurrentThreadId();
-        eu4unicode::configure_font_atlases(argv[1],argv[2],log);
+        eu4unicode::configure_font_atlases(argv[1],argv[2],log,player?"gfx/fonts/eu4-unicode/":"gfx/fonts/");
         eu4unicode::register_font_atlas(f);
         const std::filesystem::path fonts_directory(argv[2]);
         auto fonts=std::make_shared<eu4unicode::TextFonts>(std::vector<std::filesystem::path>{fonts_directory/L"SourceHanSansSC-Regular.otf",
@@ -94,6 +96,24 @@ int wmain(int argc,wchar_t** argv) {
         eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
         require(eu4unicode::find_dynamic_glyph(table,0x5b54)==nullptr,"Released font atlas remains reachable");
         require(eu4unicode::unicode_glyph_usage().glyphs==0,"Released glyph registry leaked records");
+        if(player) {
+            for(const auto size:{14,18,24,88}) {
+                const auto size_path=std::string("gfx/fonts/eu4-unicode/zh-hans-")+(size==88?"map":std::to_string(size));
+                *reinterpret_cast<const char**>(f+0xe0)=size_path.c_str();
+                *reinterpret_cast<std::uint64_t*>(f+0xf0)=size_path.size();
+                eu4unicode::register_font_atlas(f);
+                for(const auto scalar:{0x4e2du,0x30000u}) {
+                    auto record=eu4unicode::find_dynamic_glyph(table,scalar);
+                    require(record!=nullptr,"Player size has no dynamic glyph");
+                    eu4unicode::synchronize_font_texture(&wrapper,1);
+                    require(readback(device.Get(),texture.Get(),*record)==eu4unicode::rasterize_scalar(scalar,size,fonts).alpha,
+                            "Player UI/map atlas GPU region differs from its raster");
+                }
+                eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
+            }
+            require(eu4unicode::unicode_glyph_usage().glyphs==0,"Player size loop leaked records");
+            std::cout<<"Player assets: all five UI/map sizes match real D3D9 texture pixels.\n";
+        }
         require(MH_Uninitialize()==MH_OK,"MinHook cleanup failed");
         std::cout<<"Native GPU upload, preserved region, supplementary glyph, device reset, stable pointer and font release passed.\n";
         DestroyWindow(window);return 0;

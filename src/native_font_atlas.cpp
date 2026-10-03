@@ -39,6 +39,7 @@ struct Atlas {
     std::unordered_set<std::uint32_t> rejected;
 };
 std::filesystem::path fixture_path,font_path;
+std::string atlas_prefix;
 FontLog logger=nullptr;
 std::shared_ptr<const TextFonts> text_fonts;
 std::unordered_map<const void*,std::shared_ptr<Atlas>> bindings;
@@ -130,22 +131,22 @@ void sync(Atlas& a,void* wrapper) {
     a.pending.clear();
 }
 }
-void configure_font_atlases(const std::filesystem::path& fixture,const std::filesystem::path& fonts,FontLog log) {
-    fixture_path=fixture;font_path=fonts;logger=log;
+void configure_font_atlases(const std::filesystem::path& fixture,const std::filesystem::path& fonts,FontLog log,std::string_view prefix) {
+    fixture_path=fixture;font_path=fonts;logger=log;atlas_prefix=prefix;
 }
 void register_font_atlas(void* object) noexcept {
     try {
         std::lock_guard<std::recursive_mutex> lock(mutex);
         const auto f=static_cast<std::byte*>(object);
         const auto path=reinterpret_cast<const EngineString*>(f+0xe0)->view();
-        const std::array<std::pair<const char*,int>,5> names{{{"gfx/fonts/zh-hans-14",14},{"gfx/fonts/zh-hans-16",16},{"gfx/fonts/zh-hans-18",18},{"gfx/fonts/zh-hans-24",24},{"gfx/fonts/zh-hans-map",88}}};
-        int size=0;for(const auto& name:names) if(path==name.first) size=name.second;
+        const std::array<std::pair<const char*,int>,5> names{{{"zh-hans-14",14},{"zh-hans-16",16},{"zh-hans-18",18},{"zh-hans-24",24},{"zh-hans-map",88}}};
+        int size=0;for(const auto& name:names) if(path==atlas_prefix+name.first) size=name.second;
         if(!size) return;
         auto table=reinterpret_cast<void**>(f+0x120);
         const auto key=identity(table);
         if(!table[0x41]||bindings.count(key)) return;
         const auto width=*reinterpret_cast<int*>(f+0x978),height=*reinterpret_cast<int*>(f+0x97c);
-        // Dynamic space is an explicit fixture contract, never assumed in a
+        // Dynamic space is an explicit generated asset contract, never assumed in a
         // workshop atlas. Existing small atlases keep their static behavior.
         if(width!=2048||height!=4096) return;
         const auto context=*reinterpret_cast<std::byte**>(f+0x48);

@@ -1,0 +1,18 @@
+force_pow2_textures=no
+language="l_english"
+graphics={
+    size={ x=1280 y=720 }
+    min_gui={ x=1280 y=720 }
+    game_ui_scale=1.000
+    fullScreen=no
+    borderless=no
+    shadows=no
+    shadowSize=2048
+    multi_sampling=0
+    maxanisotropy=4
+    gamma=50.000000
+    vsync=yes
+}
+sound_fx_volume=0.000000
+music_volume=0.000000
+master_volume=0.000000

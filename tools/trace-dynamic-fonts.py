@@ -71,18 +71,22 @@ Interceptor.attach(base.add(0x16d4e90),{onEnter(args){
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--duration', type=int, default=600)
+    parser.add_argument('--player', action='store_true', help='Validate the staged player DLL in the owned ordinary-directory installation')
     parser.add_argument('--readback-only', action='store_true', help='Read all uploaded sample regions from the currently focused font; no SDL injection')
     args = parser.parse_args()
     if not 60 <= args.duration <= 1800:
         raise ValueError('Duration must be 60 to 1800 seconds')
-    if hashlib.sha256(EXE.read_bytes()).hexdigest() != EXE_HASH:
+    exe = ROOT/'private/player-install/Europa Universalis IV/eu4.exe' if args.player else EXE
+    dll_name = 'eu4_unicode_patch.dll' if args.player else 'eu4_unicode_probe.dll'
+    font_path = 'gfx/fonts/eu4-unicode/zh-hans-16' if args.player else 'gfx/fonts/zh-hans-16'
+    if hashlib.sha256(exe.read_bytes()).hexdigest() != EXE_HASH:
         raise ValueError('Unexpected isolated executable')
-    if 'unicode_input=1' not in (EXE.parent/'plugins/eu4_unicode_probe.ini').read_text():
+    if not args.player and 'unicode_input=1' not in (exe.parent/'plugins/eu4_unicode_probe.ini').read_text():
         raise ValueError('Enable the input experiment in the isolated game')
-    dll_hash = hashlib.sha256((EXE.parent/'plugins/eu4_unicode_probe.dll').read_bytes()).hexdigest()
-    if dll_hash != hashlib.sha256((ROOT/'build/eu4_unicode_probe.dll').read_bytes()).hexdigest():
+    dll_hash = hashlib.sha256((exe.parent/'plugins'/dll_name).read_bytes()).hexdigest()
+    if dll_hash != hashlib.sha256((ROOT/'build'/dll_name).read_bytes()).hexdigest():
         raise ValueError('Isolated DLL differs from the current build and symbol map')
-    processes = [p for p in psutil.process_iter(['exe']) if p.info['exe'] and Path(p.info['exe']) == EXE]
+    processes = [p for p in psutil.process_iter(['exe']) if p.info['exe'] and Path(p.info['exe']) == exe]
     if len(processes) != 1:
         raise ValueError('Expected one isolated game')
     process = processes[0]
@@ -91,7 +95,7 @@ def main():
     spec.loader.exec_module(module)
     cases = [dict(name='dynamic-'+str(index), before='', caret=0, byte_limit=250,
                   payload=list(text.encode()), expected=text) for index, text in enumerate(SAMPLES)]
-    mapping = (ROOT/'build/eu4_unicode_probe.map').read_text()
+    mapping = (ROOT/'build'/dll_name.replace('.dll', '.map')).read_text(encoding='utf-8')
     match = re.search(r'\sfind_loaded_glyph\s+([0-9A-Fa-f]+) f', mapping)
     if not match:
         raise ValueError('Build map lacks glyph lookup')
@@ -115,6 +119,12 @@ if(outer.add(0x260).readU8()!==1)throw Error('Native editor is not focused');
 function bytes(s){const n=s.add(16).readU64().toNumber();if(n>32000)throw Error('Invalid string');return Array.from(new Uint8Array((s.add(24).readU64().compare(16)<0?s:s.readPointer()).readByteArray(n)));}
 send({event:'ready'});
 ''' + gpu
+    script_source = script_source.replace('eu4_unicode_probe.dll', dll_name).replace('gfx/fonts/zh-hans-16', font_path)
+    if args.player:
+        script_source += """
+if(Process.findModuleByName('plugin64.dll')||Process.findModuleByName('eu4_unicode_probe.dll'))throw Error('Conflicting text DLL loaded');
+send({event:'player-loader',legacy_loaded:false,menu_patch_loaded:Process.findModuleByName('eu4_menu_patch.dll')!==null});
+"""
     arm, finish = ROOT/'private/dynamic-font-arm.txt', ROOT/'private/dynamic-font-finish.txt'
     if not args.readback_only:
         arm.unlink(missing_ok=True);finish.unlink(missing_ok=True)
@@ -122,10 +132,14 @@ send({event:'ready'});
     errors, complete = [], []
     try:
         script = session.create_script(script_source)
-        output='private/native-font-readback.jsonl' if args.readback_only else 'private/native-dynamic-fonts.jsonl'
+        output=('private/player-font-readback.jsonl' if args.readback_only else 'private/player-dynamic-fonts.jsonl') if args.player else ('private/native-font-readback.jsonl' if args.readback_only else 'private/native-dynamic-fonts.jsonl')
         with (ROOT/output).open('w', encoding='utf-8') as out:
             out.write(json.dumps(dict(event='artifact', exe_sha256=EXE_HASH,
                 dll_sha256=dll_hash, samples=SAMPLES,
+                **(dict(distribution='player overlay',font=font_path,
+                        loader_sha256=hashlib.sha256((exe.parent/'VERSION.dll').read_bytes()).hexdigest(),
+                        vanilla_core_sha256=hashlib.sha256((exe.parent/'interface/core.gfx').read_bytes()).hexdigest(),
+                        enabled_mods=json.loads((ROOT/'private/player-userdir/dlc_load.json').read_text())['enabled_mods']) if args.player else {}),
                 method=('Native GUI texture readback of already-uploaded glyphs; no SDL injection; not physical IME' if args.readback_only else
                         'Controlled SDL commits; actual native glyph lookup and native GUI draw; Direct3D texture region readback; not physical IME')))+'\n')
             def message(value, data):
