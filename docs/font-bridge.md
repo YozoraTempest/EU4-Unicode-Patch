@@ -31,6 +31,8 @@ python tools\compose-glyph-runs.py private\unicode-layout-reference.png private\
 
 本次用更新后的 `fontpack` 重新生成五种字号，全部十份 FNT/DDS 与当前游戏夹具逐字节相同，见 [生成回归记录](evidence/shaped-run-validation.json)。正式游戏与正在进行的物理输入法观察没有改用新的独立栅格接口。
 
+原生 Direct3D 9 纹理、顶点声明和缓存绘制入口的实际调查见 [GPU 接口记录](gpu-bridge.md)。当前仅确认状态与数据布局，仍需接入坐标/着色器、页批次和缓存失效。
+
 ## 原生字体生命周期
 
 修复前，实际原生字体销毁后仍能从旧别名查到 U+20000 字形；这些稀疏记录没有随原生 ASCII 表清理。修复将清理连接到 `1594360`，保持原生纹理释放、监听器移除和 ASCII/kerning 表析构流程。
