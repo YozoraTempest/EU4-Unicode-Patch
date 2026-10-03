@@ -1,0 +1,100 @@
+{
+  "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+  "dll_sha256": "dc09995c74975c005949e73d3c1d7ea1e6d289effe525bb02bca7bf0cee34276",
+  "method": "Native local monthly autosave and native Continue / Save Game; no injected agent; fixture generators removed before first reload",
+  "fixtures_removed": true,
+  "monthly_plaintext": true,
+  "monthly_compressed": true,
+  "native_plaintext_reload": true,
+  "native_compressed_reload": true,
+  "original_private_settings_restored": true,
+  "rotation": {
+    "filename": "old_autosave.eu4",
+    "previous_month_sha256": "f8ae10d525a3d1cd7ba5a39a62500fdb1a37be85a2abaf2ea150bc17a83f27b9",
+    "exact_previous_bytes": true
+  },
+  "saves": {
+    "source": {
+      "filename": "UTF8𠀀1444_11_11.eu4",
+      "format": "plaintext",
+      "size": 34250903,
+      "sha256": "ec0c24d370613307e7184dbcb15986a7901723f67beec234a947184ad4292621",
+      "names": {
+        "province": "巴黎𠀀",
+        "capital": "中文😀",
+        "army": "中文𠀀测试军",
+        "navy": "中文😀测试舰队"
+      },
+      "initialization_flag": true,
+      "native_records_checked": true,
+      "date": "1444.11.11"
+    },
+    "december": {
+      "filename": "autosave.eu4",
+      "format": "plaintext",
+      "size": 35564012,
+      "sha256": "f8ae10d525a3d1cd7ba5a39a62500fdb1a37be85a2abaf2ea150bc17a83f27b9",
+      "names": {
+        "province": "巴黎𠀀",
+        "capital": "中文😀",
+        "army": "中文𠀀测试军",
+        "navy": "中文😀测试舰队"
+      },
+      "initialization_flag": true,
+      "native_records_checked": true,
+      "date": "1444.12.1"
+    },
+    "january": {
+      "filename": "autosave.eu4",
+      "format": "plaintext",
+      "size": 36411490,
+      "sha256": "9b4a1f0797447168185fd88bf5754be85c5f5330cd1eb73defaff18be0e1ddc9",
+      "names": {
+        "province": "巴黎𠀀",
+        "capital": "中文😀",
+        "army": "中文𠀀测试军",
+        "navy": "中文😀测试舰队"
+      },
+      "initialization_flag": true,
+      "native_records_checked": true,
+      "date": "1445.1.1"
+    },
+    "february": {
+      "filename": "autosave.eu4",
+      "format": "compressed",
+      "size": 4311591,
+      "sha256": "4b2d53e3cbc4e84d60a63b80cce88aa2d76a884d62a8e5079b7def1d1be8b162",
+      "names": {
+        "province": "巴黎𠀀",
+        "capital": "中文😀",
+        "army": "中文𠀀测试军",
+        "navy": "中文😀测试舰队"
+      },
+      "initialization_flag": true,
+      "native_records_checked": true,
+      "date": "1445.2.1"
+    },
+    "reloaded": {
+      "filename": "法兰西1445_02_01.eu4",
+      "format": "plaintext",
+      "size": 36937957,
+      "sha256": "be3ed90ff54c9072cf1fad87c8bc0657ba8dba3362b643afc261757d2f7a09d8",
+      "names": {
+        "province": "巴黎𠀀",
+        "capital": "中文😀",
+        "army": "中文𠀀测试军",
+        "navy": "中文😀测试舰队"
+      },
+      "initialization_flag": true,
+      "native_records_checked": true,
+      "date": "1445.2.1"
+    }
+  },
+  "not_covered": [
+    "cloud",
+    "Ironman",
+    "multiplayer",
+    "physical IME-generated names",
+    "other autosave intervals"
+  ]
+}

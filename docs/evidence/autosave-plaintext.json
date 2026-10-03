@@ -1,0 +1,14 @@
+{
+  "filename": "autosave.eu4",
+  "format": "plaintext",
+  "size": 35564012,
+  "sha256": "f8ae10d525a3d1cd7ba5a39a62500fdb1a37be85a2abaf2ea150bc17a83f27b9",
+  "names": {
+    "province": "巴黎𠀀",
+    "capital": "中文😀",
+    "army": "中文𠀀测试军",
+    "navy": "中文😀测试舰队"
+  },
+  "initialization_flag": true,
+  "native_records_checked": true
+}

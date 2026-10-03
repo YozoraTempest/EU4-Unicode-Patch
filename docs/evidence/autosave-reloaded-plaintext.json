@@ -1,0 +1,14 @@
+{
+  "filename": "法兰西1445_02_01.eu4",
+  "format": "plaintext",
+  "size": 36937957,
+  "sha256": "be3ed90ff54c9072cf1fad87c8bc0657ba8dba3362b643afc261757d2f7a09d8",
+  "names": {
+    "province": "巴黎𠀀",
+    "capital": "中文😀",
+    "army": "中文𠀀测试军",
+    "navy": "中文😀测试舰队"
+  },
+  "initialization_flag": true,
+  "native_records_checked": true
+}
