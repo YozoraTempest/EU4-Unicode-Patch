@@ -1,4 +1,4 @@
-EU4 Unicode Patch v0.1.6-experimental 可选字体包
+EU4 Unicode Patch @PATCH_RELEASE@ 可选字体包
 打包维护：VulonLok
 
 用于补充系统字体缺少的汉字。包含思源黑体 SC Regular 与遍黑 P1/P2 Regular。

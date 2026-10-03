@@ -1,8 +1,17 @@
+param(
+    [ValidateSet('Release','Nightly')][string]$Channel='Release',
+    [string]$BuildDate='',
+    [string]$BuildDirectory='build'
+)
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'release-common.ps1')
+$info=Get-ReleaseInfo $Channel $BuildDate
+$buildRoot=Get-BuildRoot $BuildDirectory
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$stageRoot=Join-Path $projectRoot 'build/player-fonts'
+$stageRoot=Join-Path $buildRoot 'player-fonts'
 if (Test-Path -LiteralPath $stageRoot) {
-    if ((Resolve-Path -LiteralPath $stageRoot).Path -ne [IO.Path]::GetFullPath((Join-Path $projectRoot 'build/player-fonts'))) {
+    if ((Get-Item -LiteralPath $stageRoot).Attributes -band [IO.FileAttributes]::ReparsePoint -or
+        (Resolve-Path -LiteralPath $stageRoot).Path -ne [IO.Path]::GetFullPath((Join-Path $buildRoot 'player-fonts'))) {
         throw 'Unexpected generated optional-font staging path.'
     }
     Remove-Item -LiteralPath $stageRoot -Recurse -Force
@@ -19,5 +28,6 @@ foreach ($font in $fontManifest.files) {
     Copy-Item -LiteralPath $source -Destination (Join-Path $data 'fonts')
 }
 & (Join-Path $PSScriptRoot 'write-package-license.ps1') -Package Fonts -OutputPath (Join-Path $data 'FONT_LICENSES.txt')
-Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/optional-fonts.txt') -Destination (Join-Path $stageRoot 'EU4UnicodePatch.FONTS.txt')
+$readme=[IO.File]::ReadAllText((Join-Path $projectRoot 'docs/optional-fonts.txt')).Replace('@PATCH_RELEASE@',$info.Tag)
+[IO.File]::WriteAllText((Join-Path $stageRoot 'EU4UnicodePatch.FONTS.txt'),$readme,[Text.UTF8Encoding]::new($false))
 $stageRoot

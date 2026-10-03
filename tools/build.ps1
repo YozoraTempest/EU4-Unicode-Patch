@@ -1,4 +1,4 @@
-param([switch]$Fresh,[string]$BuildDirectory='build')
+param([switch]$Fresh,[string]$BuildDirectory='build',[switch]$SkipTests)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
@@ -46,5 +46,18 @@ if ($Fresh) { $configure += '--fresh' }
 if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
 & $cmake --build $buildRoot
 if ($LASTEXITCODE -ne 0) { throw 'Build failed. Exit the isolated game before rebuilding; its debugger may hold the PDB open.' }
-& (Join-Path (Split-Path $cmake) 'ctest.exe') --test-dir $buildRoot --output-on-failure
-if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+. (Join-Path $PSScriptRoot 'release-common.ps1')
+$changes=& git -C $projectRoot status --porcelain
+if ($LASTEXITCODE -ne 0) { throw 'Cannot read source checkout status.' }
+[ordered]@{
+    source_commit=(Get-SourceCommit)
+    source_tree_dirty=[bool]$changes
+    version=[IO.File]::ReadAllText((Join-Path $projectRoot 'VERSION')).Trim()
+    configuration='RelWithDebInfo'
+    patch_dll_sha256=(Get-Sha256 (Join-Path $buildRoot 'eu4_unicode_patch.dll'))
+    loader_sha256=(Get-Sha256 (Join-Path $buildRoot 'VERSION.dll'))
+} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $buildRoot 'build-info.json') -Encoding utf8NoBOM
+if (!$SkipTests) {
+    & (Join-Path (Split-Path $cmake) 'ctest.exe') --test-dir $buildRoot --output-on-failure
+    if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+}

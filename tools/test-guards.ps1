@@ -1,14 +1,14 @@
-param([string]$Configuration='')
+param([string]$Configuration='',[string]$BuildDirectory='build')
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$buildRoot=Join-Path $projectRoot 'build'
+$buildRoot=[IO.Path]::GetFullPath((Join-Path $projectRoot $BuildDirectory))
 if ($Configuration) { $buildRoot=Join-Path $buildRoot $Configuration }
 $dll=Join-Path $buildRoot 'eu4_unicode_probe.dll'
 $log=Join-Path $buildRoot 'eu4_unicode_probe.log'
 & (Join-Path $buildRoot 'guard_host.exe') $dll
 if ($LASTEXITCODE -ne 0) { throw 'Guard test host failed' }
 if ((Get-Content $log -Raw) -notmatch 'outside the isolated research fixture') { throw 'Path guard did not reject host' }
-$hashFixture=Join-Path $projectRoot 'build\guard-case\EU4UnicodePatch\private\runtime'
+$hashFixture=Join-Path $buildRoot 'guard-case\EU4UnicodePatch\private\runtime'
 New-Item -ItemType Directory -Path $hashFixture -Force | Out-Null
 $hostPath=Join-Path $hashFixture 'guard_host.exe'
 Copy-Item (Join-Path $buildRoot 'guard_host.exe') $hostPath

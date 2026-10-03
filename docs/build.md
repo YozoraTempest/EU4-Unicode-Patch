@@ -44,19 +44,37 @@ Get-ChildItem tests\*.py | ForEach-Object {
 }
 ```
 
-## 玩家包
+## 玩家包与发布
+
+版本号由仓库根目录的 `VERSION` 管理。完整构建、自动检查和打包：
 
 ```powershell
-.\tools\stage-player.ps1
-.\tools\stage-fonts.ps1
-.\tools\package.ps1
+.\tools\ci.ps1
+.\tools\ci.ps1 -Channel Nightly
 ```
 
-生成主包 `dist/EU4UnicodePatch-1.37.5-v0.1.6-experimental-drop-in.zip`、可选字体包 `dist/EU4UnicodePatch-fonts-v0.1.6-experimental.zip` 和 `dist/SHA256SUMS.txt`。两个 ZIP 均直接覆盖进游戏目录，源码、测试模组和游戏资源不进入玩家包。
+主包只有加载器、补丁 DLL、安装说明和合并许可证，直接覆盖进游戏目录。可选字体另包提供。自动检查记录、DLL 指纹与构建信息保存在 `build/`，不进入主包。
 
-打包脚本核对正式 DLL、加载器、验收记录及可选固定字体的 SHA-256。主包的打包记录写入 `build/player-manifest.json`；字体包保留 `font-manifest.json`。发布说明见 [GitHub Release](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.6-experimental)。
+`main` 为正式分支，`develop` 为开发分支。提交和 PR 会运行 CI；Actions 中手动运行 **Nightly**，默认构建 `develop`，也可填写该分支上的提交 SHA。
 
-主包包含 4 个文件，许可证合并为 `plugins/eu4_unicode_patch/LICENSE.txt`。字体包的许可证合并为 `FONT_LICENSES.txt`，两包互不覆盖。UTFCPP 的许可文本保留在源码中，纯二进制玩家包使用 Boost 许可证的分发例外。
+| 渠道 | 标签 | 主包 |
+| --- | --- | --- |
+| Nightly | `v版本-nightly-yyyyMMdd-短SHA` | `EU4UnicodePatch-1.37.5-nightly-yyyyMMdd-短SHA.zip` |
+| 正式版 | `v版本` | `EU4UnicodePatch-1.37.5-v版本.zip` |
+
+Nightly 日期按北京时间计算，标记为 Pre-release。正式发布前在 `develop` 更新 `VERSION` 和 `CHANGELOG.md`；将本仓库的 `develop` PR 合并到 `main` 后，自动构建该次合并提交并发布 Latest。其他来源的 PR 不发布正式版。
+
+两种 Release 均附主包、可选字体包及 `SHA256SUMS.txt`。先上传到草稿，全部上传成功后公开；重跑可恢复草稿，已经公开的版本保留原标签和文件。正式版本号必须递增。
+
+打包要求当前提交、DLL 和加载器与本次自动检查记录一致。本机游戏验收单独核对：
+
+```powershell
+.\tools\test-player-validation.ps1
+```
+
+该命令继续要求 DLL、加载器与本机验收记录严格匹配。CI 自动检查不替代游戏、GPU 和输入法验收，发布说明注明该构建是否匹配本机记录。
+
+主包许可证为 `plugins/eu4_unicode_patch/LICENSE.txt`；字体包许可证为 `FONT_LICENSES.txt`。UTFCPP 的许可文本保留在源码中，纯二进制玩家包使用 Boost 许可证的分发例外。
 
 ## 版本校验
 
