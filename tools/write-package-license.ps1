@@ -5,11 +5,12 @@ param(
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 if ($Package -eq 'Player') {
-    $header="EU4 Unicode Patch`n`n项目代码采用 MIT 许可证，© 2026 VulonLok。以下各段适用于所标明的代码或字体资源。`n"
+    $header="EU4 Unicode Patch`n`n项目代码采用 MIT 许可证，© 2026 VulonLok。以下各段适用于所标明的组件与数据。`n"
     $sections=@(
         @{Title='EU4 Unicode Patch — MIT';Source='LICENSE'},
         @{Title='MinHook — BSD 2-Clause';Source='vendor/minhook/LICENSE.txt'},
-        @{Title='EU4dll — 游戏适配参考 / MIT';Source='third-party/EU4dll-LICENSE.txt'}
+        @{Title='EU4dll — 游戏适配参考 / MIT';Source='third-party/EU4dll-LICENSE.txt'},
+        @{Title='phrase-pinyin-data — 词组拼音数据 / MIT';Source='vendor/phrase-pinyin-data/LICENSE'}
     )
 } else {
     $header="EU4 Unicode Patch 可选字体包`n`n打包维护：VulonLok。字体版权归各字体作者所有。`n"

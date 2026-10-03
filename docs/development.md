@@ -9,7 +9,8 @@
 | 模块 | 职责 |
 | --- | --- |
 | `unicode_text` / `unicode_services` | UTFCPP 编解码，ICU 字素、行边界与搜索键 |
-| `unicode_editor` / `unicode_search` | 单行编辑、选区、字节预算与外交国家名过滤 |
+| `unicode_editor` | 单行编辑、选区与字节预算 |
+| `unicode_search` / `unicode_pinyin` / `native_search` | 中文与拼音匹配、词组读音及国家／省份搜索适配 |
 | `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
 | `glyph_registry` / `scalar_glyph` / `native_font_atlas` | 稀疏字形记录、按需图集和设备恢复 |
@@ -46,7 +47,17 @@ ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径
 
 ## 输入与保存
 
-编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。外交搜索只修改已观察的国家名过滤调用者。
+编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。
+
+搜索接入外交国家列表与省份查找，支持中文、全拼、首字母、部分拼音、混合输入及简繁匹配。名称按当前显示内容建立索引，词组读音来自固定版本的 `phrase-pinyin-data`，其余汉字由系统 ICU 转写。
+
+特殊读音可写入游戏目录的 `plugins/eu4_unicode_patch/pinyin.txt`，支持 UTF-8 和 UTF-8 BOM，重启游戏后生效。每个汉字对应一个拼音音节，重复词组可添加不同读音，`#` 开头为注释：
+
+```text
+奥地利: ao di li
+长安: chang an
+西藏: xi zang
+```
 
 保存路径修正代理对转换与比较，并保留已观察保存入口的 UTF-8 名称。完整复杂排版已有独立 DirectWrite 实现，尚未接入游戏的测宽、绘制和选区。
 

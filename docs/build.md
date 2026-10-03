@@ -1,6 +1,6 @@
 # 构建与发布
 
-需要 Windows x64、Visual Studio 2022 C++ Build Tools、MASM、Windows SDK、PowerShell 7、CMake 3.24+、Ninja 和 Git。
+需要 Windows x64、Visual Studio 2022 C++ Build Tools、MASM、Windows SDK、PowerShell 7、CMake 3.24+、Ninja、Python 3 和 Git。Python 仅用于构建时生成拼音数据表，玩家安装无需 Python。
 
 ## 构建
 

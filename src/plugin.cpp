@@ -6,6 +6,8 @@
 #include "unicode_editor.hpp"
 #include "native_text_event.hpp"
 #include "unicode_search.hpp"
+#include "unicode_pinyin.hpp"
+#include "native_search.hpp"
 #include "native_steam_presence.hpp"
 #include "native_script_bom.hpp"
 #include "glyph_registry.hpp"
@@ -25,6 +27,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -67,20 +70,41 @@ void transliterate_save_path(EngineString* text) {
     if(caller==0x5ca24b && value.substr(0,11)=="save games/" && eu4unicode::valid_utf8(value)) return;
     original_transliterate(text);
 }
-using FindText=std::uint64_t(*)(const char*,std::uint64_t,std::uint64_t,const char*,std::uint64_t);
-FindText original_find_text=nullptr;
+eu4unicode::NativeFindText original_find_text=nullptr;
+eu4unicode::NativeSearchDistance original_search_distance=nullptr;
+std::filesystem::path search_dictionary_path;
+void load_search_dictionary() {
+    static std::once_flag loaded;
+    std::call_once(loaded,[] {
+        try {
+            if(!std::filesystem::exists(search_dictionary_path)) return;
+            std::ifstream file(search_dictionary_path,std::ios::binary);
+            if(!file) throw std::runtime_error("Cannot read pinyin dictionary");
+            const std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
+            if(file.bad()) throw std::runtime_error("Cannot read pinyin dictionary");
+            eu4unicode::set_pinyin_dictionary(content);
+            log("Custom pinyin dictionary loaded.");
+        } catch(...) { log("Custom pinyin dictionary rejected; builtin pronunciations retained."); }
+    });
+}
 std::uint64_t find_country_name(const char* name,std::uint64_t length,std::uint64_t start,
                               const char* query,std::uint64_t query_length) {
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
         reinterpret_cast<std::uintptr_t>(image);
-    // This country-list caller tests only found/not-found, never the offset.
-    // Other string-search callers retain the native byte-offset contract.
-    if(caller!=0xefc394) return original_find_text(name,length,start,query,query_length);
+    if(!eu4unicode::display_find_caller(caller)) return original_find_text(name,length,start,query,query_length);
     try {
-        return start<=length&&eu4unicode::country_search_contains(
-            std::string_view(name,static_cast<std::size_t>(length)).substr(static_cast<std::size_t>(start)),
-            std::string_view(query,static_cast<std::size_t>(query_length)))?0:UINT64_MAX;
-    } catch(...) { log("Unicode country-name search failed; candidate excluded."); return UINT64_MAX; }
+        load_search_dictionary();
+        return eu4unicode::find_display_name(caller,name,length,start,query,query_length,original_find_text);
+    } catch(...) { log("Unicode display-name search failed; candidate excluded."); return UINT64_MAX; }
+}
+std::int64_t find_province_distance(const EngineString* name,const EngineString* query) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    if(!eu4unicode::province_distance_caller(caller)) return original_search_distance(name,query);
+    try {
+        load_search_dictionary();
+        return eu4unicode::province_search_distance(caller,name,query,original_search_distance);
+    } catch(...) { log("Unicode province distance failed; candidate ranked last."); return INT32_MAX/2; }
 }
 struct LoadContext { int line; bool replace; char padding[11]; void* collection; };
 static_assert(offsetof(LoadContext,collection)==16);
@@ -801,6 +825,7 @@ bool initialize(HMODULE module) {
     const auto fonts=std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_patch"/L"fonts";
 #endif
     image=reinterpret_cast<std::byte*>(GetModuleHandleW(nullptr));
+    search_dictionary_path=std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_patch"/L"pinyin.txt";
 #ifdef EU4_UNICODE_RESEARCH
     const bool experimental_input=GetPrivateProfileIntW(L"experimental",L"unicode_input",0,
         (std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_probe.ini").c_str())!=0;
@@ -929,6 +954,26 @@ bool initialize(HMODULE module) {
         ,{0xf1615e,"e80dec7e00"}
         ,{0x17061a0,"48895c240848896c24104889742418"}
         ,{0xefc38f,"e80c9e800083f8ff"}
+        ,{0x1141475,"e876ef4000"}
+        ,{0x114147e,"e8ed385c00"}
+        ,{0x11414be,"e82def4000"}
+        ,{0x11414c7,"e8a4385c00"}
+        ,{0x114187b,"e870eb4000"}
+        ,{0x1141884,"e8e7345c00"}
+        ,{0x1141b98,"e853e84000"}
+        ,{0x1141ba1,"e8ca315c00"}
+        ,{0x1141e9c,"e84fe54000"}
+        ,{0x1141ea6,"e8c52e5c00"}
+        ,{0x11434c8,"e823cf4000"}
+        ,{0x1143a7c,"e86fc94000"}
+        ,{0x1143a86,"e8e5125c00"}
+        ,{0x1144338,"e8b3c04000"}
+        ,{0x1144341,"e82a0a5c00"}
+        ,{0x1141fe6,"e8b5415c0083f8ff"}
+        ,{0x11420dd,"e8be405c0083f8ff"}
+        ,{0x171f880,"4055565741544155415641574883ec20"}
+        ,{0x114218d,"e8eed65d0042890437"}
+        ,{0x11421ad,"e8ced65d00ffc0"}
         ,{0x1706010,"488bc4488958084889681048897018574883ec40"}
         ,{0xa901fe,"e80d5ec700"}
     };
@@ -1079,6 +1124,10 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&original_find_text))!=MH_OK) {
         log("Country search hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
+    if(MH_CreateHook(image+0x171f880,reinterpret_cast<void*>(find_province_distance),
+        reinterpret_cast<void**>(&original_search_distance))!=MH_OK) {
+        log("Province search hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
     if(MH_CreateHook(image+0x1594360,reinterpret_cast<void*>(destroy_font_table),
         reinterpret_cast<void**>(&original_font_table_destroy))!=MH_OK) {
         log("Font lifetime hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
@@ -1154,7 +1203,23 @@ bool initialize(HMODULE module) {
         {0xefc33b,bytes("e8b0406500"),bytes("9090909090")},
         {0xefc344,bytes("e8278a8000"),bytes("9090909090")},
         {0xf16156,bytes("e895a26300"),bytes("9090909090")},
-        {0xf1615e,bytes("e80dec7e00"),bytes("9090909090")} };
+        {0xf1615e,bytes("e80dec7e00"),bytes("9090909090")},
+        // Province-finder names, alternative names and queries retain UTF-8.
+        {0x1141475,bytes("e876ef4000"),bytes("9090909090")},
+        {0x114147e,bytes("e8ed385c00"),bytes("9090909090")},
+        {0x11414be,bytes("e82def4000"),bytes("9090909090")},
+        {0x11414c7,bytes("e8a4385c00"),bytes("9090909090")},
+        {0x114187b,bytes("e870eb4000"),bytes("9090909090")},
+        {0x1141884,bytes("e8e7345c00"),bytes("9090909090")},
+        {0x1141b98,bytes("e853e84000"),bytes("9090909090")},
+        {0x1141ba1,bytes("e8ca315c00"),bytes("9090909090")},
+        {0x1141e9c,bytes("e84fe54000"),bytes("9090909090")},
+        {0x1141ea6,bytes("e8c52e5c00"),bytes("9090909090")},
+        {0x11434c8,bytes("e823cf4000"),bytes("9090909090")},
+        {0x1143a7c,bytes("e86fc94000"),bytes("9090909090")},
+        {0x1143a86,bytes("e8e5125c00"),bytes("9090909090")},
+        {0x1144338,bytes("e8b3c04000"),bytes("9090909090")},
+        {0x1144341,bytes("e82a0a5c00"),bytes("9090909090")} };
     std::size_t applied=0;
     bool constants_ok=true;
     for(const auto& patch:constants) {
@@ -1176,6 +1241,7 @@ bool initialize(HMODULE module) {
     log("UTF-8 import, UI, format, map and bitmap iterators enabled.");
     log("Script lexer UTF-8 BOM handling enabled.");
     log("Steam Rich Presence UTF-8 passthrough enabled.");
+    log("Chinese and pinyin country/province search enabled.");
     return true;
 }
 }
