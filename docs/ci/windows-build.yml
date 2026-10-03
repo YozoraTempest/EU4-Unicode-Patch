@@ -21,3 +21,5 @@ jobs:
         run: python tests/migration_tests.py
       - name: Persistence evidence validation
         run: python tests/persistence_tests.py
+      - name: Native editor evidence validation
+        run: python tests/editor_evidence_tests.py

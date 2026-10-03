@@ -13,6 +13,20 @@ int main() {
     using namespace eu4unicode;
     const std::string text=u8"Ae\u0301中𠀀🇨🇳👩‍👩‍👧‍👦Z";
     const auto boundaries=grapheme_boundaries(text);
+    for(std::size_t budget=0;budget<=text.size()+1;++budget) {
+        const auto prefix=grapheme_prefix(text,budget);
+        check(prefix<=budget&&std::binary_search(boundaries.begin(),boundaries.end(),prefix),
+            "native budgets preserve complete graphemes");
+        check(valid_utf8(text.substr(0,prefix)),"bounded editor text remains valid UTF-8");
+    }
+    check(grapheme_prefix(u8"Ae\u0301Z",2)==1,"budget cannot detach a combining mark");
+    check(grapheme_prefix(u8"A👩‍👩‍👧‍👦Z",16)==1,"budget cannot retain half a ZWJ sequence");
+    bool invalid_prefix_rejected=false;
+    try { grapheme_prefix("\xf0\x9f",2); } catch(const std::invalid_argument&) { invalid_prefix_rejected=true; }
+    check(invalid_prefix_rejected,"invalid input cannot be certified as a grapheme prefix");
+    check(filter_editor_characters(u8"A代俧👧§Z","\xa7")==u8"A代俧👧Z",
+        "native section-sign blacklist excludes the scalar and preserves continuation-byte collisions");
+    check(filter_editor_characters(u8"中文A\nB","A\n")==u8"中文B","ASCII blacklist retains its native behavior");
     for(std::size_t caret=0;caret<=text.size();++caret) {
         for(const auto key:{EditKey::left,EditKey::right,EditKey::backspace,EditKey::forward_delete}) {
             const auto plan=plan_edit(text,caret,key);

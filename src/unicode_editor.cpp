@@ -13,6 +13,22 @@ std::size_t ceil_boundary(const std::vector<std::size_t>& boundaries,std::size_t
     return *std::lower_bound(boundaries.begin(),boundaries.end(),offset);
 }
 }
+std::size_t grapheme_prefix(std::string_view text,std::size_t byte_limit) {
+    const auto boundaries=grapheme_boundaries(text);
+    return floor_boundary(boundaries,(std::min)(text.size(),byte_limit));
+}
+std::string filter_editor_characters(std::string_view text,std::string_view blacklist) {
+    if(!valid_utf8(text)) throw std::invalid_argument("Editor input is not valid UTF-8");
+    std::string output;
+    for(std::size_t offset=0;offset<text.size();) {
+        const auto scalar=decode(text.substr(offset));
+        const auto excluded=scalar.value<=0xff&&
+            blacklist.find(static_cast<char>(scalar.value))!=std::string_view::npos;
+        if(!excluded) output.append(text.substr(offset,scalar.bytes));
+        offset+=scalar.bytes;
+    }
+    return output;
+}
 EditPlan plan_edit(std::string_view text,std::size_t caret,EditKey key) {
     if(caret>text.size()) throw std::out_of_range("Caret exceeds text size");
     const auto boundaries=grapheme_boundaries(text);

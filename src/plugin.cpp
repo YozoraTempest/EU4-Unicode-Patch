@@ -80,6 +80,40 @@ RepeatText repeat_text=nullptr;
 using AppendText=void*(*)(EngineString*,const char*,std::uint64_t);
 AppendText append_text=nullptr;
 struct KeyEvent { std::uint32_t key,unused,modifiers; };
+using AssignText=EngineString*(*)(EngineString*,const char*,std::uint64_t);
+AssignText original_assign_text=nullptr;
+using FilterText=void(*)(EngineString*,const EngineString*);
+FilterText original_filter_text=nullptr;
+void filter_editor_text(EngineString* text,const EngineString* blacklist) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
+    if(caller!=0x1536c37 || !eu4unicode::valid_utf8(value)) {
+        original_filter_text(text,blacklist); return;
+    }
+    try {
+        const auto filtered=eu4unicode::filter_editor_characters(value,
+            std::string_view(blacklist->data(),static_cast<std::size_t>(blacklist->size)));
+        auto data=const_cast<char*>(text->data());
+        std::memcpy(data,filtered.data(),filtered.size());
+        data[filtered.size()]='\0';
+        text->size=filtered.size();
+    } catch(...) { log("Unicode editor filtering failed; insertion excluded."); text->size=0; const_cast<char*>(text->data())[0]='\0'; }
+}
+EngineString* assign_editor_prefix(EngineString* target,const char* source,std::uint64_t length) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    // These three native editor branches assign a byte-limited prefix of a
+    // complete NUL-terminated string. All other assignment contracts stay native.
+    if(caller==0x153a30b || caller==0x153a71c || caller==0x153a9a0) {
+        const auto complete=std::string_view(source,std::strlen(source));
+        if(eu4unicode::valid_utf8(complete)) {
+            try { length=eu4unicode::grapheme_prefix(complete,static_cast<std::size_t>(length)); }
+            catch(...) { log("Unicode editor prefix failed; truncated insertion excluded."); length=0; }
+        }
+    }
+    return original_assign_text(target,source,length);
+}
 using EditorKey=bool(*)(void*,const KeyEvent*);
 EditorKey original_editor_key=nullptr;
 bool editor_key(void* widget,const KeyEvent* event) {
@@ -424,6 +458,12 @@ bool initialize(HMODULE module) {
         ,{0x1550425,"0fbe0c28488d1c28e80aaa4f00ffc788038bc7"}
         ,{0x1569f91,"8b45bc32db3c8073050fb6d8eb12"}
         ,{0x15366c0,"48895c240848896c24184889742420574883ec40"}
+        ,{0x95110,"48895c241048896c2418565741574883ec20"}
+        ,{0x153a306,"e805aeb5fe"}
+        ,{0x153a717,"e8f4a9b5fe"}
+        ,{0x153a99b,"e870a7b5fe"}
+        ,{0xb19590,"4053565741544883ec48"}
+        ,{0x1536c32,"e859295eff"}
         ,{0x1174e95,"e8e6025900"}
         ,{0x13b9567,"e814bc3400"}
         ,{0x117519e,"e8ddff5800"}
@@ -556,7 +596,11 @@ bool initialize(HMODULE module) {
     if(experimental_input) {
         if(MH_CreateHook(image+0x1569f91,reinterpret_cast<void*>(input_hook),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x15366c0,reinterpret_cast<void*>(editor_key),
-             reinterpret_cast<void**>(&original_editor_key))!=MH_OK) {
+             reinterpret_cast<void**>(&original_editor_key))!=MH_OK ||
+           MH_CreateHook(image+0x95110,reinterpret_cast<void*>(assign_editor_prefix),
+             reinterpret_cast<void**>(&original_assign_text))!=MH_OK ||
+           MH_CreateHook(image+0xb19590,reinterpret_cast<void*>(filter_editor_text),
+             reinterpret_cast<void**>(&original_filter_text))!=MH_OK) {
             log("Input hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
         }
         log("Experimental UTF-8 input and single-line grapheme editing enabled.");

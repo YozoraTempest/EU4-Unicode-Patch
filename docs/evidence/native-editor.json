@@ -1,0 +1,218 @@
+{
+  "artifact": {
+    "event": "artifact",
+    "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+    "dll_sha256": "16648a60aea22d8cc81a8bb4b5b158bfd29b4f8c8db870e5d3d569d68797d3cc",
+    "method": "programmatic native SetText and key handler on UI thread; not physical input or IME"
+  },
+  "passed": true,
+  "groups": {
+    "native-editor-key": [
+      {
+        "event": "native-editor-key",
+        "name": "supplementary-backspace",
+        "before": "A中𠀀Z",
+        "caret": 8,
+        "key": 8,
+        "after": "A中Z",
+        "after_caret": 4,
+        "expected": "A中Z",
+        "expected_caret": 4,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "supplementary-left",
+        "before": "A中𠀀Z",
+        "caret": 8,
+        "key": 1073741904,
+        "after": "A中𠀀Z",
+        "after_caret": 4,
+        "expected": "A中𠀀Z",
+        "expected_caret": 4,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "supplementary-right",
+        "before": "A中𠀀Z",
+        "caret": 4,
+        "key": 1073741903,
+        "after": "A中𠀀Z",
+        "after_caret": 8,
+        "expected": "A中𠀀Z",
+        "expected_caret": 8,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "interior-backspace",
+        "before": "A中𠀀Z",
+        "caret": 6,
+        "key": 8,
+        "after": "A中Z",
+        "after_caret": 4,
+        "expected": "A中Z",
+        "expected_caret": 4,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "interior-delete",
+        "before": "A中𠀀Z",
+        "caret": 2,
+        "key": 127,
+        "after": "A𠀀Z",
+        "after_caret": 1,
+        "expected": "A𠀀Z",
+        "expected_caret": 1,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "combining-backspace",
+        "before": "AéZ",
+        "caret": 4,
+        "key": 8,
+        "after": "AZ",
+        "after_caret": 1,
+        "expected": "AZ",
+        "expected_caret": 1,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "flag-backspace",
+        "before": "A🇨🇳Z",
+        "caret": 9,
+        "key": 8,
+        "after": "AZ",
+        "after_caret": 1,
+        "expected": "AZ",
+        "expected_caret": 1,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "zwj-backspace",
+        "before": "A👩‍👩‍👧‍👦Z",
+        "caret": 26,
+        "key": 8,
+        "after": "AZ",
+        "after_caret": 1,
+        "expected": "AZ",
+        "expected_caret": 1,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "empty-after-delete",
+        "before": "中",
+        "caret": 3,
+        "key": 8,
+        "after": "",
+        "after_caret": 0,
+        "expected": "",
+        "expected_caret": 0,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "left-at-start",
+        "before": "中A",
+        "caret": 0,
+        "key": 1073741904,
+        "after": "中A",
+        "after_caret": 0,
+        "expected": "中A",
+        "expected_caret": 0,
+        "passed": true
+      },
+      {
+        "event": "native-editor-key",
+        "name": "right-from-start",
+        "before": "中A",
+        "caret": 0,
+        "key": 1073741903,
+        "after": "中A",
+        "after_caret": 3,
+        "expected": "中A",
+        "expected_caret": 3,
+        "passed": true
+      }
+    ],
+    "native-editor-limit": [
+      {
+        "event": "native-editor-limit",
+        "name": "scalar-budget",
+        "before": "A中Z",
+        "byte_limit": 2,
+        "after": "A",
+        "expected": "A",
+        "passed": true
+      },
+      {
+        "event": "native-editor-limit",
+        "name": "combining-budget",
+        "before": "AéZ",
+        "byte_limit": 2,
+        "after": "A",
+        "expected": "A",
+        "passed": true
+      },
+      {
+        "event": "native-editor-limit",
+        "name": "zwj-budget",
+        "before": "A👩‍👩‍👧‍👦Z",
+        "byte_limit": 16,
+        "after": "A",
+        "expected": "A",
+        "passed": true
+      },
+      {
+        "event": "native-editor-limit",
+        "name": "supplementary-budget",
+        "before": "A𠀀Z",
+        "byte_limit": 5,
+        "after": "A𠀀",
+        "expected": "A𠀀",
+        "passed": true
+      }
+    ],
+    "native-editor-insert": [
+      {
+        "event": "native-editor-insert",
+        "name": "prepend-budget",
+        "before": "中Z",
+        "caret": 0,
+        "insertion": "𠀀",
+        "byte_limit": 6,
+        "after": "𠀀",
+        "expected": "𠀀",
+        "passed": true
+      },
+      {
+        "event": "native-editor-insert",
+        "name": "middle-budget",
+        "before": "A中Z",
+        "caret": 1,
+        "insertion": "𠀀",
+        "byte_limit": 6,
+        "after": "A𠀀",
+        "expected": "A𠀀",
+        "passed": true
+      }
+    ],
+    "native-editor-filter": [
+      {
+        "event": "native-editor-filter",
+        "name": "native-blacklist-collision",
+        "before": "A代俣俤俧👧§£¤@{}/\\\"Z",
+        "after": "A代俣俤俧👧Z",
+        "expected": "A代俣俤俧👧Z",
+        "passed": true
+      }
+    ]
+  },
+  "scope": "Programmatic native SetText, insertion and key handler on an actual single-line unselected widget; not physical keyboard, IME, selection, clipboard or multiplayer"
+}
