@@ -9,8 +9,7 @@ if ($Package -eq 'Player') {
     $sections=@(
         @{Title='EU4 Unicode Patch — MIT';Source='LICENSE'},
         @{Title='MinHook — BSD 2-Clause';Source='vendor/minhook/LICENSE.txt'},
-        @{Title='EU4dll — 游戏适配参考 / MIT';Source='third-party/EU4dll-LICENSE.txt'},
-        @{Title='Source Han Sans — 基础字体图集 / SIL OFL 1.1';Source='third-party/SourceHanSans-OFL.txt'}
+        @{Title='EU4dll — 游戏适配参考 / MIT';Source='third-party/EU4dll-LICENSE.txt'}
     )
 } else {
     $header="EU4 Unicode Patch 可选字体包`n`n打包维护：VulonLok。字体版权归各字体作者所有。`n"

@@ -10,6 +10,7 @@
 #include "native_ime.hpp"
 #include "native_font_atlas.hpp"
 #include "font_assets.hpp"
+#include "font_atlas_assets.hpp"
 #include <array>
 #include <atomic>
 #include <algorithm>
@@ -186,18 +187,63 @@ using FontTableDestroy=void(*)(void* const*);
 FontTableDestroy original_font_table_destroy=nullptr;
 using FontLoad=void(*)(void*);
 FontLoad original_font_load=nullptr;
+#ifndef EU4_UNICODE_RESEARCH
+std::filesystem::path player_font_directory;
+// The checked executable's resource resolver returns the first mounted source,
+// including archives. Use its selection instead of duplicating launcher/mod order.
+bool native_font_source(std::string_view path) {
+    using ResolveMount=const std::byte*(*)(const char*);
+    const auto resolve=reinterpret_cast<ResolveMount>(image+0x19fad70);
+    bool metrics=false,texture=false;
+    for(const auto extension:{".fnt",".tga",".dds"}) {
+        const auto resource=std::string(path)+extension;
+        const auto mount=resolve(resource.c_str());
+        if(!mount) continue;
+        const auto root=*reinterpret_cast<const char* const*>(mount+8);
+        const auto prefix=*reinterpret_cast<const char* const*>(mount+16);
+        std::error_code error;
+        if(!root||(prefix&&*prefix)||
+           !std::filesystem::equivalent(std::filesystem::u8path(root),player_font_directory,error)||error)
+            return false;
+        if(extension==std::string_view(".fnt")) metrics=true;else texture=true;
+    }
+    return metrics&&texture;
+}
+#endif
 void load_font_atlas(void* font) {
 #ifndef EU4_UNICODE_RESEARCH
-    auto path=reinterpret_cast<EngineString*>(static_cast<std::byte*>(font)+0xe0);
-    const auto replacement=eu4unicode::player_font_path({path->data(),static_cast<std::size_t>(path->size)});
-    if(!replacement.empty()) {
-        // Use the engine's allocator and assignment routine; never borrow a
-        // pointer in an engine string or mix DLL/engine heap ownership.
-        reinterpret_cast<AssignText>(image+0x95110)(path,replacement.data(),replacement.size());
+    for(const auto offset:{0xe0,0x100}) {
+        auto path=reinterpret_cast<EngineString*>(static_cast<std::byte*>(font)+offset);
+        const auto requested=std::string_view(path->data(),static_cast<std::size_t>(path->size));
+        const auto replacement=eu4unicode::player_font_path(requested);
+        if(replacement.empty()) continue;
+        try {
+            if(!native_font_source(requested)) {
+                char message[256];std::snprintf(message,sizeof(message),"Mod font retained: %.*s",static_cast<int>(requested.size()),requested.data());log(message);
+                continue;
+            }
+            // Generate only after DLL initialization, outside the loader lock.
+            eu4unicode::ensure_player_font_atlas(player_font_directory,replacement);
+            // Use the native allocator for both normal and enlarged UI paths.
+            reinterpret_cast<AssignText>(image+0x95110)(path,replacement.data(),replacement.size());
+        } catch(const std::exception& error) { log(error.what()); }
     }
 #endif
     original_font_load(font);
+#ifndef EU4_UNICODE_RESEARCH
+    const auto object=static_cast<std::byte*>(font);
+    const auto context=*reinterpret_cast<const std::byte* const*>(object+0x48);
+    const auto large=reinterpret_cast<const EngineString*>(object+0x100);
+    const auto threshold=*reinterpret_cast<const float*>(image+0x1dc161c);
+    const auto selected=reinterpret_cast<const EngineString*>(object+
+        (*reinterpret_cast<const float*>(context+0x32600)>=threshold&&large->size?0x100:0xe0));
+    const auto path=std::string_view(selected->data(),static_cast<std::size_t>(selected->size));
+    try {
+        if(native_font_source(path)) eu4unicode::register_font_atlas(font,path);
+    } catch(const std::exception& error) { log(error.what()); }
+#else
     eu4unicode::register_font_atlas(font);
+#endif
 }
 void destroy_font_table(void* const* table) {
     eu4unicode::release_font_atlas(table);
@@ -713,7 +759,7 @@ bool initialize(HMODULE module) {
         log("Refused: executable is outside the isolated research fixture."); return false;
     }
 #else
-    log("EU4 Unicode Patch v0.1.4-experimental initializing; author=VulonLok.");
+    log("EU4 Unicode Patch v0.1.5-experimental initializing; author=VulonLok.");
 #endif
     if(!hash_matches(exe)) { log("Refused: executable hash mismatch."); return false; }
     if(GetModuleHandleW(L"plugin64.dll")
@@ -724,14 +770,8 @@ bool initialize(HMODULE module) {
         log("Refused: legacy text patch is present."); return false;
     }
 #ifndef EU4_UNICODE_RESEARCH
-    const auto assets=exe.parent_path()/L"gfx"/L"fonts"/L"eu4-unicode";
+    player_font_directory=exe.parent_path();
     const auto fonts=std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_patch"/L"fonts";
-    for(const auto name:{L"zh-hans-14",L"zh-hans-16",L"zh-hans-18",L"zh-hans-24",L"zh-hans-map"}) {
-        if(!std::filesystem::is_regular_file(assets/(std::wstring(name)+L".fnt"))||
-           !std::filesystem::is_regular_file(assets/(std::wstring(name)+L".dds"))) {
-            log("Refused: bundled font atlases are missing; copy the complete player package.");return false;
-        }
-    }
 #endif
     image=reinterpret_cast<std::byte*>(GetModuleHandleW(nullptr));
 #ifdef EU4_UNICODE_RESEARCH
@@ -742,6 +782,7 @@ bool initialize(HMODULE module) {
 #endif
     const Site sites[]={
         {0x15989d8,"b8007d0000443bf8440f4df8"},
+        {0x19fad70,"40554883ec60488d6c242048"},
         {0x1595c9b,"488b85301100004883bcf82001000000"},
         {0x1595cad,"b910000000e81dd64900"},
         {0x1595ceb,"4c8bbd30110000498984ff20010000"},
@@ -968,7 +1009,7 @@ bool initialize(HMODULE module) {
     eu4unicode::configure_font_atlases(exe.parent_path().parent_path()/L"test-mod",
         std::filesystem::path(dll_path).parent_path()/L"fonts",log);
 #else
-    eu4unicode::configure_font_atlases(exe.parent_path(),fonts,log,"gfx/fonts/eu4-unicode/",true);
+    eu4unicode::configure_font_atlases(exe.parent_path(),fonts,log,"gfx/fonts/eu4-unicode/cache/",true);
 #endif
     if(MH_CreateHook(image+0x15953c0,reinterpret_cast<void*>(load_font_atlas),
         reinterpret_cast<void**>(&original_font_load))!=MH_OK||

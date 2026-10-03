@@ -21,11 +21,11 @@ std::string_view player_font_path(std::string_view path) noexcept {
     }};
     for(const auto& name:names) if(path==name.first) {
         switch(name.second) {
-            case 14:return "gfx/fonts/eu4-unicode/zh-hans-14";
-            case 16:return "gfx/fonts/eu4-unicode/zh-hans-16";
-            case 18:return "gfx/fonts/eu4-unicode/zh-hans-18";
-            case 24:return "gfx/fonts/eu4-unicode/zh-hans-24";
-            case 88:return "gfx/fonts/eu4-unicode/zh-hans-map";
+            case 14:return "gfx/fonts/eu4-unicode/cache/zh-hans-14";
+            case 16:return "gfx/fonts/eu4-unicode/cache/zh-hans-16";
+            case 18:return "gfx/fonts/eu4-unicode/cache/zh-hans-18";
+            case 24:return "gfx/fonts/eu4-unicode/cache/zh-hans-24";
+            case 88:return "gfx/fonts/eu4-unicode/cache/zh-hans-map";
         }
     }
     return {};

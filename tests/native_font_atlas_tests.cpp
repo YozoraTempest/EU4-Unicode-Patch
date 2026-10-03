@@ -63,14 +63,14 @@ int wmain(int argc,wchar_t** argv) {
         eu4unicode::NativeGlyph anchor{};table[0x41]=&anchor;
         *reinterpret_cast<std::byte**>(f+0x48)=context.data();
         *reinterpret_cast<void**>(context.data()+0x480)=&wrapper;
-        const char* path=player?"gfx/fonts/eu4-unicode/zh-hans-16":"gfx/fonts/zh-hans-16";
+        const char* path=player?"gfx/fonts/eu4-unicode/cache/zh-hans-16":"gfx/fonts/zh-hans-16";
         *reinterpret_cast<const char**>(f+0xe0)=path;
         *reinterpret_cast<std::uint64_t*>(f+0xf0)=std::strlen(path);
         *reinterpret_cast<std::uint64_t*>(f+0xf8)=31;
         *reinterpret_cast<int*>(f+0x970)=1;*reinterpret_cast<int*>(f+0x978)=2048;*reinterpret_cast<int*>(f+0x97c)=4096;
         eu4unicode::original_texture_lookup=lookup;
         graphics_thread=GetCurrentThreadId();
-        eu4unicode::configure_font_atlases(argv[1],argv[2],log,player?"gfx/fonts/eu4-unicode/":"gfx/fonts/",player);
+        eu4unicode::configure_font_atlases(argv[1],argv[2],log,player?"gfx/fonts/eu4-unicode/cache/":"gfx/fonts/",player);
         eu4unicode::register_font_atlas(f);
         const std::filesystem::path fonts_directory(argv[2]);
         std::shared_ptr<const eu4unicode::TextFonts> fonts;
@@ -108,7 +108,7 @@ int wmain(int argc,wchar_t** argv) {
         require(eu4unicode::unicode_glyph_usage().glyphs==0,"Released glyph registry leaked records");
         if(player) {
             for(const auto size:{14,18,24,88}) {
-                const auto size_path=std::string("gfx/fonts/eu4-unicode/zh-hans-")+(size==88?"map":std::to_string(size));
+                const auto size_path=std::string("gfx/fonts/eu4-unicode/cache/zh-hans-")+(size==88?"map":std::to_string(size));
                 *reinterpret_cast<const char**>(f+0xe0)=size_path.c_str();
                 *reinterpret_cast<std::uint64_t*>(f+0xf0)=size_path.size();
                 eu4unicode::register_font_atlas(f);

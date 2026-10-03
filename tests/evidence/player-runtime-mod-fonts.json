@@ -1,0 +1,277 @@
+{
+  "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+  "dll_sha256": "f9b32b9d3c05d6fac1f02eb323f31dcdbc71dc9d59b001e6f9c3c320508438f1",
+  "method": "Native font loader, mounted resource selection, UTF-8 glyph lookup and real D3D9 pixel readback; controlled enlarged UI load; owned game closed before observer detach",
+  "same_path_override": true,
+  "custom_path": true,
+  "archive_override": true,
+  "texture_only_override": true,
+  "enlarged_ui": true,
+  "exact_metrics_and_pixels": true,
+  "records": [
+    {
+      "event": "mod-font",
+      "path": "gfx/fonts/unicode-mod-test",
+      "dimensions": [
+        512,
+        128
+      ],
+      "glyphs": {
+        "65": {
+          "metrics": [
+            11,
+            1,
+            1,
+            0,
+            11,
+            0,
+            12,
+            0,
+            0,
+            0,
+            1,
+            0,
+            53,
+            0,
+            0,
+            0
+          ],
+          "pixel_sha256": "d1c3d25aac410617ecd56a0f89556db4aaee9f8723c506cae63457132397bff5"
+        },
+        "20013": {
+          "metrics": [
+            6,
+            1,
+            52,
+            0,
+            14,
+            0,
+            15,
+            0,
+            1,
+            0,
+            0,
+            0,
+            16,
+            0,
+            0,
+            0
+          ],
+          "pixel_sha256": "0a9f2300c7e180b379d9f9737dae108f930d42f3d3d0fadd0c290c7a1cceabd5"
+        }
+      },
+      "mounts": {
+        ".fnt": "D:/Astra-Paradox/repos/EU4UnicodePatch/private/mod-font-fixtures/directory",
+        ".tga": null,
+        ".dds": "D:/Astra-Paradox/repos/EU4UnicodePatch/private/mod-font-fixtures/directory"
+      }
+    },
+    {
+      "event": "mod-font",
+      "path": "gfx/fonts/vic_18",
+      "dimensions": [
+        512,
+        128
+      ],
+      "glyphs": {
+        "65": {
+          "metrics": [
+            11,
+            1,
+            1,
+            0,
+            11,
+            0,
+            12,
+            0,
+            0,
+            0,
+            1,
+            0,
+            37,
+            0,
+            0,
+            0
+          ],
+          "pixel_sha256": "5f16b2a4d09fafc11ed515e60c347c69b802cc205d0f929b472bda48fea15be7"
+        },
+        "20013": {
+          "metrics": [
+            6,
+            1,
+            52,
+            0,
+            14,
+            0,
+            15,
+            0,
+            1,
+            0,
+            0,
+            0,
+            16,
+            0,
+            0,
+            0
+          ],
+          "pixel_sha256": "0a9f2300c7e180b379d9f9737dae108f930d42f3d3d0fadd0c290c7a1cceabd5"
+        }
+      },
+      "mounts": {
+        ".fnt": "D:/Astra-Paradox/repos/EU4UnicodePatch/private/mod-font-fixtures/directory",
+        ".tga": "D:\\Astra-Paradox\\repos\\EU4UnicodePatch\\private\\player-install\\Europa Universalis IV\\",
+        ".dds": "D:/Astra-Paradox/repos/EU4UnicodePatch/private/mod-font-fixtures/directory"
+      }
+    },
+    {
+      "event": "mod-font",
+      "path": "gfx/fonts/vic_18s",
+      "dimensions": [
+        256,
+        256
+      ],
+      "glyphs": {
+        "65": {
+          "metrics": [
+            0,
+            0,
+            79,
+            0,
+            17,
+            0,
+            16,
+            0,
+            253,
+            255,
+            0,
+            0,
+            9,
+            0,
+            1,
+            0
+          ],
+          "pixel_sha256": "c24accf48670625e781a470e23683a6bd6900c954c21964c58ffe7fee23c546c"
+        }
+      },
+      "mounts": {
+        ".fnt": "D:\\Astra-Paradox\\repos\\EU4UnicodePatch\\private\\player-install\\Europa Universalis IV\\",
+        ".tga": null,
+        ".dds": "D:/Astra-Paradox/repos/EU4UnicodePatch/private/mod-font-fixtures/directory"
+      }
+    },
+    {
+      "event": "mod-font",
+      "path": "gfx/fonts/vic_22",
+      "dimensions": [
+        512,
+        128
+      ],
+      "glyphs": {
+        "65": {
+          "metrics": [
+            41,
+            1,
+            1,
+            0,
+            13,
+            0,
+            14,
+            0,
+            0,
+            0,
+            0,
+            0,
+            43,
+            0,
+            0,
+            0
+          ],
+          "pixel_sha256": "c639a3c02e34dd181c910ea95161b462dea1ec3937543380d70f5288d145ef16"
+        },
+        "20013": {
+          "metrics": [
+            200,
+            1,
+            59,
+            0,
+            16,
+            0,
+            17,
+            0,
+            1,
+            0,
+            255,
+            255,
+            18,
+            0,
+            0,
+            0
+          ],
+          "pixel_sha256": "597410ee0d4254a8e8cee63af7e5cded4b0be4d890c03223aa46eebf5c3b5332"
+        }
+      },
+      "mounts": {
+        ".fnt": "D:/Astra-Paradox/repos/EU4UnicodePatch/private/mod-font-fixtures/archive.zip",
+        ".tga": "D:\\Astra-Paradox\\repos\\EU4UnicodePatch\\private\\player-install\\Europa Universalis IV\\",
+        ".dds": "D:/Astra-Paradox/repos/EU4UnicodePatch/private/mod-font-fixtures/archive.zip"
+      }
+    },
+    {
+      "event": "mod-font-enlarged",
+      "path": "gfx/fonts/unicode-mod-test",
+      "dimensions": [
+        512,
+        128
+      ],
+      "glyphs": {
+        "65": {
+          "metrics": [
+            11,
+            1,
+            1,
+            0,
+            11,
+            0,
+            12,
+            0,
+            0,
+            0,
+            1,
+            0,
+            53,
+            0,
+            0,
+            0
+          ],
+          "pixel_sha256": "d1c3d25aac410617ecd56a0f89556db4aaee9f8723c506cae63457132397bff5"
+        },
+        "20013": {
+          "metrics": [
+            6,
+            1,
+            52,
+            0,
+            14,
+            0,
+            15,
+            0,
+            1,
+            0,
+            0,
+            0,
+            16,
+            0,
+            0,
+            0
+          ],
+          "pixel_sha256": "0a9f2300c7e180b379d9f9737dae108f930d42f3d3d0fadd0c290c7a1cceabd5"
+        }
+      },
+      "mounts": {
+        ".fnt": "D:/Astra-Paradox/repos/EU4UnicodePatch/private/mod-font-fixtures/directory",
+        ".tga": null,
+        ".dds": "D:/Astra-Paradox/repos/EU4UnicodePatch/private/mod-font-fixtures/directory"
+      }
+    }
+  ]
+}

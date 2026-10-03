@@ -1,0 +1,164 @@
+{
+  "patch_version": "0.1.5-experimental",
+  "author": "VulonLok",
+  "distribution": "player overlay",
+  "game_version": "1.37.5.0 Inca Windows x64",
+  "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+  "dll_sha256": "f9b32b9d3c05d6fac1f02eb323f31dcdbc71dc9d59b001e6f9c3c320508438f1",
+  "loader_sha256": "570ac1afd441e5c1344ba6aff64a23bb535fdee2408ffaa76995e3f9c5bfcf7a",
+  "font_preference": "system first",
+  "loaded_modules": {
+    "enabled": 1,
+    "legacy_loaded": false,
+    "probe_loaded": false,
+    "menu_patch_loaded": true,
+    "loader_loaded": true
+  },
+  "ctest": {
+    "passed": 10,
+    "failed": 0
+  },
+  "runtime_generation": {
+    "system_font_pixels": true,
+    "bundled_font_assets": 0,
+    "main_package_files": [
+      "EU4UnicodePatch.README.txt",
+      "VERSION.dll",
+      "plugins/eu4_unicode_patch.dll",
+      "plugins/eu4_unicode_patch/LICENSE.txt"
+    ],
+    "sizes": [
+      14,
+      16,
+      18,
+      24,
+      88
+    ],
+    "dimensions": [
+      2048,
+      4096
+    ],
+    "initial_glyphs_per_size": 192,
+    "exact_base_alpha_metrics_and_colors": true,
+    "process_cache_reuse": true,
+    "assets": [
+      {
+        "name": "zh-hans-14.dds",
+        "bytes": 33554560,
+        "sha256": "f868811fce170a4ab514a8cfa3f3922e7a27edc15ed727997cb413c58f87ef5d"
+      },
+      {
+        "name": "zh-hans-14.fnt",
+        "bytes": 15414,
+        "sha256": "7836afe7f8f939fd3c417abfe279fd58c2f6562f8ae1af59df767f98799a729c"
+      },
+      {
+        "name": "zh-hans-16.dds",
+        "bytes": 33554560,
+        "sha256": "856938fdac177ebde0b6a2045eb9382a79e823597b2962333844e90e26737d64"
+      },
+      {
+        "name": "zh-hans-16.fnt",
+        "bytes": 15508,
+        "sha256": "62411f05a29477a2b4b5d51509a94eda53a0731c97ac9a283061d74f5472045c"
+      },
+      {
+        "name": "zh-hans-18.dds",
+        "bytes": 33554560,
+        "sha256": "30b5d0f5fc2daf846dd1ab66ec163366ce36d6d608f31f5e5996d07cb5d1b501"
+      },
+      {
+        "name": "zh-hans-18.fnt",
+        "bytes": 15620,
+        "sha256": "6ef37150396fe82de0e63d981d80b17a9a78105b235c2622c4ae50917b8a7e82"
+      },
+      {
+        "name": "zh-hans-24.dds",
+        "bytes": 33554560,
+        "sha256": "5cd2d585e0ee8f7cd7a160af86fa3d763e5825b38fa1e2a7a75d5c0b6a86cf44"
+      },
+      {
+        "name": "zh-hans-24.fnt",
+        "bytes": 15731,
+        "sha256": "d3260e187cca57daa09309aa79666bae73a831ac85c0a0da6344527430daca8c"
+      },
+      {
+        "name": "zh-hans-map.dds",
+        "bytes": 33554560,
+        "sha256": "27c1b84da31fb273f0d31b6ec434d9051c8194a894f0f2e993099173916a7472"
+      },
+      {
+        "name": "zh-hans-map.fnt",
+        "bytes": 16110,
+        "sha256": "92a512b4be8030876b86c14546517aff4bf131c2c9aa7c775c48692349e5fb0e"
+      }
+    ],
+    "optional_pack_same_base_assets": true,
+    "assets_distributed": false
+  },
+  "game_startup": {
+    "mode": "system",
+    "pid": 28752,
+    "observed_seconds": 29,
+    "window_title": "Europa Universalis IV",
+    "optional_font_files": 0,
+    "enabled": 1,
+    "legacy_loaded": false,
+    "probe_loaded": false,
+    "menu_patch_loaded": true,
+    "loader_loaded": true,
+    "observer": "OS module enumeration and startup log; no injected agent"
+  },
+  "optional_game_startup": {
+    "mode": "optional",
+    "pid": 20768,
+    "observed_seconds": 26,
+    "window_title": "Europa Universalis IV",
+    "optional_font_files": 3,
+    "enabled": 1,
+    "legacy_loaded": false,
+    "probe_loaded": false,
+    "menu_patch_loaded": true,
+    "loader_loaded": true,
+    "observer": "OS module enumeration and startup log; no injected agent"
+  },
+  "d3d9_component": {
+    "sizes": [
+      14,
+      16,
+      18,
+      24,
+      88
+    ],
+    "exact_alpha": true,
+    "system_only": true,
+    "optional_font_pack": true,
+    "cpu_only_worker_generation": true,
+    "preserved_region": true,
+    "reset_restored": true,
+    "stable_pointer": true,
+    "owner_release": true,
+    "missing_system_scalar": "U+323B0",
+    "optional_supplies_missing_scalar": true,
+    "logs": [
+      "player-runtime-fonts-system-device.log",
+      "player-runtime-fonts-optional-device.log"
+    ]
+  },
+  "mod_fonts": {
+    "same_path_override": true,
+    "custom_path": true,
+    "archive_override": true,
+    "texture_only_override": true,
+    "enlarged_ui": true,
+    "exact_metrics_and_pixels": true
+  },
+  "mod_font_report": "player-runtime-mod-fonts.json",
+  "limitations": [
+    "Mod bitmap fonts retain existing glyphs; dynamic missing-glyph generation is limited to patch-generated atlases.",
+    "Enlarged UI font was loaded through a controlled native probe at scale 1.25; complete scaled UI interaction is unverified.",
+    "Current player physical IME and complete controlled SDL/GPU input sequence have not been repeated.",
+    "Complex shaping is implemented only in the standalone layout component, not integrated into game rendering.",
+    "Multi-page atlases, long campaigns, in-game device recovery, Ironman and multiplayer are unverified."
+  ]
+}

@@ -1,9 +1,9 @@
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$patchVersion='0.1.4-experimental'
+$patchVersion='0.1.5-experimental'
 $packageName="EU4UnicodePatch-1.37.5-v$patchVersion-drop-in.zip"
 $fontPackageName="EU4UnicodePatch-fonts-v$patchVersion.zip"
-$validation=Get-Content -LiteralPath (Join-Path $projectRoot 'tests/evidence/player-package-cleanup.json') -Raw | ConvertFrom-Json
+$validation=Get-Content -LiteralPath (Join-Path $projectRoot 'tests/evidence/player-runtime-fonts.json') -Raw | ConvertFrom-Json
 foreach ($entry in @(
     @{Path='build/eu4_unicode_patch.dll';Hash=$validation.dll_sha256},
     @{Path='build/VERSION.dll';Hash=$validation.loader_sha256}
@@ -20,15 +20,16 @@ if ($validation.distribution -ne 'player overlay' -or $validation.loaded_modules
     $validation.d3d9_component.optional_font_pack -ne $true -or
     $validation.game_startup.optional_font_files -ne 0 -or
     $validation.optional_game_startup.optional_font_files -ne 3 -or
+    $validation.runtime_generation.system_font_pixels -ne $true -or
+    $validation.runtime_generation.bundled_font_assets -ne 0 -or
+    $validation.mod_fonts.same_path_override -ne $true -or
+    $validation.mod_fonts.custom_path -ne $true -or
+    $validation.mod_fonts.archive_override -ne $true -or
+    $validation.mod_fonts.texture_only_override -ne $true -or
+    $validation.mod_fonts.enlarged_ui -ne $true -or
+    $validation.mod_fonts.exact_metrics_and_pixels -ne $true -or
     $validation.font_preference -ne 'system first') {
     throw 'Player overlay validation is incomplete.'
-}
-foreach ($asset in $validation.assets) {
-    $source=Join-Path $projectRoot "build/player-assets/$($asset.path)"
-    if ((Get-Item -LiteralPath $source).Length -ne $asset.bytes -or
-        (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant() -ne $asset.sha256) {
-        throw 'Player font atlas differs from the validated assets.'
-    }
 }
 $sourceCommit=& git -C $projectRoot rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Package from a source checkout.' }
@@ -57,7 +58,7 @@ $manifest=[ordered]@{
     unicode_input_default=$true
     font_preference='system first; optional font pack supplies missing glyphs'
     optional_font_package=$fontPackageName
-    validation='Ordinary-directory startup with vanilla font definitions; five D3D9 sizes in system-only and optional-font modes, Reset and ownership verified'
+    validation='Runtime system-font generation; ordinary-directory startup; native mod font overrides and custom paths; five D3D9 sizes, Reset and ownership verified'
     validation_limits='Latest player physical IME and complete controlled SDL/GPU sequence pending; complex shaping, multi-page atlases, Ironman and multiplayer unverified'
     files=$packageFiles
 }

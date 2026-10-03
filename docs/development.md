@@ -10,7 +10,7 @@
 | `unicode_editor` / `unicode_search` | 单行编辑、选区、字节预算与外交国家名过滤 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
 | `glyph_registry` / `scalar_glyph` / `native_font_atlas` | 稀疏字形记录、按需图集和设备恢复 |
-| `font_assets` | 已适配的原版字体路径映射 |
+| `font_assets` / `font_atlas_assets` | 原版字体路径映射与运行时基础图集生成 |
 | `plugin.cpp` / MASM | 指令检查、引擎挂钩与失败回滚 |
 | `version_proxy` | Windows version API 转发及插件加载 |
 
@@ -25,13 +25,15 @@
 | 单行按键 / 插入 | `15366c0` / `1536b80` |
 | Windows IME 消息 / 光标矩形 | `1764940` / `17657c0` |
 
-ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径通过游戏的字符串赋值函数替换，使用原生分配器；其他模组字体路径不改写。
+ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径通过游戏的字符串赋值函数替换，使用原生分配器；原版同名路径先查询引擎资源解析器（RVA `19fad70`）；`.fnt`、`.tga` 或 `.dds` 来自模组或压缩包时保留原路径。自定义路径保持原生加载，普通与放大 UI 路径分别处理。
 
 ## 字体
 
 玩家版按需字形先用系统 DirectWrite 字体；缺字后才加载游戏目录中的可选字体文件。开发探针保留文件字体优先的验证方式。安装或移除字体包后需重启游戏。
 
-基础图集从思源黑体生成，共有 14、16、18、24、88px 五页，每页 2048×4096，初始包含 192 个拉丁字符及省略号。可选字体的版本与 SHA-256 见[清单](../fixtures/open-fonts.json)，版权与许可证见[第三方说明](../THIRD_PARTY_NOTICES.md)。
+基础图集在原生字体加载回调中从系统字体生成，共有 14、16、18、24、88px 五页，每页 2048×4096，初始包含 192 个基础字符。同一进程重复加载时复用，下一次启动重新生成，缓存位于 `gfx/fonts/eu4-unicode/cache/`；DirectWrite 初始化在 DLL 加载锁之外执行。可选字体的版本与 SHA-256 见[清单](../fixtures/open-fonts.json)，版权与许可证见[第三方说明](../THIRD_PARTY_NOTICES.md)。
+
+模组位图字体保留已收录字形与度量；动态补字目前只用于补丁生成图集。
 
 测宽阶段只生成 CPU 字形，纹理查找阶段上传，旧坐标和 UV 保留。共享纹理的字体共用一页，Reset 后从 CPU staging 恢复；补丁不持有 default-pool 纹理引用。
 
@@ -75,6 +77,8 @@ python tools\migrate-localisation.py '旧模组的localisation目录' private\mi
 玩家副本位于 `private/player-install/Europa Universalis IV`，独立用户目录为 `private/player-userdir`。脚本保留原版字体定义和原安装的旧插件，覆盖玩家包，不修改原安装。`-SaveFile` 可省略。EU4 的 `userdir.txt` 路径不要带尾部换行。
 
 默认测试无可选字体的主包；加上 `-OptionalFonts` 可测试字体包安装后的行为。
+
+`python tools/verify-mod-fonts.py` 在该副本中生成目录及压缩包测试模组，检查同名覆盖、自定义路径、纹理覆盖和放大字体的度量与实际 GPU 像素；脚本退出时恢复副本的模组配置。生成的系统字体纹理仅留在 `private/`。
 
 ## 原生探针
 

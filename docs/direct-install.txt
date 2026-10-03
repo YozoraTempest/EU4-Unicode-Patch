@@ -1,4 +1,4 @@
-EU4 Unicode Patch v0.1.4-experimental
+EU4 Unicode Patch v0.1.5-experimental
 作者：VulonLok
 适用：EU4 1.37.5.0 Inca，Windows x64，Windows 10 1903 或更新版本。
 
@@ -11,13 +11,14 @@ EU4 Unicode Patch v0.1.4-experimental
 eu4.exe
 VERSION.dll
 plugins/eu4_unicode_patch.dll
-gfx/fonts/eu4-unicode/五套 .fnt 和 .dds
+plugins/eu4_unicode_patch/LICENSE.txt
+EU4UnicodePatch.README.txt
 
 不需要运行脚本、编译、复制游戏或安装系统字体。
 
 可选字体
-主包优先使用系统字体，不附完整字库。需要补充生僻字时，下载
-EU4UnicodePatch-fonts-v0.1.4-experimental.zip，同样覆盖进游戏目录后重启。
+主包使用系统字体，基础图集在游戏加载时生成，不附字体文件或预生成图集。需要补充生僻字时，下载
+EU4UnicodePatch-fonts-v0.1.5-experimental.zip，同样覆盖进游戏目录后重启。
 三个字体文件位于 plugins/eu4_unicode_patch/fonts/，安装后仍优先使用系统字体。
 删除 fonts/ 文件夹即可取消可选字库；v0.1.1 留下的字库也按可选字体使用。
 
@@ -29,10 +30,11 @@ EU4UnicodePatch-fonts-v0.1.4-experimental.zip，同样覆盖进游戏目录后�
 汉化
 本包提供编码、字体和输入支持，不附带完整中文翻译。
 汉化本地化必须是普通 UTF-8；旧双字节转义汉化需要先迁移。
-自定义图标字体及未识别的模组字体保持其原有资源。
+模组字体按游戏加载顺序保留，支持原版同名覆盖和自定义路径。
+缺字动态生成目前用于补丁自身图集。
 
 更新
-退出游戏后用新玩家包覆盖同一游戏目录。存档与用户设置保留。
+退出游戏后用新玩家包覆盖同一游戏目录。存档与用户设置保留。旧版留下的基础图集不再使用，字体缓存会自动生成。
 
 卸载
 退出游戏，删除 plugins/eu4_unicode_patch.dll、plugins/eu4_unicode_patch/、
@@ -42,7 +44,7 @@ gfx/fonts/eu4-unicode/、EU4UnicodePatch.README.txt 和 EU4UnicodePatch.FONTS.tx
 
 日志：plugins/eu4_unicode_patch.log
 启用标志：UTF-8 import, UI, format, map and bitmap iterators enabled.
-Refused 表示版本、冲突或包内文件检查未通过；缺字或图集已满也记录在日志中。
+Refused 表示版本或冲突检查未通过；缺字或图集已满也记录在日志中。
 
 这是实验版。多页图集、复杂文字整段排版、铁人和联机尚未完成验证。
 下载与详细说明：https://github.com/YozoraTempest/EU4-Unicode-Patch

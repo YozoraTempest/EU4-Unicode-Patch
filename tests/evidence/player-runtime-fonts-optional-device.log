@@ -1,0 +1,28 @@
+Font source: system fonts first; optional font files supplement missing glyphs.
+Dynamic glyph U+5B54 queued: size=16 rect=1,19,16,14 advance=16
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic glyph U+30000 queued: size=16 rect=18,19,16,15 advance=16
+Dynamic font texture uploaded: size=16 glyphs=1
+Device reset restored both cached GPU regions; native pointer reuse=1.
+Dynamic glyph U+4E2D queued: size=14 rect=1,17,12,12 advance=14
+Dynamic font texture uploaded: size=14 glyphs=1
+Dynamic glyph U+30000 queued: size=14 rect=14,17,14,12 advance=14
+Dynamic font texture uploaded: size=14 glyphs=1
+Dynamic glyph U+4E2D queued: size=18 rect=1,21,16,17 advance=18
+Dynamic font texture uploaded: size=18 glyphs=1
+Dynamic glyph U+30000 queued: size=18 rect=18,21,18,16 advance=18
+Dynamic font texture uploaded: size=18 glyphs=1
+Dynamic glyph U+4E2D queued: size=24 rect=1,55,21,24 advance=24
+Dynamic font texture uploaded: size=24 glyphs=1
+Dynamic glyph U+30000 queued: size=24 rect=23,55,22,21 advance=24
+Dynamic font texture uploaded: size=24 glyphs=1
+Dynamic glyph U+4E2D queued: size=88 rect=1,467,75,86 advance=88
+Dynamic font texture uploaded: size=88 glyphs=1
+Dynamic glyph U+30000 queued: size=88 rect=77,467,81,78 advance=88
+Dynamic font texture uploaded: size=88 glyphs=1
+Player assets: all five UI/map sizes match real D3D9 texture pixels.
+Optional font files loaded: 3
+Dynamic glyph U+323B0 queued: size=16 rect=1,19,12,14 advance=16
+Dynamic font texture uploaded: size=16 glyphs=1
+Optional-font mode: system pixels retain priority; missing CJK glyph uses the file-backed font.
+Native GPU upload, preserved region, supplementary glyph, device reset, stable pointer and font release passed.

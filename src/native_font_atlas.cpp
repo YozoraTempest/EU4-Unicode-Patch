@@ -158,11 +158,11 @@ void configure_font_atlases(const std::filesystem::path& fixture,const std::file
     prefer_system=prefer_system_fonts;font_files_checked=false;text_fonts.reset();
     if(logger&&prefer_system) logger("Font source: system fonts first; optional font files supplement missing glyphs.");
 }
-void register_font_atlas(void* object) noexcept {
+void register_font_atlas(void* object,std::string_view selected_path) noexcept {
     try {
         std::lock_guard<std::recursive_mutex> lock(mutex);
         const auto f=static_cast<std::byte*>(object);
-        const auto path=reinterpret_cast<const EngineString*>(f+0xe0)->view();
+        const auto path=selected_path.empty()?reinterpret_cast<const EngineString*>(f+0xe0)->view():selected_path;
         const std::array<std::pair<const char*,int>,5> names{{{"zh-hans-14",14},{"zh-hans-16",16},{"zh-hans-18",18},{"zh-hans-24",24},{"zh-hans-map",88}}};
         int size=0;for(const auto& name:names) if(path==atlas_prefix+name.first) size=name.second;
         if(!size) return;

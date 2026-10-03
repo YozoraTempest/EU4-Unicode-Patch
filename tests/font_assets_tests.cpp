@@ -5,10 +5,10 @@
 int main() {
     using eu4unicode::player_font_path;
     try {
-        if(player_font_path("gfx/fonts/vic_18s")!="gfx/fonts/eu4-unicode/zh-hans-16"||
-           player_font_path("gfx/fonts/garamond_16_bold")!="gfx/fonts/eu4-unicode/zh-hans-16"||
-           player_font_path("gfx/fonts/Mapfont")!="gfx/fonts/eu4-unicode/zh-hans-map"||
-           player_font_path("gfx/fonts/zh-hans-24")!="gfx/fonts/eu4-unicode/zh-hans-24")
+        if(player_font_path("gfx/fonts/vic_18s")!="gfx/fonts/eu4-unicode/cache/zh-hans-16"||
+           player_font_path("gfx/fonts/garamond_16_bold")!="gfx/fonts/eu4-unicode/cache/zh-hans-16"||
+           player_font_path("gfx/fonts/Mapfont")!="gfx/fonts/eu4-unicode/cache/zh-hans-map"||
+           player_font_path("gfx/fonts/zh-hans-24")!="gfx/fonts/eu4-unicode/cache/zh-hans-24")
             throw std::runtime_error("Native UI/map font mapping failed");
         for(const auto path:{"gfx/fonts/icons","mod/vic_18","gfx/fonts/vic_18_extra",
                              "gfx/fonts/eu4-unicode/zh-hans-16",""})

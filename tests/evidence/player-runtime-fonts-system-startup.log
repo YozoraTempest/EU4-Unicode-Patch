@@ -1,0 +1,13 @@
+EU4 Unicode Patch v0.1.5-experimental initializing; author=VulonLok.
+Font source: system fonts first; optional font files supplement missing glyphs.
+Experimental UTF-8 input and single-line grapheme editing enabled.
+Native Windows IME candidate UI and caret exclusion rectangle enabled.
+UTF-8 import, UI, format, map and bitmap iterators enabled.
+Registered FE_SINGLE_PLAYER without single-byte conversion:
+Single Player
+Registered FE_SINGLE_PLAYER without single-byte conversion:
+Single Player
+Dynamic glyph U+6CD5 queued: size=18 rect=1,21,18,16 advance=18
+Dynamic glyph U+5170 queued: size=18 rect=20,21,18,16 advance=18
+Dynamic glyph U+897F queued: size=18 rect=39,21,18,16 advance=18
+Dynamic font texture uploaded: size=18 glyphs=3
