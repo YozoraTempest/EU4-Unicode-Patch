@@ -62,7 +62,7 @@ git submodule update --init --recursive
 
 六个 CTest 分别覆盖 UTF-8 核心、ICU Unicode 服务、DirectWrite 布局与栅格化、原生稀疏字形表、编辑事务，以及国家显示名搜索。编辑测试覆盖光标落在 UTF-8/字素内部、完整字素删除、选区替换和字节预算。公共 MASM 宏文件也有显式构建依赖。保护测试会在两个错误宿主中加载 DLL，检查拒绝日志与导出的 `Eu4UnicodeProbeEnabled()` 状态。
 
-运行跟踪需要 Python、Frida 和 psutil。本机已有研究环境：
+运行跟踪需要 Python、Frida 和 psutil；剪贴板探针另使用 pefile 校验 DLL 数据节。本机已有研究环境：
 
 ```powershell
 ..\EU4MenuPatch\.venv\Scripts\python.exe tools\trace-import.py --duration 75
@@ -79,7 +79,7 @@ git submodule update --init --recursive
 
 ## 实验输入
 
-已实现完整 SDL UTF-8 提交与单行字素移动、删除及选区适配。每个 SDL 文本事件携带完整有效 UTF-8 穿过原生队列，再一次性插入编辑器；预算与控件范围回删保持完整字素，通知只发布最终状态。实际 SDL 轮询入口的 26 个合成事件案例、原生无选区编辑的 18 个案例，以及 18 组选区操作的 27 个状态均已核对；包括中文/生僻字选区替换和禁止提交保留原选区，见 [编辑验收](docs/input.md)。物理键盘中文输入、输入法预编辑、鼠标选区和多行尚未验收。名称的数据往返不能替代输入入口的验收。输入实验默认关闭：
+已实现完整 SDL UTF-8 提交与单行字素移动、删除及选区适配。每个 SDL 文本事件携带完整有效 UTF-8 穿过原生队列，再一次性插入编辑器；预算与控件范围回删保持完整字素，通知只发布最终状态。实际 SDL 轮询入口的 26 个合成事件案例、原生无选区编辑的 18 个案例，以及 18 组选区操作的 27 个状态均已核对；包括中文/生僻字选区替换和禁止提交保留原选区。原生粘贴另通过 16 个受控 SDL 文本来源案例，修复缓冲释放与选区保留，并验证字体过滤、完整插入和最终通知，见 [编辑验收](docs/input.md)。物理键盘中文输入、输入法预编辑、系统剪贴板转换、鼠标选区和多行尚未验收。名称的数据往返不能替代输入入口的验收。输入实验默认关闭：
 
 ```powershell
 .\tools\start-test.ps1 -ExperimentalInput

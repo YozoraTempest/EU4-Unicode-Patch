@@ -31,3 +31,5 @@ jobs:
         run: python tests/font_lifetime_evidence_tests.py
       - name: Native editor pixel geometry evidence validation
         run: python tests/geometry_evidence_tests.py
+      - name: Native clipboard evidence validation
+        run: python tests/clipboard_evidence_tests.py

@@ -85,11 +85,12 @@ using AssignText=EngineString*(*)(EngineString*,const char*,std::uint64_t);
 AssignText original_assign_text=nullptr;
 using FilterText=void(*)(EngineString*,const EngineString*);
 FilterText original_filter_text=nullptr;
+thread_local bool clipboard_font_filter=false;
 void filter_editor_text(EngineString* text,const EngineString* blacklist) {
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
         reinterpret_cast<std::uintptr_t>(image);
     const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
-    if(caller!=0x1536c37 || !eu4unicode::valid_utf8(value)) {
+    if((caller!=0x1536c37&&!(clipboard_font_filter&&caller==0x15a05ad)) || !eu4unicode::valid_utf8(value)) {
         original_filter_text(text,blacklist); return;
     }
     try {
@@ -286,6 +287,44 @@ void insert_editor_commit(void* widget,const EngineString* text) {
         text=active_commit.text;
     if(static_cast<std::byte*>(widget)[0x90]!=std::byte{0}) editor_selection(widget);
     original_editor_insert(widget,text);
+}
+void paste_editor_clipboard(void* widget) {
+    using ClipboardText=char*(*)();
+    using ClipboardFree=void(*)(void*);
+    const auto release=reinterpret_cast<ClipboardFree>(image+0x1735e00);
+    std::unique_ptr<char,ClipboardFree> clipboard(
+        reinterpret_cast<ClipboardText>(image+0x1734490)(),release);
+    if(!clipboard) return;
+    const auto length=strnlen_s(clipboard.get(),32001);
+    if(!length||length>32000) return;
+    const std::string_view value(clipboard.get(),length);
+    if(!eu4unicode::valid_utf8(value)) return;
+    try {
+        EngineString text{};text.capacity=15;
+        struct DestroyText {
+            EngineString* text;
+            ~DestroyText(){reinterpret_cast<void(*)(EngineString*)>(image+0x95660)(text);}
+        } destroy{&text};
+        original_assign_text(&text,value.data(),value.size());
+        const auto base=static_cast<std::byte*>(widget);
+        const auto font=*reinterpret_cast<void**>(base+0x98);
+        if(font&&base[0xe4]!=std::byte{0}) {
+            const auto previous=clipboard_font_filter;
+            struct Restore { bool previous; ~Restore(){clipboard_font_filter=previous;} } restore{previous};
+            clipboard_font_filter=true;
+            using Transform=void(*)(void*,EngineString*);
+            reinterpret_cast<Transform>((*static_cast<void***>(font))[0xc0/8])(font,&text);
+        }
+        const auto blacklist=reinterpret_cast<const EngineString*>(base+0xb8);
+        const auto filtered=eu4unicode::filter_editor_characters(
+            {text.data(),static_cast<std::size_t>(text.size)},
+            {blacklist->data(),static_cast<std::size_t>(blacklist->size)});
+        if(filtered.empty()) return;
+        original_assign_text(&text,filtered.data(),filtered.size());
+        // Keep the active selection until the existing insert action replaces
+        // it. Rejected clipboard text leaves text, caret and selection intact.
+        insert_editor_commit(widget,&text);
+    } catch(...) { log("Unicode clipboard paste failed; insertion excluded."); }
 }
 bool consume_editor_commit(void* callback,const char* character) {
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
@@ -669,6 +708,11 @@ bool initialize(HMODULE module) {
         ,{0x1536340,"448b45d0ff50603906440f4ff3488b55"}
         ,{0x1537210,"48895c240848896c2410488974241848897c2420"}
         ,{0x1539820,"48895c241848896c242057415441574883ec204c"}
+        ,{0x1539240,"40534883ec40488bd9c6819000000000e83bb21f00"}
+        ,{0x1734490,"48ff2559bd8700"}
+        ,{0x1735e00,"48ff2599ac8700"}
+        ,{0x15a04f0,"40534883ec60488bda4533c0"}
+        ,{0x15a05a8,"e8e38f57ff"}
         ,{0x1538560,"40534883ec20488b01488bd9ff9068010000"}
         ,{0x1538670,"40534883ec20488b01488bd9ff9068010000"}
         ,{0x153857f,"488b03488bcbff90d8000000"}
@@ -827,6 +871,7 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_width_fit))!=MH_OK ||
            MH_CreateHook(image+0x1539820,reinterpret_cast<void*>(editor_word_break),
              reinterpret_cast<void**>(&original_editor_word_break))!=MH_OK ||
+           MH_CreateHook(image+0x1539240,reinterpret_cast<void*>(paste_editor_clipboard),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x95110,reinterpret_cast<void*>(assign_editor_prefix),
              reinterpret_cast<void**>(&original_assign_text))!=MH_OK ||
            MH_CreateHook(image+0xb19590,reinterpret_cast<void*>(filter_editor_text),
