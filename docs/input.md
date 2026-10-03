@@ -198,7 +198,7 @@ python tests\ime_rect_evidence_tests.py
 
 定位挂钩保留原组合窗口调用，在同一光标矩形上设置 `ImmSetCandidateWindow`，使用 `CFS_EXCLUDE` 排除光标所在行。获取和释放同一个窗口的 IMM 上下文，没有保存借用句柄或更改 Windows 输入法设置。实现采用 [Microsoft 候选窗接口](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immsetcandidatewindow)及[现代 SDL 的定位方式](https://github.com/libsdl-org/SDL/blob/SDL2/src/video/windows/SDL_windowskeyboard.c)。
 
-七个受控原生窗口消息案例通过：四种活动上下文 UI 标志完整保留，三个关闭状态保持原消息契约。正常 UI 帧上的十七次候选定位请求均由 Windows 接受；随后用 `ImmGetCandidateWindow` 读回的索引、排除模式、位置和矩形与实际光标一致。相同 DLL 的二十六个 SDL 完整提交、队列、一次插入和最终通知案例回归通过。见[候选窗原始记录](evidence/native-ime-candidate-contract.jsonl)与[独立报告](evidence/native-ime-candidate-contract.json)。这证明消息与定位 API 契约，候选列表的实际可见性仍待用户使用物理输入法复验。
+七个受控原生窗口消息案例通过：四种活动上下文 UI 标志完整保留，三个关闭状态保持原消息契约。正常 UI 帧上的十七次候选定位请求均由 Windows 接受；随后用 `ImmGetCandidateWindow` 读回的索引、排除模式、位置和矩形与实际光标一致。相同 DLL 的二十六个 SDL 完整提交、队列、一次插入和最终通知案例回归通过。见[候选窗原始记录](evidence/native-ime-candidate-contract.jsonl)与[独立报告](evidence/native-ime-candidate-contract.json)。该记录证明消息与定位 API 契约；候选列表的实际可见性另由下节用户物理复验确认。
 
 ```powershell
 .\tools\start-test.ps1 -ExperimentalInput
@@ -211,3 +211,17 @@ python tests\ime_rect_evidence_tests.py
 python tools\verify-ime-candidates.py private\native-ime-candidates.jsonl
 python tests\ime_candidates_evidence_tests.py
 ```
+
+## 物理输入法复验
+
+2026-10-03，用户在同一修补版、1280×720、GUI scale 1 的外交搜索框使用中文输入法，确认“候选列表出现，位置正常”。被动观察同时记录到候选打开、变化和关闭通知继续传给默认 IME 窗口，TSF UI 请求允许显示，Windows 接受候选位置且读回值与光标一致。见[用户确认与 API 摘要](evidence/physical-ime-candidates.json)。受控消息报告中的物理可见性标记仍表示该自动报告自身的范围，实际可见性由这份独立用户确认补充。
+
+用户另确认中文提交、整字退格、Shift+← 选择和输入法替换正常，最终文本为“中字”。实际原生状态完整保留为九步：`中文测试 → 中文测试阿 → 中文测试 → 中文测 → 中文 → 选中文 → 中中 → 选中第二个中 → 中字`。记录包含额外追加并删除“阿”、以“中”替换“文”后再次选择并以“字”替换的操作，没有把中间操作改写成理想夹具。
+
+四个 SDL 中文提交分别对应一次完整原生插入；三次物理 Backspace 删除完整字符；两次物理 Shift+← 选择的锚点均为字节位置 6、光标位置 3，选区分别为“文”和“中”。两次替换均保留首字“中”、清空选择并将光标移到新文本末尾。七次原生通知与最终文本一致。只发布这段测试的必要事件和状态，其他输入记录继续留在 `private`。见[物理编辑记录](evidence/physical-editor-sequence.json)。
+
+```powershell
+python tools\verify-physical-editor.py docs\evidence\physical-editor-sequence.json
+```
+
+验收只覆盖当前 Windows 中文输入法和真实单行搜索框。生僻字、组合序列的物理输入、其他输入法与控件、缩放、预编辑绘制、系统剪贴板、鼠标选区和多行继续待验收。

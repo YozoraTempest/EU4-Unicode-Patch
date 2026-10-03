@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-03",
+  "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+  "dll_sha256": "d02e0cece69fdf60a7ea29407537b4554b9d4776c56016ee87b81c15acce255d",
+  "scope": "User-operated Chinese IME in the isolated diplomacy search box, 1280x720, GUI scale 1; no general input or other IME claim",
+  "user_confirmation": "候选列表出现，位置正常",
+  "candidate_visibility": "confirmed by user",
+  "candidate_position": "confirmed normal by user",
+  "observed_candidate_lifecycle_messages": 174,
+  "observed_candidate_rectangles": 88,
+  "observed_native_tsf_show_requests": 36,
+  "remaining": [
+    "Physical rare-character and grapheme sequences",
+    "Other IMEs, controls and display scales",
+    "Preedit rendering, OS clipboard and mouse selection"
+  ],
+  "raw_input_record_policy": "Keystrokes and input records remain private; this summary contains only prescribed test outcome and aggregate API checks",
+  "editor_sequence": "physical-editor-sequence.json",
+  "editor_user_confirmation": "全部正常，最后是“中字”"
+}

@@ -1,0 +1,522 @@
+{
+  "event": "artifact",
+  "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+  "dll_sha256": "d02e0cece69fdf60a7ea29407537b4554b9d4776c56016ee87b81c15acce255d",
+  "method": "Passive observation only; no injected SDL events or edit transactions",
+  "date": "2026-10-03",
+  "scope": "Actual user-operated Chinese IME, Backspace, Shift+Left and selection replacement in the isolated diplomacy search box",
+  "user_confirmation": "全部正常，最后是“中字”",
+  "records": [
+    {
+      "source_index": 1034,
+      "event": "physical-sdl-text",
+      "type": 771,
+      "utf8": [
+        228,
+        184,
+        173,
+        230,
+        150,
+        135,
+        230,
+        181,
+        139,
+        232,
+        175,
+        149
+      ]
+    },
+    {
+      "source_index": 1036,
+      "event": "physical-native-insert",
+      "payload": [
+        228,
+        184,
+        173,
+        230,
+        150,
+        135,
+        230,
+        181,
+        139,
+        232,
+        175,
+        149
+      ]
+    },
+    {
+      "source_index": 1037,
+      "event": "physical-native-notify",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          230,
+          181,
+          139,
+          232,
+          175,
+          149
+        ],
+        "caret": 12,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1039,
+      "event": "physical-editor-state",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          230,
+          181,
+          139,
+          232,
+          175,
+          149
+        ],
+        "caret": 12,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1049,
+      "event": "physical-sdl-text",
+      "type": 771,
+      "utf8": [
+        233,
+        152,
+        191
+      ]
+    },
+    {
+      "source_index": 1051,
+      "event": "physical-native-insert",
+      "payload": [
+        233,
+        152,
+        191
+      ]
+    },
+    {
+      "source_index": 1052,
+      "event": "physical-native-notify",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          230,
+          181,
+          139,
+          232,
+          175,
+          149,
+          233,
+          152,
+          191
+        ],
+        "caret": 15,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1054,
+      "event": "physical-editor-state",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          230,
+          181,
+          139,
+          232,
+          175,
+          149,
+          233,
+          152,
+          191
+        ],
+        "caret": 15,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1062,
+      "event": "physical-sdl-key",
+      "type": 768,
+      "key": 8,
+      "scancode": 42,
+      "modifiers": 4096
+    },
+    {
+      "source_index": 1063,
+      "event": "physical-native-notify",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          230,
+          181,
+          139,
+          232,
+          175,
+          149
+        ],
+        "caret": 12,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1065,
+      "event": "physical-editor-state",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          230,
+          181,
+          139,
+          232,
+          175,
+          149
+        ],
+        "caret": 12,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1068,
+      "event": "physical-sdl-key",
+      "type": 768,
+      "key": 8,
+      "scancode": 42,
+      "modifiers": 4096
+    },
+    {
+      "source_index": 1069,
+      "event": "physical-native-notify",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          230,
+          181,
+          139
+        ],
+        "caret": 9,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1071,
+      "event": "physical-editor-state",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          230,
+          181,
+          139
+        ],
+        "caret": 9,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1074,
+      "event": "physical-sdl-key",
+      "type": 768,
+      "key": 8,
+      "scancode": 42,
+      "modifiers": 4096
+    },
+    {
+      "source_index": 1075,
+      "event": "physical-native-notify",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135
+        ],
+        "caret": 6,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1077,
+      "event": "physical-editor-state",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135
+        ],
+        "caret": 6,
+        "row": 0,
+        "selected": [],
+        "anchor": 0,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1085,
+      "event": "physical-sdl-key",
+      "type": 768,
+      "key": 1073742049,
+      "scancode": 225,
+      "modifiers": 4096
+    },
+    {
+      "source_index": 1086,
+      "event": "physical-sdl-key",
+      "type": 768,
+      "key": 1073741904,
+      "scancode": 80,
+      "modifiers": 4097
+    },
+    {
+      "source_index": 1088,
+      "event": "physical-editor-state",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135
+        ],
+        "caret": 3,
+        "row": 0,
+        "selected": [
+          230,
+          150,
+          135
+        ],
+        "anchor": 6,
+        "active": true
+      }
+    },
+    {
+      "source_index": 1121,
+      "event": "physical-sdl-text",
+      "type": 771,
+      "utf8": [
+        228,
+        184,
+        173
+      ]
+    },
+    {
+      "source_index": 1123,
+      "event": "physical-native-insert",
+      "payload": [
+        228,
+        184,
+        173
+      ]
+    },
+    {
+      "source_index": 1124,
+      "event": "physical-native-notify",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          228,
+          184,
+          173
+        ],
+        "caret": 6,
+        "row": 0,
+        "selected": [],
+        "anchor": 3,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1126,
+      "event": "physical-editor-state",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          228,
+          184,
+          173
+        ],
+        "caret": 6,
+        "row": 0,
+        "selected": [],
+        "anchor": 3,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1134,
+      "event": "physical-sdl-key",
+      "type": 768,
+      "key": 1073742049,
+      "scancode": 225,
+      "modifiers": 4096
+    },
+    {
+      "source_index": 1135,
+      "event": "physical-sdl-key",
+      "type": 768,
+      "key": 1073741904,
+      "scancode": 80,
+      "modifiers": 4097
+    },
+    {
+      "source_index": 1137,
+      "event": "physical-editor-state",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          228,
+          184,
+          173
+        ],
+        "caret": 3,
+        "row": 0,
+        "selected": [
+          228,
+          184,
+          173
+        ],
+        "anchor": 6,
+        "active": true
+      }
+    },
+    {
+      "source_index": 1151,
+      "event": "physical-sdl-text",
+      "type": 771,
+      "utf8": [
+        229,
+        173,
+        151
+      ]
+    },
+    {
+      "source_index": 1153,
+      "event": "physical-native-insert",
+      "payload": [
+        229,
+        173,
+        151
+      ]
+    },
+    {
+      "source_index": 1154,
+      "event": "physical-native-notify",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          229,
+          173,
+          151
+        ],
+        "caret": 6,
+        "row": 0,
+        "selected": [],
+        "anchor": 3,
+        "active": false
+      }
+    },
+    {
+      "source_index": 1156,
+      "event": "physical-editor-state",
+      "state": {
+        "text": [
+          228,
+          184,
+          173,
+          229,
+          173,
+          151
+        ],
+        "caret": 6,
+        "row": 0,
+        "selected": [],
+        "anchor": 3,
+        "active": false
+      }
+    }
+  ],
+  "observed_extra_operations": "The user also appended and removed 阿, replaced 文 with 中, then selected the second 中 and replaced it with 字; the complete sequence is preserved."
+}

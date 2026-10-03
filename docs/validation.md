@@ -60,7 +60,7 @@
 
 本机字体样本包括中文、日文、韩文、𠀀、😀、希腊文、阿拉伯文、希伯来文、印地文与泰文，缺字数量为 0。系统选择了 Leelawadee UI、Malgun Gothic、Microsoft YaHei UI、Nirmala UI、Segoe UI、Segoe UI Emoji 和 SimSun-ExtB。[诊断图片](evidence/unicode-layout.png)由独立 TextLayout 模块生成，不能作为这些能力已接入 EU4 的证据。其他机器的实际覆盖取决于已安装字体。
 
-独立模块补齐完整 shaped run 后，22 个 run 的实际 mask 与基线另外组图；原布局销毁后的字体寿命、完整源簇覆盖、字形偏移、RTL 负左边界、灰度覆盖、空白宽度和亚像素相位均通过。五种字号重新生成的十份 FNT/DDS 与游戏现用文件逐字节相同；[文件指纹](evidence/shaped-run-validation.json)和[组合诊断图](evidence/unicode-shaped-runs.png)保存结果。该模块尚未接入游戏 GPU，研究 DLL 保持下面的指纹。
+独立模块补齐完整 shaped run 后，22 个 run 的实际 mask 与基线另外组图；原布局销毁后的字体寿命、完整源簇覆盖、字形偏移、RTL 负左边界、灰度覆盖、空白宽度和亚像素相位均通过。五种字号重新生成的十份 FNT/DDS 与游戏现用文件逐字节相同；[文件指纹](evidence/shaped-run-validation.json)和[组合诊断图](evidence/unicode-shaped-runs.png)保存结果。该模块尚未接入游戏 GPU；该阶段未改变研究 DLL，后续候选窗修补的当前指纹见下文。
 
 构建与语法检查通过。Ninja 正确识别本机中文 include 前缀，公共 MASM 宏使用显式依赖。GitHub Actions 模板定义 Windows x64 构建、全部 CTest 和拒绝宿主测试。当前 OAuth 令牌没有 workflow 写入权限，GitHub 拒绝发布 .github/workflows 文件；模板保存在 docs/ci/windows-build.yml，尚未启用远端自动运行。
 
@@ -70,7 +70,9 @@
 
 原生像素定位、宽度截断与组合空格边界另通过 11 组、727 个像素位置；测宽使用当前 GUI 字体，定位结果保持完整字素，首个过宽字素仍能推进。18 个编辑案例、18 组和 27 个选区状态在该阶段 DLL 上复测通过。几何记录使用独立值夹具，SDL 高度裁剪另核对了该搜索框的实际像素宽度与最终单行缓存；物理鼠标与其他 GUI 行缓存未验收。
 
-后续物理观察收到“法兰西”的完整 UTF-8 提交及三次整字退格，用户报告候选窗不可见。实验输入新增 Windows 原生候选 UI 标志保留和 `CFS_EXCLUDE` 定位：七个原生消息案例通过，十七次实际请求被 Windows 接受并正确读回，二十六个 SDL 输入案例在新 DLL 上通过。七个 CTest 和两项保护宿主检查通过。候选列表实际可见性、预编辑画面及完整物理选区流程仍待复验，见[候选窗记录](evidence/native-ime-candidate-contract.jsonl)和[报告](evidence/native-ime-candidate-contract.json)。
+后续物理观察收到“法兰西”的完整 UTF-8 提交及三次整字退格，用户报告候选窗不可见。实验输入新增 Windows 原生候选 UI 标志保留和 `CFS_EXCLUDE` 定位：七个原生消息案例通过，十七次实际请求被 Windows 接受并正确读回，二十六个 SDL 输入案例在新 DLL 上通过。七个 CTest 和两项保护宿主检查通过。物理结果另见下段；受控 API 验收见[候选窗记录](evidence/native-ime-candidate-contract.jsonl)和[报告](evidence/native-ime-candidate-contract.json)。
+
+修补版随后由用户物理复验，确认候选列表可见、位置正常，中文提交、整字删除、Shift+← 选择和输入法替换正常。被动记录核对九个原生状态、四次完整 IME 提交与一次性插入、三次整字退格、两次选择/替换和七次原生通知，最终文本为“中字”。记录保留额外追加/删除及一次中间替换，没有跳过中间状态。见[候选窗确认](evidence/physical-ime-candidates.json)和[物理编辑记录](evidence/physical-editor-sequence.json)。该结果只适用于当前单行控件、输入法及显示设置，预编辑画面、其他输入法/控件和完整 Unicode 物理输入覆盖继续待办。
 
 原生粘贴另通过 16 个真实单行对象案例，修复 SDL 缓冲泄漏、提前清空活动选择和字体过滤破坏 UTF-8 续字节；非法、空、全禁用和超长文本保留原状态。私有 SDL 文本来源使用真实分配器，每个案例恰好一次释放。转发观察器核对一次完整插入与一次最终通知，拒绝路径两者皆无；DLL/MAP 指纹及独立原始记录见 [输入验收](input.md)。十三项证据检查通过。原生复制/剪切到再粘贴另通过 16 个受控来源往返，捕获实际输出字节后供粘贴读取；十项专用证据检查通过。直接复制/剪切没有产生外交通知，再粘贴恰好通知一次。这些结果不替代系统剪贴板转换或物理快捷键的完整事件链验收。
 

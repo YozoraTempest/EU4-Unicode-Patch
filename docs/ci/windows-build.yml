@@ -39,3 +39,5 @@ jobs:
         run: python tests/ime_rect_evidence_tests.py
       - name: Native Windows IME candidate evidence validation
         run: python tests/ime_candidates_evidence_tests.py
+      - name: Physical Chinese IME editing evidence validation
+        run: python tools/verify-physical-editor.py docs/evidence/physical-editor-sequence.json
