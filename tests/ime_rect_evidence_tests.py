@@ -15,7 +15,7 @@ spec.loader.exec_module(module)
 
 class ImeRectEvidenceTests(unittest.TestCase):
     def setUp(self):
-        self.path = ROOT / 'docs/evidence/native-ime-rect.jsonl'
+        self.path = ROOT / 'tests/evidence/native-ime-rect.jsonl'
         self.records = [json.loads(line) for line in self.path.read_text(encoding='utf-8').splitlines()]
 
     def event(self, name, case=None):

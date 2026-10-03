@@ -19,7 +19,7 @@
 需要 **Windows 10 1903 或更新版本**。包内已包含 `VERSION.dll` 加载器；已有该文件时，先备份原文件。
 
 1. 保存战役并完全退出游戏。
-2. 下载补丁 ZIP，将里面的全部内容复制到 `eu4.exe` 所在目录，合并文件夹并覆盖同名文件。
+2. 下载补丁 ZIP，将里面的全部内容复制到 `eu4.exe` 所在目录，合并文件夹并覆盖同名文件。Source code 是源码。
 3. 正常从 Steam 或启动器启动游戏。
 
 安装后的目录：
@@ -35,19 +35,23 @@ Europa Universalis IV/
 └── gfx/fonts/eu4-unicode/
 ```
 
-更新时，退出游戏后用新包覆盖同一目录。安装不需要运行脚本或安装系统字体。详细目录与移除方法见[安装说明](docs/install.md)。
+更新时，退出游戏后用新包覆盖同一目录。安装不需要运行脚本或安装系统字体。不要把整个 ZIP 放进 `plugins`，也不要多套一层文件夹。
 
 系统字体缺字时，再下载可选字体包，同样解压覆盖到游戏目录后重启。已安装字体包时仍优先使用系统字体；移除 `plugins/eu4_unicode_patch/fonts/` 即可取消可选字库。主包保留游戏加载所需的基础图集。
 
+从 v0.1.1 更新时，原有 `fonts/` 文件夹会继续作为可选字库使用；只用系统字体时可删除它。
+
 ## 卸载
 
-退出游戏，删除 `plugins/eu4_unicode_patch.dll`、`plugins/eu4_unicode_patch/`、`gfx/fonts/eu4-unicode/`、`EU4UnicodePatch.README.txt` 和可选包的 `EU4UnicodePatch.FONTS.txt`。恢复备份的 `VERSION.dll`；此前没有加载器时，删除本包的 `VERSION.dll`。
+退出游戏，删除 `plugins/eu4_unicode_patch.dll`、`plugins/eu4_unicode_patch/`、`plugins/eu4_unicode_patch.log`、`gfx/fonts/eu4-unicode/`、`EU4UnicodePatch.README.txt` 和可选包的 `EU4UnicodePatch.FONTS.txt`。恢复备份的 `VERSION.dll`；此前没有加载器时，删除本包的 `VERSION.dll`。其他插件仍需加载器时，保留或重新安装所需加载器。
+
+恢复旧加载器后，旧双字节补丁及其自动更新也会恢复原来的行为。
 
 ## 兼容性
 
 - **游戏版本：** 仅支持 1.37.5.0 Inca，Windows x64。补丁会检查 EXE 的 SHA-256 和目标指令，校验失败时拒绝应用。
-- **旧双字节补丁：** 包内加载器跳过 `plugins/plugin64.dll` 和旧补丁的自动更新，旧文件保留。其他插件仍正常加载；已测试与 MenuPatch 一起启动。
-- **汉化模组：** 本地化应使用普通 UTF-8。旧双字节转义汉化需要先转换；自定义模组字体不保证支持。
+- **旧双字节补丁：** 包内加载器跳过 `plugins/plugin64.dll`、开发探针 `eu4_unicode_probe.dll` 和旧补丁的自动更新，旧文件保留。其他插件仍正常加载；已测试与 MenuPatch 一起启动。安装 Unicode 补丁期间不要换回旧加载器，以免同时加载两套补丁。
+- **汉化模组：** 本地化应使用普通 UTF-8。旧双字节转义汉化需要先[转换](docs/development.md#旧汉化迁移)；自定义模组字体不保证支持。
 - **测试情况：** 本版通过构建、九项 CTest、保护检查与两种字体安装方式的启动检查。字体实现未改动，五种字号 D3D9 上传沿用 v0.1.2 测试记录。完整输入与候选窗有此前开发版记录，本版尚未完成整套人工复验。
 - **当前限制：** 每字号一张固定图集；多页图集、阿拉伯文等复杂排版、所有控件及输入法、长期战役、铁人和联机仍待完善。详见[测试记录](docs/validation.md)。
 

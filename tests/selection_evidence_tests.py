@@ -16,7 +16,7 @@ spec.loader.exec_module(module)
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.records = [json.loads(line) for line in
-                        (ROOT / 'docs/evidence/native-selection.jsonl').read_text(encoding='utf-8').splitlines()]
+                        (ROOT / 'tests/evidence/native-selection.jsonl').read_text(encoding='utf-8').splitlines()]
 
     def step(self):
         return next(r['payload'] for r in self.records if r.get('payload', {}).get('event') == 'selection-step')
@@ -29,7 +29,7 @@ class EvidenceTests(unittest.TestCase):
                 module.verify(path)
 
     def test_valid_native_baseline(self):
-        self.assertTrue(module.verify(ROOT / 'docs/evidence/native-selection.jsonl')['passed'])
+        self.assertTrue(module.verify(ROOT / 'tests/evidence/native-selection.jsonl')['passed'])
 
     def test_partial_selection(self):
         self.step()['after']['selected'] = [0xf0, 0xa0]

@@ -14,8 +14,8 @@ spec.loader.exec_module(module)
 
 class DynamicFontEvidenceTests(unittest.TestCase):
     def setUp(self):
-        self.records = [json.loads(line) for line in (ROOT/'docs/evidence/native-dynamic-fonts.jsonl').read_text(encoding='utf-8').splitlines()]
-        self.cpu = json.loads((ROOT/'docs/evidence/dynamic-font-cpu.json').read_text(encoding='utf-8'))
+        self.records = [json.loads(line) for line in (ROOT/'tests/evidence/native-dynamic-fonts.jsonl').read_text(encoding='utf-8').splitlines()]
+        self.cpu = json.loads((ROOT/'tests/evidence/dynamic-font-cpu.json').read_text(encoding='utf-8'))
 
     def event(self, name):
         return next(record['payload'] for record in self.records if record.get('payload', {}).get('event') == name)

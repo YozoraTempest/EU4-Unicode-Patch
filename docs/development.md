@@ -27,9 +27,19 @@
 
 ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径通过游戏的字符串赋值函数替换，使用原生分配器；其他模组字体路径不改写。
 
+## 字体
+
 玩家版按需字形先用系统 DirectWrite 字体；缺字后才加载游戏目录中的可选字体文件。开发探针保留文件字体优先的验证方式。安装或移除字体包后需重启游戏。
 
-测宽阶段只生成 CPU 字形，纹理查找阶段上传。补丁不持有 default-pool 纹理引用。字体拥有者和设备 Reset 的处理见[字体说明](open-fonts.md)。
+基础图集从思源黑体生成，共有 14、16、18、24、88px 五页，每页 2048×4096，初始包含 192 个拉丁字符及省略号。可选字体的版本与 SHA-256 见[清单](../fixtures/open-fonts.json)，版权与许可证见[第三方说明](../THIRD_PARTY_NOTICES.md)。
+
+测宽阶段只生成 CPU 字形，纹理查找阶段上传，旧坐标和 UV 保留。共享纹理的字体共用一页，Reset 后从 CPU staging 恢复；补丁不持有 default-pool 纹理引用。
+
+每页约占 32 MiB GPU 内存，动态上传另占约 32 MiB CPU staging。五页全部使用时分别约占 160 MiB，另计字体和缓存。图集满或字体缺字时仍可能显示占位符。
+
+字库 cmap 覆盖审计使用 `tools/audit-open-fonts.py`，依赖见 `tools/requirements-font-audit.txt`。覆盖报告不代表所有字符和复杂文字都已通过游戏验收。
+
+## 输入与保存
 
 编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。外交搜索只修改已观察的国家名过滤调用者。
 
@@ -70,12 +80,14 @@ python tools\migrate-localisation.py '旧模组的localisation目录' private\mi
 
 Frida 探针需要独立 Python 环境、Frida 和 psutil；剪贴板探针另需 pefile。MAP 必须与当前 DLL 一致。结束调试前先关闭专用游戏实例。
 
-| 验证目标 | 工具 |
-| --- | --- |
-| 注册与绘制 | `trace-import.py` / `verify-trace.py` |
-| 输入、选区、几何 | `trace-sdl-input.py`、`trace-editor.py`、`trace-selection.py`、`trace-editor-geometry.py` |
-| 剪贴板与候选窗 | `trace-clipboard.py`、`trace-ime-rect.py`、`observe-ime-candidates.py` |
-| 字体、搜索与存档 | `trace-font-lifetime.py`、`trace-search.py`、`trace-paths.py` |
-| 动态 GPU 字形 | `trace-dynamic-fonts.py` / `verify-dynamic-fonts.py` |
+`tools/trace-*.py` 记录原生调用，`tools/verify-*.py` 检查结果。受控 SDL 注入、GPU 读回与人工输入分别记录，结果见[测试范围](validation.md)，原始记录位于 `tests/evidence/`。
 
-动态 GPU 探针在外交搜索框聚焦后使用 `private/dynamic-font-arm.txt` 开始、`private/dynamic-font-finish.txt` 结束。`--player` 改为验证普通目录中的正式 DLL。受控 SDL 注入、GPU 读回与人工输入分别记录，结果见[测试记录](validation.md)。
+动态 GPU 探针在外交搜索框聚焦后使用 `private/dynamic-font-arm.txt` 开始、`private/dynamic-font-finish.txt` 结束。`--player` 改为验证普通目录中的正式 DLL。
+
+## 后续任务
+
+- 图集：多页绘制、容量预算、缓存淘汰、字体重载及游戏设备恢复。
+- 排版：将 DirectWrite 整段排版接入游戏测宽、绘制、光标和选区。
+- 输入：更多输入法、控件、缩放、预编辑、多行、撤销及系统剪贴板。
+- 保存：其他入口、输入产生的名称、自动保存周期及云存档。
+- 游戏回归：更多模组、长期战役、铁人及双端联机、聊天与同步。

@@ -32,7 +32,7 @@ cd EU4UnicodePatch
 
 基础图集只从固定开源字体生成。运行时系统字体由玩家本机提供。设备检查分别验证无字库和可选字库模式，覆盖五种字号、系统优先、缺字补充、旧区域保留、Reset 与释放。
 
-历史证据检查：
+测试记录位于 `tests/evidence/`。检查命令：
 
 ```powershell
 Get-ChildItem tests\*.py | ForEach-Object {
@@ -51,7 +51,7 @@ Get-ChildItem tests\*.py | ForEach-Object {
 
 生成主包 `dist/EU4UnicodePatch-1.37.5-v0.1.3-experimental-drop-in.zip`、可选字体包 `dist/EU4UnicodePatch-fonts-v0.1.3-experimental.zip` 和 `dist/SHA256SUMS.txt`。两个 ZIP 均直接覆盖进游戏目录，源码、测试模组和游戏资源不进入玩家包。
 
-打包脚本核对正式 DLL、加载器、已验收图集及固定字体的 SHA-256。主包的 `manifest.json` 和字体包的 `font-manifest.json` 记录源提交与文件校验值，互不覆盖。发布说明见 [v0.1.3](releases/v0.1.3-experimental.md)。
+打包脚本核对正式 DLL、加载器、已验收图集及固定字体的 SHA-256。主包的 `manifest.json` 和字体包的 `font-manifest.json` 记录源提交与文件校验值，互不覆盖。发布说明见 [GitHub Release](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.3-experimental)。
 
 ## 版本校验
 

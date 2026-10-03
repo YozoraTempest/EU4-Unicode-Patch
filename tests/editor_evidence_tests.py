@@ -16,7 +16,7 @@ spec.loader.exec_module(module)
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.records = [json.loads(line) for line in
-                        (ROOT / 'docs/evidence/native-editor-trace.jsonl').read_text(encoding='utf-8').splitlines()]
+                        (ROOT / 'tests/evidence/native-editor-trace.jsonl').read_text(encoding='utf-8').splitlines()]
 
     def rejected(self):
         with tempfile.TemporaryDirectory() as directory:

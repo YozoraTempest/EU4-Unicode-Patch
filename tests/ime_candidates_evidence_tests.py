@@ -13,7 +13,7 @@ spec.loader.exec_module(module)
 
 class CandidateEvidenceTests(unittest.TestCase):
     def setUp(self):
-        self.records = [json.loads(line) for line in (ROOT / 'docs/evidence/native-ime-candidate-contract.jsonl').read_text(encoding='utf-8').splitlines()]
+        self.records = [json.loads(line) for line in (ROOT / 'tests/evidence/native-ime-candidate-contract.jsonl').read_text(encoding='utf-8').splitlines()]
 
     def event(self, name):
         return next(r['payload'] for r in self.records[1:] if r.get('payload', {}).get('event') == name)

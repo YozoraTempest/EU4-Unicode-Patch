@@ -16,7 +16,7 @@ spec.loader.exec_module(module)
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.records = [json.loads(line) for line in
-                        (ROOT / 'docs/evidence/native-font-lifetime.jsonl').read_text(encoding='utf-8').splitlines()]
+                        (ROOT / 'tests/evidence/native-font-lifetime.jsonl').read_text(encoding='utf-8').splitlines()]
 
     def cycle(self):
         return next(r['payload'] for r in self.records if r.get('payload', {}).get('event') == 'native-font-lifecycle')
@@ -29,7 +29,7 @@ class EvidenceTests(unittest.TestCase):
                 module.verify(path)
 
     def test_native_baseline(self):
-        self.assertTrue(module.verify(ROOT / 'docs/evidence/native-font-lifetime.jsonl')['passed'])
+        self.assertTrue(module.verify(ROOT / 'tests/evidence/native-font-lifetime.jsonl')['passed'])
 
     def test_reachable_dead_atlas(self):
         self.cycle()['after_destroy_missing']['131072'] = False

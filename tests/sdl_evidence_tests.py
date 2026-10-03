@@ -16,7 +16,7 @@ spec.loader.exec_module(module)
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.records = [json.loads(line) for line in
-                        (ROOT / 'docs/evidence/native-sdl-input.jsonl').read_text(encoding='utf-8').splitlines()]
+                        (ROOT / 'tests/evidence/native-sdl-input.jsonl').read_text(encoding='utf-8').splitlines()]
 
     def result(self):
         return next(r['payload'] for r in self.records
@@ -36,7 +36,7 @@ class EvidenceTests(unittest.TestCase):
                     and r['payload'].get('event') == 'native-sdl-result')
 
     def test_valid_evidence(self):
-        self.assertTrue(module.verify(ROOT / 'docs/evidence/native-sdl-input.jsonl')['passed'])
+        self.assertTrue(module.verify(ROOT / 'tests/evidence/native-sdl-input.jsonl')['passed'])
 
     def test_missing_live_geometry(self):
         self.height_result().pop('height_geometry')

@@ -15,7 +15,7 @@ spec.loader.exec_module(module)
 
 class RoundtripEvidenceTests(unittest.TestCase):
     def setUp(self):
-        self.path = ROOT / 'docs/evidence/native-clipboard-roundtrip.jsonl'
+        self.path = ROOT / 'tests/evidence/native-clipboard-roundtrip.jsonl'
         self.records = [json.loads(line) for line in self.path.read_text(encoding='utf-8').splitlines()]
 
     def result(self, name='copy-supplementary'):

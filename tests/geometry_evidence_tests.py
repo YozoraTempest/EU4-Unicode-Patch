@@ -16,7 +16,7 @@ spec.loader.exec_module(module)
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.records = [json.loads(line) for line in
-                        (ROOT / 'docs/evidence/native-editor-geometry.jsonl').read_text(encoding='utf-8').splitlines()]
+                        (ROOT / 'tests/evidence/native-editor-geometry.jsonl').read_text(encoding='utf-8').splitlines()]
 
     def case(self, name='supplementary'):
         return next(r['payload'] for r in self.records if r.get('payload', {}).get('name') == name)
@@ -29,7 +29,7 @@ class EvidenceTests(unittest.TestCase):
                 module.verify(path)
 
     def test_valid_native_baseline(self):
-        self.assertTrue(module.verify(ROOT / 'docs/evidence/native-editor-geometry.jsonl')['passed'])
+        self.assertTrue(module.verify(ROOT / 'tests/evidence/native-editor-geometry.jsonl')['passed'])
 
     def test_interior_caret(self):
         self.case()['hits'][5][1] = 3

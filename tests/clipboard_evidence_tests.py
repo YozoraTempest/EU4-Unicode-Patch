@@ -15,7 +15,7 @@ spec.loader.exec_module(module)
 
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
-        self.path = ROOT / 'docs/evidence/native-clipboard.jsonl'
+        self.path = ROOT / 'tests/evidence/native-clipboard.jsonl'
         self.records = [json.loads(line) for line in self.path.read_text(encoding='utf-8').splitlines()]
 
     def result(self, name='supplementary'):
