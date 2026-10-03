@@ -1,7 +1,7 @@
 """Convert an explicitly selected EU4dll escaped localization copy to UTF-8.
 
 The outer file encoding is UTF-8; payload bytes are represented with CP1252
-characters. The legacy protocol is documented in docs/migration.md.
+characters. The legacy protocol is documented in docs/development.md.
 """
 import argparse
 import hashlib

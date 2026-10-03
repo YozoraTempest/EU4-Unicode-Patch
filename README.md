@@ -1,115 +1,67 @@
-# EU4 Unicode UTF-8 补丁原型
+# EU4 Unicode Patch
 
-针对 EU4 1.37.5 Windows x64 的隔离研究原型。标准 UTF-8 中文已经通过本地化读取、主文字、普通按钮、颜色、资源图标、中文换行、国家地图标签及实际事件窗口验证。系统字体模式已在游戏中显示扩展汉字“𠀀”、emoji、韩文与希腊文。开源字体模式新增思源黑体 SC 与遍黑体，并在原生纹理中按需生成未预收录的汉字；14 个实际 GPU 字形区域逐像素核对通过。文本保持标准 UTF-8，不使用旧补丁的转义编码。
+让《欧陆风云 IV》使用标准 **UTF-8** 显示和处理中文，支持扩展汉字、中文输入法、整字编辑，以及 Unicode 国家名搜索。
 
-当前仍是研究版本，不能据此宣称整套游戏已经支持完整 Unicode。DLL 只接受本项目 `private/runtime/eu4.exe` 测试副本，不会在正式 Steam 游戏目录启用。
+适用于 **EU4 1.37.5.0 Inca / Windows x64**。当前版本：**v0.1.0-experimental**。
 
-## 已验证范围
+[下载实验版](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.0-experimental/EU4UnicodePatch-1.37.5-v0.1.0-experimental-isolated.zip) · [发布说明](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.0-experimental) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
 
-| 层次 | 当前行为 |
-| --- | --- |
-| 本地化 | 保留原始 UTF-8；源文件按游戏要求带 UTF-8 BOM |
-| 字符遍历 | UTFCPP 解析 1–4 字节字符；32 位 Unicode 标量；缓冲区截断保留完整字符 |
-| 原生字形表 | ASCII 保留原生表，U+0100–U+10FFFF 使用稳定指针的稀疏表；不截断码点，不占用私用区 |
-| 字体生命周期 | 原生字体表析构释放稀疏记录与旧别名；五种字号的 64 次原生构造/加载/析构、尺寸与地址复用通过 |
-| 系统字体图集 | DirectWrite 根据夹具实际字符选择系统回退字体，生成原生 FNT/DDS；𠀀、😀、韩文进入游戏绘制 |
-| 开源字体与按需字形 | 思源黑体 SC + 遍黑体，私有字体集合覆盖 Unicode 17 的 102,998 个已分配 CJK 统一/兼容汉字；运行时生成固定图集中的新字形，14 个原生 GPU 区域核对通过，见 [字库与桥接验收](docs/open-fonts.md) |
-| UI | 主文字、按钮及位图测宽/绘制路径按完整 UTF-8 字符推进 |
-| 颜色与图标 | `§Y…§!`、`§G…§!`、`§R…§!` 和 `£adm£/£dip£/£mil£`；中文尾字节不会误触发格式解析 |
-| 地图 | 中文国家名测宽、绘制、间距和遍历；补齐第二处顶点容量计数；整包地图 186 个 Unicode 标签的实际顶点未超过分配容量 |
-| 汉化迁移 | 审计并转换本机 146 个旧协议 YML 文件，保持源文件与格式；整包菜单、设置、国家面板、战局通过 |
-| 存档与路径 | 修复 UTF-16 代理对路径转换及 Load Game 的旧转写；中文/生僻字文件名原生读写，四类名称经压缩 → 非压缩存档保留并重启读取，见 [持久化验收](docs/persistence.md) |
-| 换行 | 主文字路径使用 ICU 行边界，避免在字符内部断开及在中文逗号、句号之前断行 |
-| 国家搜索 | 外交名单使用 Unicode 大小写/规范/全角匹配，保留既有重音行为和查询原文；12 组实际候选过滤通过，见 [搜索验收](docs/search.md) |
-| 输入实验 | 单行编辑、选区和完整 SDL 提交默认关闭；原生像素定位/宽度截断通过 11 组、727 个像素位置；光标到 SDL 输入矩形通过九个案例及失焦/重新聚焦验收，见 [输入验收](docs/input.md) |
-| 隔离保护 | 目录、EXE 哈希、指令字节和旧插件冲突校验；失败时不启用 |
-| Unicode 服务 | ICU 字素边界、组合字符/ZWJ 序列处理及 NFKC casefold 搜索键，独立测试通过 |
-| 后续字体模块 | DirectWrite 字体回退、复杂文字 shaping、双向文字、测宽及字素命中测试；完整 run 保留实际字体/基线/偏移/源簇并直接栅格化，独立渲染通过 |
+本版在独立游戏副本中运行，包含用于验证文字显示的测试模组。DLL 保留隔离目录保护，直接复制到正式游戏目录会拒绝启用。完整 Unicode 排版仍在开发中。
 
-运行证据与限制见 [validation.md](docs/validation.md)。游戏截图：[生僻字与更多语言](docs/evidence/utf8-supplementary.jpg)、[系统字体事件](docs/evidence/utf8-system-font-event.jpg)、[主菜单格式](docs/evidence/utf8-format.jpg)、[中文地图](docs/evidence/utf8-map.jpg)。[复杂文字布局截图](docs/evidence/unicode-layout.png)来自独立测试程序，复杂文字排版尚未接入游戏绘制。
+## 本版功能
 
-## 本机运行
+- 标准 UTF-8 本地化、界面和地图文字，保留游戏颜色标记、资源图标及中文换行。
+- 思源黑体 SC 与遍黑体，按需生成图集之外的新汉字，解决输入其他汉字时显示省略号的问题。
+- 单行编辑的中文输入法候选窗、完整 UTF-8 提交、整字退格、键盘选区与替换；输入功能通过启动开关启用。
+- 外交国家名单的 Unicode 搜索，以及中文和扩展汉字存档路径修正。
+
+字体文件的字符覆盖已审计，普通汉字和扩展汉字已核对真实游戏纹理；各项验证的范围见[测试记录](docs/validation.md)。
+
+## 运行
+
+需要 **Windows 10 1903 或更新版本**、PowerShell 7，以及已安装的 EU4。游戏目录中需已有 [Matanki EU4dll](https://github.com/matanki-saito/EU4dll) 的 x64 `VERSION.dll` 加载器；发布包不附带游戏或加载器。
+
+1. 下载实验版 ZIP，解压得到 `EU4UnicodePatch` 文件夹，保留这个文件夹名称。
+2. 在解压目录打开 PowerShell 7，运行以下命令；将游戏路径改成自己的安装目录。
+3. 从打开的测试游戏开始新战局，或在外交搜索框测试中文输入。
 
 ```powershell
-cd D:\Astra-Paradox\repos\EU4UnicodePatch
-.\tools\prepare-test.ps1 -OpenFonts
+$gameDirectory = 'D:\SteamLibrary\steamapps\common\Europa Universalis IV'
+.\tools\prepare-runtime.ps1 -GameDirectory $gameDirectory
+.\tools\prepare-test.ps1 -GameDirectory $gameDirectory -OpenFonts
 .\tools\start-test.ps1 -ExperimentalInput
 ```
 
-开源字体模式自动获取并校验固定版本的思源黑体 SC、遍黑体原文件，预留运行时字形空间；不会安装系统字体。旧系统字体夹具仍可用 `-SystemFonts` 生成。不传两项字体开关时使用下述工坊字体。准备脚本只生成私有测试模组与字体副本。测试会修改部分主菜单与国家本地化，并在测试战局开始时触发专用事件。这些夹具会改变游戏校验和；它们不用于铁人成就或联机兼容性验收。测试用户目录与正式存档分离。
+首次准备会复制约 5 GB 游戏文件，并在本目录创建独立的用户目录与测试模组。开源字体随包提供，无须安装系统字体。发布包已经包含 DLL 和字体生成器，运行不需要编译或安装 Python。
 
-修改 [本地化源文件](fixtures/localisation/eu4_unicode_probe_l_english.yml) 后，退出测试实例、重新准备并启动即可。
+以后启动只需执行 `start-test.ps1 -ExperimentalInput`；省略该开关则关闭实验输入。更新、目录说明与移除方式见[运行说明](docs/install.md)。
 
-首次准备约 5 GB 的游戏副本，需要本机已经安装 EU4、现有 x64 `version.dll` 加载器。系统字体模式使用本机字体；不传 `-SystemFonts` 时使用工坊中文字体 `2976470733`：
+## 兼容性
 
-```powershell
-.\tools\prepare-runtime.ps1
-.\tools\prepare-test.ps1 -SystemFonts
-```
+- **游戏版本：** 仅支持已适配的 1.37.5.0 x64 可执行文件，启动时检查 SHA-256 和目标指令。
+- **旧双字节补丁：** 与 `plugins/plugin64.dll` 修改位置重叠，不能同时加载；准备脚本不会把正式游戏的插件复制进测试实例。
+- **汉化模组：** 使用旧双字节转义的本地化需要转换成普通 UTF-8。发布包中的小型测试模组不提供整套汉化；转换方法见[开发说明](docs/development.md#旧汉化迁移)。
+- **当前限制：** 每字号固定一张图集；多页、缓存淘汰及复杂文字整段排版尚未完成。阿拉伯文等需要连字或双向布局的文字不能按当前汉字路径验收。
+- **尚未验证：** 所有输入法和控件、系统剪贴板完整事件链、多行编辑、长期战役、铁人及多人联机。测试模组会改变游戏校验和。
 
-游戏、DLC、加载器、工坊/系统字体、生成的 FNT/DDS 与测试存档不会进入分发包；三个经固定 SHA-256 校验的开源字体原文件及其 OFL 许可证随包提供。项目目录名需为 `EU4UnicodePatch`，以满足原型目录校验。
+## 排查问题
 
-## 构建与检查
-
-需要 PowerShell 7、VS 2022 的 MSVC x64 / MASM / Windows SDK，以及 CMake 和 Ninja。Unicode 服务使用 Windows 自带 `icu.dll`，需要 Windows 10 1903 或更新版本；DirectWrite 模块支持系统字体与进程私有开源字体。
-
-```powershell
-git submodule update --init --recursive
-.\tools\build.ps1
-.\tools\test-guards.ps1
-```
-
-构建脚本通过 `vswhere` 查找工具链，实际探测本机编译器的 include 前缀，让 Ninja 正确记录头文件依赖。需要重新配置时传入 `-Fresh`。重新构建前退出测试游戏；游戏的调试组件可能保持 PDB 打开。
-
-七个 CTest 分别覆盖 UTF-8 核心、ICU Unicode 服务、DirectWrite 布局与栅格化、原生稀疏字形表、编辑事务、国家显示名搜索及 Windows 输入法消息契约。编辑测试覆盖光标落在 UTF-8/字素内部、完整字素删除、选区替换和字节预算。公共 MASM 宏文件也有显式构建依赖。保护测试会在两个错误宿主中加载 DLL，检查拒绝日志与导出的 `Eu4UnicodeProbeEnabled()` 状态。
-
-运行跟踪需要 Python、Frida 和 psutil；剪贴板探针另使用 pefile 校验 DLL 数据节。本机已有研究环境：
-
-```powershell
-..\EU4MenuPatch\.venv\Scripts\python.exe tools\trace-import.py --duration 75
-..\EU4MenuPatch\.venv\Scripts\python.exe tools\verify-trace.py
-```
-
-跟踪脚本部署当前 DLL，记录 EXE / DLL 指纹与真实运行事件；结束时先关闭它启动的专用游戏，再释放代理。普通交互测试使用 `start-test.ps1`，无需 Frida。
-
-独立字体模块可生成诊断图片：
-
-```powershell
-.\build\unicode_layout_tests.exe .\private\unicode-layout.png
-```
-
-## 实验输入
-
-已实现完整 SDL UTF-8 提交与单行字素移动、删除及选区适配。每个 SDL 文本事件携带完整有效 UTF-8 穿过原生队列，再一次性插入编辑器；预算与控件范围回删保持完整字素，通知只发布最终状态。实际 SDL 轮询入口的 26 个合成事件案例、原生无选区编辑的 18 个案例，以及 18 组选区操作的 27 个状态均已核对；包括中文/生僻字选区替换和禁止提交保留原选区。原生粘贴另通过 16 个受控 SDL 文本来源案例，修复缓冲释放与选区保留，并验证字体过滤、完整插入和最终通知；复制/剪切到再粘贴另通过 16 个受控往返案例，见 [编辑验收](docs/input.md)。完整物理输入覆盖、输入法预编辑绘制、系统剪贴板转换、鼠标选区和多行尚未验收。名称的数据往返不能替代输入入口的验收。输入实验默认关闭：
-
-```powershell
-.\tools\start-test.ps1 -ExperimentalInput
-```
-
-该开关只写入测试副本插件旁的 `eu4_unicode_probe.ini`。独立 ICU 字素测试通过不等于游戏编辑器集成通过。
-
-## 当前限制与完整范围
-
-实验输入还将正常绘制帧中的原生光标位置传给 SDL，避免聚焦函数临时绘制时的旧父级坐标；同一坐标不重复提交，重新聚焦时刷新。九个字符案例及失焦/重新聚焦已经核对实际完成的 SDL 调用。本机游戏内置 SDL 2.0.4，这项结果仍需真实输入法确认候选窗显示、定位和预编辑行为；不能以设置输入矩形代替输入法验收。
-
-实验输入新增 Windows 原生候选 UI 标志保留和候选窗定位，解决实际中文输入时候选列表不可见的问题。七个原生消息案例、十七次 Windows 定位读回及二十六个 SDL 输入回归案例通过，见[候选窗说明](docs/input.md#windows-原生候选窗修补)。
-
-修补版已得到用户物理复验：候选列表可见且位置正常，中文提交、整字退格、Shift+← 选择与输入法替换正常。实际九个状态、四次提交和两次选择/替换核对通过，最终为“中字”。范围仍限定于当前输入法及单行搜索框，见[物理复验记录](docs/input.md#物理输入法复验)。
-
-- 开源字体模式按需生成字体覆盖的标量字形，当前实际验收包含常用汉字、U+20BB7、U+30000 和 U+323B0；其他字号/控件及地图动态字形继续待验收。普通系统/工坊模式仍按原夹具的预生成覆盖显示。
-- 开源模式每字号固定一页 2048×4096，约 32 MiB GPU；首次动态上传另创建 32 MiB CPU staging。单页填满或实际字体缺字时仍显示占位。设备 Reset 的恢复和指针地址复用通过真实 D3D9 设备测试，游戏长期恢复、多页、缓存预算与活字体原位热重载继续待办，见 [开源字体说明](docs/open-fonts.md)。
-- DirectWrite 的 shaping、bidi 与复杂文字选区/命中测试已在独立模块通过，尚需接入游戏统一布局。逐码点图集不能正确排版阿拉伯文等复杂文字。
-- 外交国家名单的 Unicode 搜索已接入并验收；其他搜索框仍需逐一接入。地图大小写路径目前保留非 ASCII 字节，只转换 ASCII 字母。
-- 当前输入法与单行搜索框的物理中文提交、退格、键盘选择和替换已复验；更多字符的物理输入、粘贴、鼠标选区、多行、编辑器产生的自定义名称往返和联机文本尚需验收。单行原生选区函数和合成 SDL 替换已有证据。整包迁移、手动中文文件名、压缩/非压缩格式，以及本地月度自动保存、轮换和重启读取已有运行证据；其他保存入口与长时间回归仍需覆盖。
-- 支持版本固定为此 SHA-256 的 EU4 1.37.5 EXE。没有对其他版本或加载中的游戏提供热补丁。
-
-完整预期内容、依赖关系与验收条件见 [roadmap.md](docs/roadmap.md)。仍未完成的项目保留为待办，不以计划或独立测试替代游戏验收。
+加载日志位于 `private/runtime/plugins/eu4_unicode_probe.log`。正常启用时包含：
 
 ```text
-支持的 eu4.exe SHA-256:
-9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a
+UTF-8 import, UI, format, map and bitmap iterators enabled.
 ```
 
-旧 `plugin64.dll` 与本补丁修改重叠位置，不能同时启用。旧转义汉化文本可使用已审计的 [迁移工具与流程](docs/migration.md) 转为普通 UTF-8 副本；转换不写入原模组。迁移格式必须明确指定，不根据“能够解码为 UTF-8”猜测文本协议。
+启用输入功能后，还会出现 `Experimental UTF-8 input and single-line grapheme editing enabled.`。日志出现 `Refused` 表示路径、版本或旧插件检查未通过；没有日志时检查 DLL 位置和加载器。
 
-源码按关注点分层：`unicode_text` 管理编码与标量，`unicode_services` 管理 Unicode 边界和搜索，`unicode_layout` 管理系统布局与字体，`scalar_glyph` 生成标量字形，`native_font_atlas` 管理原生纹理的按需上传和恢复，`plugin.cpp` 管理版本与引擎边界，汇编文件适配原生调用现场。依赖与研究来源见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+出现省略号时，确认使用 `-OpenFonts` 准备字体，并查看日志是否报告字库缺字或图集容量不足。准备文件前先退出测试游戏。
+
+遇到崩溃、乱码或输入异常，请[提交 Issue](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues/new)，附上游戏版本、复现步骤、模组列表和补丁日志。
+
+## 开发
+
+源码使用 C++17、MSVC、MASM 和 Windows SDK。[构建与检查](docs/build.md) · [字体说明](docs/open-fonts.md) · [引擎适配与复验](docs/development.md) · [后续任务](docs/roadmap.md)
+
+## 许可证
+
+项目代码采用 [MIT](LICENSE)。思源黑体和遍黑体采用 SIL OFL 1.1，字体版本、授权与其他依赖见[第三方说明](THIRD_PARTY_NOTICES.md)。

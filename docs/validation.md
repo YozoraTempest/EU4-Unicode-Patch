@@ -1,105 +1,44 @@
-# UTF-8 与后续 Unicode 模块验证记录
+# 测试记录
 
-日期：2026-10-03。平台：本机 Windows / Steam EU4 1.37.5 x64。所有游戏测试使用本项目的独立游戏副本、测试模组和用户目录。
+平台为本机 Windows / Steam EU4 1.37.5.0 x64，游戏测试使用独立副本、测试模组和用户目录。下表汇总各功能完成时的记录；各证据文件保留其实际 DLL 指纹，不表示所有历史案例已在当前 DLL 上重新执行。
 
-## 游戏中的结果
+## 当前发布 DLL
 
-| 项目 | 结果与证据 |
-| --- | --- |
-| 本地化 / 主绘制 | 标准 UTF-8 值在注册与绘制入口完整保留；跟踪自动断言通过 |
-| 普通按钮 | “设置 UTF8”正常显示、可点击；后续彩色设置文字正常 |
-| 颜色 | 原生颜色解析收到 Y、G、R、!；画面中黄色、绿色、红色分别显示 |
-| 图标 | 原生图标入口收到 adm、dip、mil；三个图标在中文文本之间显示 |
-| 格式碰撞 | “代俣俤俧”的续字节包含 £/§/¤ 对应字节；完整中文码点进入字形查找，END 未被吞掉 |
-| 地图 | 法兰西、英格兰、卡斯蒂利亚、奥斯曼国家标签显示；选择法国并进入 1444 战局 |
-| 事件 | 自定义 UTF-8 事件标题、正文、颜色与资源图标正常；中文彩色选项可点击关闭 |
-| 换行 | 中文长段落产生多行；生成的换行保持空字形控制语义；ICU 行边界接入主文字路径 |
-| 生僻字与字体回退 | 系统字体模式原生显示“𠀀”、😀、韩文、希腊文；完整码点与 16 字节 glyph metrics 均与生成 FNT 核对通过 |
-| 字体生命周期 | 五种字号 64 次原生构造/加载/析构；图集别名失效、地址复用、字形指标与缓存基线通过，见 [字体桥接](font-bridge.md) |
-| 缓冲区 | 测试 32000 字节边界附近的四字节字符，不保留半个 UTF-8 字符 |
-| 存档与路径 | 中文及 U+20000 文件名原生读写；修复代理对路径转换/比较及 Load Game 转写；18 个原生比较案例通过，压缩/非压缩存档和四类名称数据往返见下文 |
-| 国家显示名搜索 | 外交名单 12 组原生查询通过，覆盖规范/大小写展开/全角/多语言及负例；每组检查 185 个候选并保留原文，见 [搜索验收](search.md) |
-| 原生编辑对象 | 11 个字素按键、4 个字节预算、2 个插入位置与 1 个过滤碰撞案例通过；调用方式和限制见 [编辑验收](input.md) |
-| 原生选区对象 | 18 组、27 个状态通过，覆盖字素选择、正反方向、端点对齐、选择替换/删除；直接函数调用，不替代键鼠入口 |
-| SDL 输入链路 | 26 个合成事件穿过实际轮询入口、两次原生队列复制、一次插入和最终通知；包含无效编码、禁止字符、控件范围截断及选择替换/保留；不代替物理输入法验收 |
-| 原生粘贴 | 16 个受控 SDL 文本来源案例通过原生 Ctrl-V 分发，检查真实缓冲分配/释放、字体过滤、选区、完整插入与一次最终通知；系统剪贴板与物理快捷键尚未验收 |
-| 整包汉化 | 146 个旧协议文件转换后进入菜单、设置、国家面板、战局；原文件 SHA-256 不变 |
-| 地图容量 | 整包暴露并修复第二处标签顶点计数；186 个 Unicode 地图标签实际顶点数不超过分配容量 |
-| 初始化保护 | 无关目录和错误 EXE 哈希均拒绝启用；保护宿主检查导出状态为 0 |
-| 原目录 | 原始 eu4.exe、version.dll、plugin64.dll 的 SHA-256 保持初始值 |
-
-跟踪验证：[runtime-trace.jsonl](evidence/runtime-trace.jsonl)。该文件第一条 artifact 事件记录本次 EXE / DLL 指纹。自动校验包含注册、绘制、字形、换行、颜色、图标和续字节碰撞，不接受 Frida 脚本错误。
-
-原生游戏画面：[生僻字与更多语言](evidence/utf8-supplementary.jpg)、[系统字体事件](evidence/utf8-system-font-event.jpg)、[设置](evidence/settings.jpg)、[颜色与图标](evidence/utf8-format.jpg)、[中文地图](evidence/utf8-map.jpg)。画面来自无 Frida 的交互测试；旧画面记录该功能完成时的版本。新的默认构建关闭未验收输入实验。
-
-测试模组会改变校验和，当前不据此声称铁人成就或联机兼容。游戏与生成的字体图集夹具不随项目分发；经固定 SHA-256 校验的思源黑体/遍黑体原文件及其 OFL 许可证随新包提供。
-
-## 整包迁移与存档往返
-
-本机 146 个旧协议 YML 文件共还原 2,781,965 个转义字符，转换文本包含 4,313 种字符。原文件哈希不变。原生交互通过完整菜单、设置、国家面板和 1444 战局，见 [迁移流程和画面](migration.md)。地图顶点容量记录覆盖 186 个 Unicode 标签，越界数量为 0。
-
-保存名称构造、保存按钮及 Load Game 名称选择的四处 CP1252 转写调用改为保留 UTF-8；文件系统转写适配只放行已观察到的 `save games/` 调用，其他转写调用仍走原函数。原生非法路径检查仍执行。原生手动保存 `法兰西1444_11_11.eu4` 和 `法兰西𠀀1444_11_11.eu4`，两份压缩存档的 `gamestate`、`meta`、`ai` 成员完整性均通过。
-
-旧记录更正：`fd08cff` 曾把进入战局视为非 BMP 读取成功。移除生成夹具后发现读取失败会初始化默认世界；CreateFileW 实测表明原生路径转换遗漏代理对的 `+0x10000`，U+20000 被误写成 U+10000。旧非 BMP 读取结论已撤回，基本汉字样本的字段往返也未据此声称已验证。[旧写入记录及更正](evidence/save-roundtrip.json)、[中文存档列表](evidence/chinese-save-name.jpg)、[非 BMP 保存名](evidence/supplementary-save-name.jpg)保留写入证据。
-
-新验收使用四个独特名称及初始化标志，移除持久化事件和单位模板后读取原生压缩文件，再原生保存为非压缩文件，检查省份、首都、军队、舰队记录中的 UTF-8 字节及标志。非压缩文件重启后仍恢复这些名称。原生路径函数的 ASCII、基本汉字、U+10000、U+20000、emoji、U+10FFFF 双向转换和容量边界均通过。本地月度自动保存已验证两个非压缩月份、文件轮换、压缩月份及两种格式重启读取，五份文件的日期和原生字段均核对通过。详见 [重建步骤与证据](persistence.md)。名称由原生脚本/模板生成，尚未经过输入法或剪贴板入口；其他自动保存周期、云存档、铁人和多人文本仍需验收。
-
-## 独立模块结果
-
-当前七个 CTest 均通过，五项 Python 迁移测试与四项持久化证据校验测试通过；原生国家搜索记录的 12 组结果独立校验通过。18 个原生编辑对象案例经独立脚本核对，四项证据负例测试确认错误结果、遗漏、重复和代理异常均被拒绝。
-
-- UTF-8 核心：ASCII、中日韩、重音字符、四字节字符、U+10FFFF、非法/过长/代理项/截断编码、完整标量截断、BMFont 槽位适配。
-- ICU：组合重音、扩展汉字、旗帜、ZWJ 家庭序列、前后字素边界、完整删除、中文标点行边界、规范等价/大小写/全角搜索键。
-- DirectWrite：系统字体回退、复杂文字与 RTL glyph run、UTF-8 源偏移、每次命中落在完整字素边界、非法 UTF-8 拒绝。
-- 字形表：完整码点、独立字体与共享图集别名、稳定指针、重复拒绝、代理项拒绝、U+0100/私用区不碰撞；Unicode 记录先于 ASCII A 加载时，后续绑定保留原指针。
-
-- 编辑事务：混合中文、四字节字符、组合字符、旗帜和 ZWJ 家庭序列的每个字节偏移；字素内部光标修复、完整删除、选区替换、组合字符合并后的光标、非法提交与字节预算。
-- 迁移：四种旧标记、CP1252 未定义载荷字节、旧私用区重映射、UTF-16 代理对、截断与孤立代理项拒绝；保留 BOM/换行/颜色/变量并拒绝覆盖输入目录。
-- 持久化证据：压缩/非压缩记录、混合旧单字节字段；匹配字符串落在错误字段、缺初始化标志、错误省份所有权或二进制格式时拒绝通过。
-- 国家搜索：规范等价、完整 Unicode 大小写展开、全角、既有拉丁重音/Æ/ß 行为、基本汉字与非 BMP 区分、希腊文、西里尔文、空查询和非法 UTF-8 拒绝。
-
-本机字体样本包括中文、日文、韩文、𠀀、😀、希腊文、阿拉伯文、希伯来文、印地文与泰文，缺字数量为 0。系统选择了 Leelawadee UI、Malgun Gothic、Microsoft YaHei UI、Nirmala UI、Segoe UI、Segoe UI Emoji 和 SimSun-ExtB。[诊断图片](evidence/unicode-layout.png)由独立 TextLayout 模块生成，不能作为这些能力已接入 EU4 的证据。其他机器的实际覆盖取决于已安装字体。
-
-独立模块补齐完整 shaped run 后，22 个 run 的实际 mask 与基线另外组图；原布局销毁后的字体寿命、完整源簇覆盖、字形偏移、RTL 负左边界、灰度覆盖、空白宽度和亚像素相位均通过。五种字号重新生成的十份 FNT/DDS 与游戏现用文件逐字节相同；[文件指纹](evidence/shaped-run-validation.json)和[组合诊断图](evidence/unicode-shaped-runs.png)保存结果。该模块尚未接入游戏 GPU；该阶段未改变研究 DLL，后续候选窗修补的当前指纹见下文。
-
-构建与语法检查通过。Ninja 正确识别本机中文 include 前缀，公共 MASM 宏使用显式依赖。GitHub Actions 模板定义 Windows x64 构建、全部 CTest 和拒绝宿主测试。当前 OAuth 令牌没有 workflow 写入权限，GitHub 拒绝发布 .github/workflows 文件；模板保存在 docs/ci/windows-build.yml，尚未启用远端自动运行。
-
-## 输入实验与未验收项
-
-完整 SDL UTF-8 提交与单行字素编辑/选区已经实现，但默认关闭。实际无选区对象通过 18 个案例；原生选区动作的 18 组、27 个状态通过；26 个合成 SDL 事件穿过真实轮询和队列，每个被接受的提交只插入一次、通知一次最终状态，控件范围回删保持完整字素。选区替换完成后选择被清除，全禁用提交保留原选择。见 [原生记录与重建流程](input.md)。本机自动化按键曾观察到输入法预编辑事件，但合成提交不能证明物理键盘中文提交、候选窗、粘贴、多行、鼠标命中/拖选、编辑器自定义名称或联机文本。名称持久化不能替代输入入口验证。
-
-原生像素定位、宽度截断与组合空格边界另通过 11 组、727 个像素位置；测宽使用当前 GUI 字体，定位结果保持完整字素，首个过宽字素仍能推进。18 个编辑案例、18 组和 27 个选区状态在该阶段 DLL 上复测通过。几何记录使用独立值夹具，SDL 高度裁剪另核对了该搜索框的实际像素宽度与最终单行缓存；物理鼠标与其他 GUI 行缓存未验收。
-
-后续物理观察收到“法兰西”的完整 UTF-8 提交及三次整字退格，用户报告候选窗不可见。实验输入新增 Windows 原生候选 UI 标志保留和 `CFS_EXCLUDE` 定位：七个原生消息案例通过，十七次实际请求被 Windows 接受并正确读回，二十六个 SDL 输入案例在新 DLL 上通过。七个 CTest 和两项保护宿主检查通过。物理结果另见下段；受控 API 验收见[候选窗记录](evidence/native-ime-candidate-contract.jsonl)和[报告](evidence/native-ime-candidate-contract.json)。
-
-修补版随后由用户物理复验，确认候选列表可见、位置正常，中文提交、整字删除、Shift+← 选择和输入法替换正常。被动记录核对九个原生状态、四次完整 IME 提交与一次性插入、三次整字退格、两次选择/替换和七次原生通知，最终文本为“中字”。记录保留额外追加/删除及一次中间替换，没有跳过中间状态。见[候选窗确认](evidence/physical-ime-candidates.json)和[物理编辑记录](evidence/physical-editor-sequence.json)。该结果只适用于当前单行控件、输入法及显示设置，预编辑画面、其他输入法/控件和完整 Unicode 物理输入覆盖继续待办。
-
-原生粘贴另通过 16 个真实单行对象案例，修复 SDL 缓冲泄漏、提前清空活动选择和字体过滤破坏 UTF-8 续字节；非法、空、全禁用和超长文本保留原状态。私有 SDL 文本来源使用真实分配器，每个案例恰好一次释放。转发观察器核对一次完整插入与一次最终通知，拒绝路径两者皆无；DLL/MAP 指纹及独立原始记录见 [输入验收](input.md)。十三项证据检查通过。原生复制/剪切到再粘贴另通过 16 个受控来源往返，捕获实际输出字节后供粘贴读取；十项专用证据检查通过。直接复制/剪切没有产生外交通知，再粘贴恰好通知一次。这些结果不替代系统剪贴板转换或物理快捷键的完整事件链验收。
-
-系统字体回退通过生成原生图集接入游戏，覆盖夹具收录的字符；原生字体生命周期通过 64 次循环与地址复用。后续开源字体模式新增固定页运行时生成及 GPU 上传，14 个实际字形区域通过，下段记录其范围。普通系统/工坊图集仍按预生成覆盖显示；多页、预算、其他控件/字号、游戏设备恢复与活字体原位热重载继续待办。独立 DirectWrite 的 shaping 与 bidi 通过不能作为复杂文字已接入游戏的证据。外交国家搜索已接入 Unicode 搜索键，其他搜索框尚需逐一验证。
-
-完整范围与继续推进条件见 [roadmap.md](roadmap.md)。此记录不构成完整发行版或长时间游戏稳定性的证明。
-
-## 开源字体与运行时新增汉字
-
-用户遇到其他汉字显示“……”后，确认原字体夹具每字号只收录 339 个字符；新输入不在图集内会走 U+2026 占位。修补新增进程私有的思源黑体 SC / 遍黑体，离线审计实际字体 cmap 覆盖 Unicode 17 已分配的 102,998 个统一/兼容汉字，缺字数为 0。这是字库覆盖结果，不能替代全部字符的游戏验收。
-
-当前 DLL 在真实外交搜索框通过“中华人民共和国”“孔雀翡翠”“𠮷𰀀𲎰”三个受控完整 SDL 提交；每例保留完整 UTF-8、两份原生队列数据、正确光标、一次插入与一次通知。实际绑定 GPU 纹理的 14 个字形区域读回后，尺寸、偏移、advance 和每个 alpha 字节均与独立参考相同，且没有返回省略号；11 个字符不在静态图集中，是运行时新生成的字形。16 项证据测试拒绝纹理/像素/指标错误、占位、缺失/重复和输入队列破坏。
-
-九个真实字体回退/栅格样本及 retained face 寿命通过。另一个真实 D3D9 设备测试核对工作线程只生成 CPU 字形、上传后旧区域保留、U+30000、Reset 后图集恢复、实际纹理地址复用、字形指针稳定和拥有者释放。七个 CTest 与两个拒绝宿主检查在当前 DLL 上通过。游戏 GPU 证据范围仍限于 16px 单行 GUI，受控提交不能替代更多汉字的物理输入复验；全字号/地图、多页、缓存预算、整段复杂文字、原位重载和游戏长期设备恢复继续待办。
-
-重建命令、许可证、固定字体及证据链接见 [开源字体与动态字形](open-fonts.md)。
-
-## 指纹
-
-输入法矩形另通过九个字符案例及失焦/重新聚焦：正常绘制后的光标精灵位置、原生完整前缀测宽、字体行高与实际完成的 SDL 调用一致；稳定坐标不会重复调用，重新聚焦会刷新。首次聚焦的同步临时绘制曾提交旧父级坐标，修复后首次只提交正常帧中的正确位置。十三项证据检查拒绝旧坐标、错误字体/文本来源、未完成调用、失焦更新、缓存未清理、不同线程/控件和乱序事件。结果限定为 SDL 2.0.4 的输入矩形，不证明物理候选窗或预编辑；见 [原始记录](evidence/native-ime-rect.jsonl)和[独立报告](evidence/native-ime-rect.json)。
+v0.1.0-experimental 的 DLL SHA-256：
 
 ```text
-eu4.exe:
-9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a
-
-当前研究 DLL（开源字体与按需字形，保留候选窗修补）:
 d71bd5fba5d87b40bd7d0506aa2c1f1a2ae030145df3d259dff3ae65f1042f37
 ```
 
-在高频文字入口卸载 Frida 曾触发访问冲突，所以跟踪结束时先关闭它启动的测试进程，再释放会话。原生交互使用不附加代理的启动脚本。初始化的字体与绘制挂钩要求启动前加载，不能热插入运行中的游戏。第三轮曾因 MASM 未追踪公共宏依赖而混入旧对象文件，启动发生访问冲突；补充 OBJECT_DEPENDS 并重新编译后原生游戏和跟踪验收通过。
+当前 DLL 已通过七个 CTest、两个错误宿主保护检查，以及真实 EU4 外交搜索框的三个受控 SDL 提交：“中华人民共和国”“孔雀翡翠”“𠮷𰀀𲎰”。每例核对完整 UTF-8、两次队列复制、正确光标、一次插入和一次通知。
+
+实际绑定的 GPU 纹理中，14 个字符的尺寸、偏移、advance 和每个 alpha 字节与独立参考相同，均未取到省略号；11 个为动态新增字形。U+20BB7 来自思源黑体，U+30000、U+323B0 来自遍黑体 P2。[原始记录](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-dynamic-fonts.jsonl) · [GPU 报告](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-dynamic-fonts.json) · [CPU 参考](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/dynamic-font-cpu.json)
+
+九个文件字体回退样本及 retained face 寿命通过。真实 D3D9 设备/模拟原生拥有者测试通过工作线程仅生成 CPU 数据、旧区域保留、扩展字符、Reset 恢复、实际纹理地址复用、稳定指针和拥有者释放。它证明设备契约，不替代游戏窗口/设备恢复的长期回归。
+
+## 功能证据
+
+| 路径 | 已有验证 | 证据 |
+| --- | --- | --- |
+| 本地化、UI、格式 | UTF-8 注册/绘制、按钮、颜色、资源图标、续字节格式碰撞和中文换行 | [运行记录](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/runtime-trace.jsonl) |
+| 整包汉化与地图 | 146 文件迁移，2,781,965 个转义还原；186 个 Unicode 地图标签顶点未超容量，原文件哈希不变 | [地图预算](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/migrated-map-budgets.json) |
+| 字体覆盖 | Unicode 17 已分配的 102,998 个统一/兼容汉字均有非零 cmap 映射；只证明字体覆盖 | [字库审计](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/open-font-coverage.json) |
+| 原生字体生命周期 | 五种字号 64 次构造/加载/析构，地址复用后旧别名失效，活字形保留 | [生命周期报告](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-font-lifetime.json) |
+| 独立复杂布局 | 实际字体、RTL、cluster、偏移、基线相位及字体寿命；尚未接入游戏整段绘制 | [布局记录](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/shaped-run-validation.json) |
+| 原生单行编辑 | 18 个无选区案例；18 组选区、27 个状态；11 组、727 个像素位置 | [编辑](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-editor.json)、[选区](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-selection.json)、[几何](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-editor-geometry.json) |
+| SDL 完整提交 | 26 个合成事件，包含非法/全禁用拒绝、选区替换和字节预算，接受时只插入/通知一次 | [SDL 报告](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-sdl-input.json) |
+| 剪贴板受控来源 | 16 个原生粘贴案例；16 个复制/剪切/再粘贴往返；实际分配/释放核对 | [粘贴](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-clipboard.json)、[往返](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-clipboard-roundtrip.json) |
+| IME API | 九个 SDL 光标矩形案例及失焦/重新聚焦；七个 Windows 消息契约、十七次定位读回 | [矩形](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-ime-rect.json)、[候选窗](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-ime-candidate-contract.json) |
+| 物理中文输入 | 用户确认候选可见且位置正常；提交、整字退格、Shift 选择与替换，九个状态最终为“中字” | [用户确认](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/physical-ime-candidates.json)、[实际编辑](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/physical-editor-sequence.json) |
+| 国家显示名搜索 | 12 组查询，包含规范等价、全角、重音、ß、希腊文、西里尔文及扩展汉字；保留原文 | [搜索记录](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/country-search.json) |
+| 存档、路径和自动保存 | 代理对转换/比较、四类名称压缩→非压缩往返与重启读取；本地月度保存、轮换、两种格式恢复 | [持久化](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/persistence-roundtrip.json)、[路径比较](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/native-path-comparison.json)、[自动保存](https://github.com/YozoraTempest/EU4-Unicode-Patch/blob/main/docs/evidence/autosave-roundtrip.json) |
+
+物理输入记录来自此前候选窗修补 DLL `d02e0ce…`，范围为当前 Windows 中文输入法、外交单行搜索框、1280×720、GUI scale 1。当前新字库 DLL 的三组输入为受控 SDL 提交，更多汉字的物理复验尚未补充。剪贴板的受控来源也不等于系统剪贴板或物理快捷键完整链路通过。
+
+旧 `save-roundtrip.json` 只保留写入记录；`fd08cff` 曾把默认世界初始化误认为非 BMP 读取成功，该结论已撤回。现有读取验收要求原生文件打开成功、移除名称生成夹具后仍恢复正确字段。
+
+原始 JSON/JSONL 由证据测试使用，保留在源码仓库；发布包提供 DLL 和简明文档，证据链接指向仓库。独立 CPU 诊断图片、API 返回成功和游戏画面各有范围，不能相互替代。
+
+## 未完成范围
+
+多页图集与淘汰预算、活字体原位重载、游戏长期设备恢复、完整 shaped run 的 GPU/测宽/选区集成；其他控件/字号/地图动态字形、输入法预编辑、多行、系统剪贴板和物理鼠标选区；其他保存入口、云存档、铁人及联机。推进顺序见[后续任务](roadmap.md)。
