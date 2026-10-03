@@ -4,6 +4,7 @@
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
 #include "unicode_editor.hpp"
+#include "native_text_event.hpp"
 #include "unicode_search.hpp"
 #include "glyph_registry.hpp"
 #include <array>
@@ -157,6 +158,92 @@ bool editor_key(void* widget,const KeyEvent* event) {
     for(std::size_t i=0;i<length;++i) handled=original_editor_key(widget,event)||handled;
     return handled;
 }
+using EditorCharacter=bool(*)(void*,const char*);
+using EditorInsert=void(*)(void*,const EngineString*);
+EditorCharacter original_editor_character=nullptr;
+EditorInsert original_editor_insert=nullptr;
+struct ActiveCommit { void* widget; const EngineString* text; };
+thread_local ActiveCommit active_commit{};
+void insert_editor_commit(void* widget,const EngineString* text) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    if(caller==0x1535615&&active_commit.widget==widget&&active_commit.text)
+        text=active_commit.text;
+    original_editor_insert(widget,text);
+}
+bool consume_editor_commit(void* callback,const char* character) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    // This native caller passes the type-2 queue node's text member, not an
+    // arbitrary one-byte character pointer. Other callers retain that ABI.
+    if(caller!=0x14e9cb6) return original_editor_character(callback,character);
+    const auto event=reinterpret_cast<const eu4unicode::NativeTextEvent*>(character-0x10);
+    if(event->utf8_tag!=eu4unicode::native_utf8_tag)
+        return original_editor_character(callback,character);
+    const auto payload=eu4unicode::queued_utf8(*event);
+    if(payload.empty()) return false;
+    try {
+        auto base=static_cast<std::byte*>(callback);
+        const auto blacklist=reinterpret_cast<const EngineString*>(base+0xd0);
+        auto filtered=eu4unicode::filter_editor_characters(payload,
+            {blacklist->data(),static_cast<std::size_t>(blacklist->size)});
+        const auto editor_blacklist=reinterpret_cast<const EngineString*>(base-0x50);
+        filtered=eu4unicode::filter_editor_characters(filtered,
+            {editor_blacklist->data(),static_cast<std::size_t>(editor_blacklist->size)});
+        // Preserve the original context-dependent seven-character restriction.
+        using FindElement=void*(*)(void*,const void*);
+        const auto find=reinterpret_cast<FindElement>(image+0x14db3c0);
+        if(find(*reinterpret_cast<void**>(base+0x10),base+0x30)&&
+           *reinterpret_cast<const unsigned char*>(base-0x24))
+            filtered=eu4unicode::filter_editor_characters(filtered,
+                {reinterpret_cast<const char*>(image+0x1d91328),7});
+        if(filtered.empty()) return false;
+        EngineString text{};
+        text.size=filtered.size();
+        text.capacity=filtered.size()<16?15:filtered.size();
+        if(text.capacity<16) std::memcpy(text.storage.small,filtered.c_str(),filtered.size()+1);
+        else text.storage.pointer=filtered.c_str();
+        const auto previous=active_commit;
+        struct Restore { ActiveCommit previous; ~Restore(){active_commit=previous;} } restore{previous};
+        active_commit={base-0x108,&text};
+        // The native character consumer keeps its notification and focus logic;
+        // its single insertion call receives the complete borrowed string.
+        return original_editor_character(callback,filtered.c_str());
+    } catch(...) { log("Unicode queued commit failed; insertion excluded."); return false; }
+}
+extern "C" void trim_editor_grapheme(void* widget) {
+    auto base=static_cast<std::byte*>(widget);
+    auto text=reinterpret_cast<EngineString*>(base+0x30);
+    const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
+    if(eu4unicode::valid_utf8(value)&&!value.empty()) {
+        using Position=std::uint32_t(*)(void*,std::uint32_t,std::uint32_t);
+        const auto position=reinterpret_cast<Position>(image+0x153aa90)(widget,
+            *reinterpret_cast<std::uint16_t*>(base+0x56),*reinterpret_cast<std::uint16_t*>(base+0x54));
+        if(position&&position<=value.size()) {
+            try {
+                const auto plan=eu4unicode::plan_edit(value,position,eu4unicode::EditKey::backspace);
+                auto data=const_cast<char*>(text->data());
+                std::memmove(data+plan.erase_begin,data+plan.erase_end,
+                    value.size()-plan.erase_end+1);
+                text->size-=plan.erase_end-plan.erase_begin;
+                base[0x100]=base[0x101]=std::byte{1};
+                using MoveCaret=void(*)(void*,std::uint32_t);
+                reinterpret_cast<MoveCaret>(image+0x1536f50)(widget,static_cast<std::uint32_t>(plan.caret));
+                struct Rows { const std::byte* begin; const std::byte* end; };
+                using GetRows=const Rows*(*)(void*);
+                const auto vtable=*static_cast<void***>(widget);
+                const auto rows=reinterpret_cast<GetRows>(vtable[0x1a0/8])(widget);
+                *reinterpret_cast<std::uint16_t*>(base+0x60)=
+                    static_cast<std::uint16_t>((rows->end-rows->begin)/40);
+                return;
+            } catch(...) { log("Unicode editor fitting failed."); }
+        }
+    }
+    // Keep the observed native behavior for non-UTF-8 text and empty positions.
+    using Backspace=void(*)(void*);
+    const auto vtable=*static_cast<void***>(widget);
+    reinterpret_cast<Backspace>(vtable[0x138/8])(widget);
+}
 void import_text(const EngineString* key,const EngineString* value,int version,
                  int /*unused*/,const LoadContext* context) {
     const auto text=std::string_view(value->data(),static_cast<std::size_t>(value->size));
@@ -232,6 +319,7 @@ std::uintptr_t g_map_adjust_copy_return,g_map_adjust_glyph_return,g_map_upper_re
 std::uintptr_t g_map_vertex_count_return;
 std::uintptr_t g_map_kern_call;
 std::uintptr_t g_input_return;
+std::uintptr_t g_editor_fit_return;
 std::uintptr_t g_text_limit_return;
 std::uintptr_t g_font_allocate,g_font_duplicate,g_font_store_return,g_font_initialize,g_font_skip,g_engine_new;
 std::uintptr_t g_path_pair_return;
@@ -250,6 +338,7 @@ void map_justify_draw_hook(); void map_justify_measure_hook(); void map_justify_
 void map_adjust_copy_hook(); void map_adjust_glyph_hook(); void map_upper_hook(); void map_lower_hook();
 void map_vertex_count_hook();
 void input_hook();
+void editor_fit_hook();
 void text_limit_hook();
 void font_lookup_hook(); void font_store_hook();
 void path_pair_hook();
@@ -366,31 +455,14 @@ void dispatch_utf8(void* window,void* receiver,const char* payload,std::uint32_t
     if(length==32 || !eu4unicode::valid_utf8({payload,length})) {
         log("Rejected malformed SDL UTF-8 text input."); return;
     }
-    struct NativeTextEvent {
-        std::byte prefix[16];
-        unsigned char byte;
-        std::byte padding[31];
-        std::uint64_t reserved;
-        std::uint64_t text_kind;
-        std::byte reserved_text[16];
-        std::uint32_t type;
-        std::uint16_t flags;
-        std::uint16_t trailing;
-    };
-    static_assert(offsetof(NativeTextEvent,text_kind)==0x38 && offsetof(NativeTextEvent,type)==0x50);
-    static_assert(sizeof(NativeTextEvent)==0x58);
     using WindowEvent=void(*)(void*,int,std::uint32_t,int);
-    using TextEvent=void(*)(void*,NativeTextEvent*);
+    using TextEvent=void(*)(void*,eu4unicode::NativeTextEvent*);
     auto window_vtable=*static_cast<void***>(window);
     auto receiver_vtable=*static_cast<void***>(receiver);
-    for(std::size_t index=0;index<length;++index) {
-        reinterpret_cast<WindowEvent>(window_vtable[4])(window,0x303,event_value,0);
-        NativeTextEvent event{};
-        event.byte=static_cast<unsigned char>(payload[index]);
-        event.text_kind=3;
-        event.type=2;
-        reinterpret_cast<TextEvent>(receiver_vtable[3])(receiver,&event);
-    }
+    eu4unicode::NativeTextEvent event{};
+    if(!eu4unicode::make_text_event({payload,length},event)) return;
+    reinterpret_cast<WindowEvent>(window_vtable[4])(window,0x303,event_value,0);
+    reinterpret_cast<TextEvent>(receiver_vtable[3])(receiver,&event);
 }
 }
 
@@ -464,6 +536,16 @@ bool initialize(HMODULE module) {
         ,{0x153a99b,"e870a7b5fe"}
         ,{0xb19590,"4053565741544883ec48"}
         ,{0x1536c32,"e859295eff"}
+        ,{0x15354e0,"48895c240848896c2410488974241848897c24204156"}
+        ,{0x1536b80,"488bc44889580848897010488978184c896020"}
+        ,{0x14e9cac,"488b01488d5310ff5008"}
+        ,{0x153560a,"488d542420ff90a0000000"}
+        ,{0x836f33,"0f1003488bd00f11000f104b100f1148100f1043200f1140200f104b300f1148300f1043400f114040f20f104b50f20f114850"}
+        ,{0x1d91328,"22a7a4a3407b7d"}
+        ,{0x14db3c0,"48895c2410488974241848897c24205541544155"}
+        ,{0x1536e51,"488b07488bcfff9038010000"}
+        ,{0x1536f50,"48895c2408488974241048897c24184c89642420"}
+        ,{0x153aa90,"48895c240848896c2410488974241848897c2420"}
         ,{0x1174e95,"e8e6025900"}
         ,{0x13b9567,"e814bc3400"}
         ,{0x117519e,"e8ddff5800"}
@@ -526,6 +608,7 @@ bool initialize(HMODULE module) {
     g_map_upper_return=address(0x14ba838);
     g_map_lower_return=address(0x1550438);
     g_input_return=address(0x156a22a);
+    g_editor_fit_return=address(0x1536e5d);
     g_text_limit_return=address(0x15989e4);
     g_font_allocate=address(0x1595cad);
     g_font_duplicate=address(0x1595d07);
@@ -595,12 +678,17 @@ bool initialize(HMODULE module) {
     }
     if(experimental_input) {
         if(MH_CreateHook(image+0x1569f91,reinterpret_cast<void*>(input_hook),nullptr)!=MH_OK ||
+           MH_CreateHook(image+0x1536e51,reinterpret_cast<void*>(editor_fit_hook),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x15366c0,reinterpret_cast<void*>(editor_key),
              reinterpret_cast<void**>(&original_editor_key))!=MH_OK ||
            MH_CreateHook(image+0x95110,reinterpret_cast<void*>(assign_editor_prefix),
              reinterpret_cast<void**>(&original_assign_text))!=MH_OK ||
            MH_CreateHook(image+0xb19590,reinterpret_cast<void*>(filter_editor_text),
-             reinterpret_cast<void**>(&original_filter_text))!=MH_OK) {
+             reinterpret_cast<void**>(&original_filter_text))!=MH_OK ||
+           MH_CreateHook(image+0x15354e0,reinterpret_cast<void*>(consume_editor_commit),
+             reinterpret_cast<void**>(&original_editor_character))!=MH_OK ||
+           MH_CreateHook(image+0x1536b80,reinterpret_cast<void*>(insert_editor_commit),
+             reinterpret_cast<void**>(&original_editor_insert))!=MH_OK) {
             log("Input hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
         }
         log("Experimental UTF-8 input and single-line grapheme editing enabled.");

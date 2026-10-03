@@ -23,3 +23,5 @@ jobs:
         run: python tests/persistence_tests.py
       - name: Native editor evidence validation
         run: python tests/editor_evidence_tests.py
+      - name: SDL input evidence validation
+        run: python tests/sdl_evidence_tests.py

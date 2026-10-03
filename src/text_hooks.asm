@@ -41,6 +41,8 @@ EXTERN g_bitmap_plain_entry:QWORD
 EXTERN g_bitmap_icon_end_return:QWORD
 EXTERN dispatch_utf8:PROC
 EXTERN g_input_return:QWORD
+EXTERN trim_editor_grapheme:PROC
+EXTERN g_editor_fit_return:QWORD
 EXTERN bounded_text_length:PROC
 EXTERN g_text_limit_return:QWORD
 
@@ -68,6 +70,14 @@ input_hook PROC
     RESTORE_CONTEXT
     jmp qword ptr [g_input_return]
 input_hook ENDP
+
+editor_fit_hook PROC
+    SAVE_CONTEXT
+    mov rcx, rdi
+    call trim_editor_grapheme
+    RESTORE_CONTEXT
+    jmp qword ptr [g_editor_fit_return]
+editor_fit_hook ENDP
 
 main_draw_hook PROC
     SAVE_CONTEXT

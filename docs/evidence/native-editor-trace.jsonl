@@ -1,5 +1,5 @@
-{"event": "artifact", "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a", "dll_sha256": "16648a60aea22d8cc81a8bb4b5b158bfd29b4f8c8db870e5d3d569d68797d3cc", "method": "programmatic native SetText and key handler on UI thread; not physical input or IME"}
-{"type": "send", "payload": {"event": "ready", "pid": 48396}}
+{"event": "artifact", "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a", "dll_sha256": "c6b32d4fd1e1c6c20a39680d5f255b31b04945ca6c4ff85468388d5b21555425", "method": "programmatic native SetText and key handler on UI thread; not physical input or IME"}
+{"type": "send", "payload": {"event": "ready", "pid": 5204}}
 {"type": "send", "payload": {"event": "native-editor-budget", "original_byte_limit": 250, "test_byte_limit": 80, "blacklist_bytes": [34, 167, 164, 163, 64, 123, 125, 47, 92]}}
 {"type": "send", "payload": {"event": "native-editor-fixture", "name": "supplementary-backspace", "native_bytes": [65, 228, 184, 173, 240, 160, 128, 128, 90], "size": 9, "width": 15, "rows": 1, "backspace_rva": "0x1538db0", "delete_rva": "0x1538f30"}}
 {"type": "send", "payload": {"event": "native-editor-key", "name": "supplementary-backspace", "before": "A\u4e2d\ud840\udc00Z", "caret": 8, "key": 8, "after": "A\u4e2dZ", "after_caret": 4, "expected": "A\u4e2dZ", "expected_caret": 4, "passed": true}}

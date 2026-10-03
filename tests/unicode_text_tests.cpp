@@ -1,4 +1,5 @@
 #include "unicode_text.hpp"
+#include "native_text_event.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -42,5 +43,22 @@ int main() {
     check(bitmap_slot(0x20000)==0x20000 && decode(u8"𠀀").value==0x20000,
         "supplementary glyph keys retain the complete code point");
     check(bitmap_slot(0x2014)==0x2014,"native Unicode punctuation glyph ID");
+    NativeTextEvent event{};
+    const std::string commit=u8"A👩‍👩‍👧‍👦𠀀";
+    check(make_text_event(commit,event),"queue accepts a complete 30-byte commit");
+    NativeTextEvent copied=event;
+    event={};
+    check(queued_utf8(copied)==commit,"queued payload survives source lifetime and complete node copies");
+    check(make_text_event(std::string(27,'A')+u8"𠀀",event),"31-byte SDL payload fits");
+    check(!make_text_event(std::string(28,'A')+u8"𠀀",event)&&queued_utf8(event).empty(),"oversize payload leaves no marked event");
+    check(!make_text_event("\xf0\x9f",event),"truncated input never enters the native queue");
+    check(!make_text_event(std::string("A\0Z",3),event),"embedded NUL is rejected");
+    check(!make_text_event({},event),"empty SDL input is ignored");
+    make_text_event(u8"👧",event);event.text[3]='\0';
+    check(queued_utf8(event).empty(),"corrupted copied payload is rejected");
+    make_text_event(u8"𠀀",event);event.utf8_tag=0;
+    check(queued_utf8(event).empty(),"native one-byte events remain unmarked");
+    make_text_event(u8"𠀀",event);event.type=1;
+    check(queued_utf8(event).empty(),"keyboard events cannot become text commits");
     std::cout << "Unicode scalar, invalid-input and bitmap-adapter checks passed.\n";
 }
