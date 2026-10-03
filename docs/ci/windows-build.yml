@@ -33,3 +33,5 @@ jobs:
         run: python tests/geometry_evidence_tests.py
       - name: Native clipboard evidence validation
         run: python tests/clipboard_evidence_tests.py
+      - name: Native copy and cut roundtrip evidence validation
+        run: python tests/clipboard_roundtrip_evidence_tests.py

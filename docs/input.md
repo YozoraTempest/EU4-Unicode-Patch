@@ -139,3 +139,23 @@ SDL 的 `SDL_GetClipboardText` 返回需要调用方释放的 UTF-8 缓冲。本
 ```
 
 十三项证据检查覆盖有效记录、漏释放/重复释放、半字符插入、部分通知、未替换选择、拒绝输入误清选择、非法文本插入、字体过滤损坏、缺失案例/结束、观察器 MAP 元数据和代理异常。这项验收不证明物理 Ctrl-V、系统剪贴板编码转换、复制/剪切或输入法已通过。[SDL 获取文本](https://wiki.libsdl.org/SDL2/SDL_GetClipboardText)与[设置文本](https://wiki.libsdl.org/SDL2/SDL_SetClipboardText)的官方契约说明 UTF-8 编码及所有权；游戏函数和控件范围来自精确 EXE 的指令与运行证据。
+
+## 原生复制、剪切与再粘贴
+
+在同一个真实单行控件上，另用八类文本分别执行原生 Ctrl-C 或 Ctrl-X，再执行 Ctrl-V，共 16 个往返案例。选区包含 ASCII、中文、生僻字、组合重音、旗帜、家庭 emoji、续字节碰撞和超过单个 SDL 事件的 32 字节文本；正反方向选择均覆盖。复制保留原文本与选择，剪切恰好删除完整选择并留下 `AZ`；再粘贴恢复原文且只通知一次最终状态。
+
+原生复制 `15395b0` 和选择剪切 `1539090` 已使用 UTF-8 调用 SDL，无需额外编码转换。探针将 `SDL_SetClipboardText` 的动态 API 表入口替换为私有接收者；再粘贴的来源使用这次实际捕获的字节，不能直接拿预期夹具重建结果。每个案例只写入一次、只读取一次、真实分配与释放各一次。见[往返原始记录](evidence/native-clipboard-roundtrip.jsonl)和[独立报告](evidence/native-clipboard-roundtrip.json)。
+
+直接分发复制/剪切时，没有观察到外交变更通知；验证仅要求其完整文本和选择状态，再粘贴的最终通知另外核对。这不能证明物理 Ctrl-C/Ctrl-X 的完整外层事件链，也不能证明系统剪贴板转换或其他控件。十项专用证据检查拒绝复制误改选择、剪切错误范围、捕获字节损坏、提前读取、重复写入、跳过剪切后的实际状态、半字符插入、漏通知及错误模式。
+
+```powershell
+.\tools\start-test.ps1 -ExperimentalInput
+..\EU4MenuPatch\.venv\Scripts\python.exe tools\trace-clipboard.py --roundtrip --duration 600
+```
+
+进入外交页后，专用探针自动执行并关闭独立实例，然后校验：
+
+```powershell
+..\EU4MenuPatch\.venv\Scripts\python.exe tools\verify-clipboard.py private\native-clipboard-roundtrip.jsonl --roundtrip
+..\EU4MenuPatch\.venv\Scripts\python.exe tests\clipboard_roundtrip_evidence_tests.py
+```

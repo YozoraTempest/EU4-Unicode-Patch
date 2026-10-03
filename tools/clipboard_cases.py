@@ -34,3 +34,18 @@ CLIPBOARD_CASES = [
     case('oversized-preserves-selection', expected='A中𠀀Z', before='A中𠀀Z', caret=8, raw=[65] * 32001,
          selection=dict(anchor=4, caret=8, selected='𠀀')),
 ]
+
+ROUNDTRIP_CASES = []
+for index, (name, text) in enumerate([
+        ('ascii', 'abc'), ('chinese', '中文'), ('supplementary', '𠀀'),
+        ('combining-accent', 'e\u0301'), ('flag-grapheme', '🇨🇳'),
+        ('zwj-family', '👩‍👩‍👧‍👦'), ('continuation-collisions', '代俣俤俧'),
+        ('more-than-sdl-event', '𠀀' * 8)]):
+    end = 1 + len(text.encode('utf-8'))
+    for action in ['copy', 'cut']:
+        anchor, caret = (end, 1) if index % 2 else (1, end)
+        fixture = case(action + '-' + name, text, expected='A' + text + 'Z',
+                       before='A' + text + 'Z', caret=caret,
+                       selection=dict(anchor=anchor, caret=caret, selected=text))
+        fixture['action'] = action
+        ROUNDTRIP_CASES.append(fixture)

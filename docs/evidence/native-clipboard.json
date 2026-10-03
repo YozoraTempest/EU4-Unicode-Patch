@@ -5,6 +5,7 @@
     "dll_sha256": "9a5b8afb7aef924b9469d07fd47dc2f960b77d162cea74dd2900cf8e291a2609",
     "map_sha256": "8548f7113d21219d62d610a6fb8ecb5a766be9a85ee36f7f0e8ea18d6dd2a3e4",
     "insert_observer_rva": "0x173240",
+    "mode": "paste",
     "method": "Native Ctrl-V dispatcher, isolated SDL clipboard source, real SDL_malloc/SDL_free, forwarding insertion/notification observers, live single-line edit widget; no OS clipboard writes or physical shortcut claim"
   },
   "passed": true,

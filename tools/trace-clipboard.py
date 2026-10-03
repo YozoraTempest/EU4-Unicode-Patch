@@ -9,7 +9,7 @@ import time
 import frida
 import psutil
 import pefile
-from clipboard_cases import CLIPBOARD_CASES
+from clipboard_cases import CLIPBOARD_CASES, ROUNDTRIP_CASES
 
 ROOT = Path(__file__).resolve().parents[1]
 EXE = ROOT / 'private/runtime/eu4.exe'
@@ -24,7 +24,7 @@ const destroy=new NativeFunction(base.add(0x95660),'void',['pointer'],options);
 const select=new NativeFunction(base.add(0x153b170),'void',['pointer'],options);
 const key=new NativeFunction(base.add(0x15366c0),'bool',['pointer','pointer'],{...options,traps:'all'});
 const allocate=new NativeFunction(base.add(0x1735ec0),'pointer',['uint64'],options);
-let view=null,widget=null,ran=false,active=null,source=null,reads=0,releases=0,inserts=[],notifications=[];
+let view=null,widget=null,ran=false,active=null,source=null,provided=null,writes=[],reads=0,releases=0,inserts=[],notifications=[];
 function bytes(s){const n=s.add(16).readU64().toNumber(),data=s.add(24).readU64().compare(16)<0?s:s.readPointer();
   if(n>32000)throw new Error('Unexpected native string size');return Array.from(new Uint8Array(data.readByteArray(n)));}
 function state(){return {text:bytes(widget.add(0x30)),caret:widget.add(0x54).readU16(),row:widget.add(0x56).readU16(),
@@ -34,9 +34,10 @@ function state(){return {text:bytes(widget.add(0x30)),caret:widget.add(0x54).rea
 const sourceCallback=new NativeCallback(function(){
   if(!active)throw new Error('Unexpected clipboard read outside a fixture');
   if(reads++)throw new Error('Clipboard source read more than once');
-  source=allocate(active.source.length+1);
+  if(provided===null)throw new Error('Clipboard source has no text');
+  source=allocate(provided.length+1);
   if(source.isNull())throw new Error('SDL allocation failed');
-  source.writeByteArray(active.source.concat([0]));return source;
+  source.writeByteArray(provided.concat([0]));return source;
 },'pointer',[]);
 // The exported SDL entry points are seven-byte jumps through SDL's own dynamic
 // API table. Replace the source/table entries directly, including nested calls;
@@ -54,12 +55,21 @@ const release=new NativeFunction(freeSlot.readPointer(),'void',['pointer'],{...o
 const releaseCallback=new NativeCallback(function(value){
   if(active&&source&&value.equals(source)){
     if(releases++)throw new Error('Clipboard source released more than once');
-    if(JSON.stringify(Array.from(new Uint8Array(source.readByteArray(active.source.length+1))))!==JSON.stringify(active.source.concat([0])))
+    if(JSON.stringify(Array.from(new Uint8Array(source.readByteArray(provided.length+1))))!==JSON.stringify(provided.concat([0])))
       throw new Error('Clipboard source buffer was modified');
   }
   release(value);
 },'void',['pointer']);
 getSlot.writePointer(sourceCallback);freeSlot.writePointer(releaseCallback);
+// Native copy/cut writes only to this private provider. The subsequent paste
+// reads these captured bytes, rather than reconstructing the expected fixture.
+const setCallback=new NativeCallback(function(text){
+  if(!active||!active.action)throw new Error('Unexpected clipboard write');
+  const value=text.readUtf8String();
+  provided=Array.from(unescape(encodeURIComponent(value)),ch=>ch.charCodeAt(0));
+  writes.push(provided.slice());return 0;
+},'int',['pointer']);
+if(cases[0].action)apiSlot(0x17357c0,0x1fb01e8).writePointer(setCallback);
 // These forwarding callbacks also observe nested native invocations made from
 // the UI-frame callback. Ordinary Interceptor listeners are suppressed there.
 // The insertion callback calls the existing MinHook trampoline without changing
@@ -100,13 +110,24 @@ Interceptor.attach(base.add(0x15988e0),{onEnter(){
       if(c.selection){widget.add(0x92).writeU16(c.selection.anchor);widget.add(0x94).writeU16(0);
         widget.add(0x54).writeU16(c.selection.caret);select(widget);widget.add(0x90).writeU8(1);}
       const before=state();widget.add(0xe0).writeS32(c.byte_limit);widget.add(0xe4).writeU8(c.font_flags);
-      reads=0;releases=0;source=null;inserts=[];notifications=[];active=c;
-      const event=Memory.alloc(12);event.writeU32(0x76);event.add(4).writeU32(0);event.add(8).writeU32(1);
+      reads=0;releases=0;source=null;provided=c.action?null:c.source;writes=[];inserts=[];notifications=[];active=c;
+      const event=Memory.alloc(12);event.add(4).writeU32(0);event.add(8).writeU32(1);
+      let actionResult=null;
+      if(c.action){
+        event.writeU32(c.action==='copy'?0x63:0x78);
+        const actionHandled=key(widget,event)!==0;
+        actionResult={handled:actionHandled,after:state(),writes:writes.slice(),reads,releases,
+          inserts:inserts.slice(),notifications:notifications.slice()};
+        if(writes.length!==1||provided===null)throw new Error('Native copy/cut did not supply clipboard text');
+        inserts=[];notifications=[];
+      }
+      const pasteBefore=state();event.writeU32(0x76);
       const handled=key(widget,event)!==0;const after=state();
       if(reads!==1||releases!==1)throw new Error('Clipboard ownership: '+JSON.stringify({name:c.name,reads,releases,handled,before,after,inserts}));
       active=null;
       send({event:'clipboard-case',name:c.name,source_length:c.source.length,before,after,handled,
-        reads,releases,inserts,notifications,byte_limit:c.byte_limit,font_flags:c.font_flags});
+        reads,releases,inserts,notifications,byte_limit:c.byte_limit,font_flags:c.font_flags,
+        ...(c.action?{action:c.action,action_result:actionResult,paste_before:pasteBefore}:{} )});
     }
     send({event:'clipboard-complete',cases:cases.length,allocations:cases.length,releases:cases.length});
   }catch(e){send({event:'clipboard-failed',message:String(e)});}
@@ -119,6 +140,7 @@ send({event:'ready',pid:Process.id});
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--duration', type=int, default=600)
+    parser.add_argument('--roundtrip', action='store_true', help='Exercise native copy/cut followed by paste')
     args = parser.parse_args()
     if not 60 <= args.duration <= 1800:
         raise ValueError('Duration must be 60 to 1800 seconds')
@@ -149,12 +171,15 @@ def main():
     session = frida.attach(process.pid)
     complete, errors = [], []
     try:
-        script = session.create_script(SCRIPT.replace('__CASES__', json.dumps(CLIPBOARD_CASES))
+        cases = ROUNDTRIP_CASES if args.roundtrip else CLIPBOARD_CASES
+        script = session.create_script(SCRIPT.replace('__CASES__', json.dumps(cases))
                                        .replace('__INSERT_SLOT__', str(insert_slot)))
-        with (ROOT / 'private/native-clipboard.jsonl').open('w', encoding='utf-8') as out:
+        output = 'native-clipboard-roundtrip.jsonl' if args.roundtrip else 'native-clipboard.jsonl'
+        with (ROOT / 'private' / output).open('w', encoding='utf-8') as out:
             out.write(json.dumps(dict(event='artifact', exe_sha256=EXPECTED_HASH,
                 dll_sha256=dll_hash, map_sha256=hashlib.sha256(mapping_path.read_bytes()).hexdigest(),
                 insert_observer_rva=hex(insert_slot),
+                mode='roundtrip' if args.roundtrip else 'paste',
                 method='Native Ctrl-V dispatcher, isolated SDL clipboard source, real SDL_malloc/SDL_free, forwarding insertion/notification observers, live single-line edit widget; no OS clipboard writes or physical shortcut claim'))+'\n')
             def message(value, data):
                 out.write(json.dumps(value)+'\n'); out.flush()
