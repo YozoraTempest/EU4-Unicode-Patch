@@ -1,5 +1,5 @@
-{"event": "artifact", "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a", "dll_sha256": "defdc5e398c90e7b8a73ceb0c6273776a7fc24b8c36257dd2d2baf6434bb70ca", "method": "Native key, selection and insertion functions on UI thread; not physical keyboard, mouse or IME"}
-{"type": "send", "payload": {"event": "ready", "pid": 8324}}
+{"event": "artifact", "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a", "dll_sha256": "de9f902f6f07f74ff6d4daca94152078afa1ce081a94a8a515b755fc2acde137", "method": "Native key, selection and insertion functions on UI thread; not physical keyboard, mouse or IME"}
+{"type": "send", "payload": {"event": "ready", "pid": 40200}}
 {"type": "send", "payload": {"event": "selection-budget", "original_byte_limit": 250, "test_byte_limit": 80}}
 {"type": "send", "payload": {"event": "selection-fixture", "name": "shift-left-supplementary", "before": {"text": [65, 228, 184, 173, 240, 160, 128, 128, 90], "caret": 8, "row": 0, "anchor": 0, "anchor_row": 0, "selected": [], "active": false}}}
 {"type": "send", "payload": {"event": "selection-step", "name": "shift-left-supplementary", "step": 0, "action": {"kind": "key", "code": 1073741904, "modifiers": 4}, "after": {"text": [65, 228, 184, 173, 240, 160, 128, 128, 90], "caret": 4, "row": 0, "anchor": 8, "anchor_row": 0, "selected": [240, 160, 128, 128], "active": true}, "handled": 1, "notifications": []}}

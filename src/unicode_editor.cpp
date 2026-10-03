@@ -2,6 +2,7 @@
 #include "unicode_services.hpp"
 #include "unicode_text.hpp"
 #include <algorithm>
+#include <cstdint>
 #include <stdexcept>
 
 namespace eu4unicode {
@@ -16,6 +17,32 @@ std::size_t ceil_boundary(const std::vector<std::size_t>& boundaries,std::size_t
 std::size_t grapheme_prefix(std::string_view text,std::size_t byte_limit) {
     const auto boundaries=grapheme_boundaries(text);
     return floor_boundary(boundaries,(std::min)(text.size(),byte_limit));
+}
+std::size_t fitting_grapheme_prefix(std::string_view text,int pixels,const PrefixMeasure& measure) {
+    const auto boundaries=grapheme_boundaries(text);
+    if(pixels<0) return 0;
+    std::size_t first=1,last=boundaries.size();
+    while(first<last) {
+        const auto middle=first+(last-first)/2;
+        if(measure(boundaries[middle])<=pixels) first=middle+1;
+        else last=middle;
+    }
+    return boundaries[first-1];
+}
+std::size_t nearest_grapheme_boundary(std::string_view text,int pixels,const PrefixMeasure& measure) {
+    const auto boundaries=grapheme_boundaries(text);
+    if(pixels<=0||text.empty()) return 0;
+    std::size_t first=1,last=boundaries.size();
+    while(first<last) {
+        const auto middle=first+(last-first)/2;
+        if(measure(boundaries[middle])<pixels) first=middle+1;
+        else last=middle;
+    }
+    if(first==boundaries.size()) return text.size();
+    const auto before=boundaries[first-1],after=boundaries[first];
+    const auto left=before?measure(before):0;
+    const auto right=measure(after);
+    return static_cast<std::int64_t>(pixels)-left<=static_cast<std::int64_t>(right)-pixels?before:after;
 }
 std::string filter_editor_characters(std::string_view text,std::string_view blacklist) {
     if(!valid_utf8(text)) throw std::invalid_argument("Editor input is not valid UTF-8");

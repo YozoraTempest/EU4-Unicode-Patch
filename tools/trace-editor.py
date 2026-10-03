@@ -106,6 +106,7 @@ send({event:'ready',pid:Process.id});
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--duration", type=int, default=600)
+    parser.add_argument('--keep-open', action='store_true', help='Keep the observer until the owned game exits')
     args = parser.parse_args()
     if not 60 <= args.duration <= 1800:
         raise ValueError("Duration must be 60 to 1800 seconds")
@@ -143,7 +144,9 @@ def main():
             script.load()
             print("Open diplomacy, then click Name sort to exercise the native edit widget.", flush=True)
             deadline = time.monotonic() + args.duration
-            while time.monotonic() < deadline and process.is_running() and not errors and not complete:
+            while time.monotonic() < deadline and process.is_running():
+                if errors or (not args.keep_open and complete):
+                    break
                 time.sleep(.25)
         if errors or not complete:
             raise RuntimeError("Native editor validation did not pass")

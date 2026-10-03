@@ -25,7 +25,7 @@ SDL_CASES = [
     case('ascii-prohibited-prefix', '@中文', expected='中文'),
     case('fully-prohibited-commit', '@{}/\\"§£¤', expected=''),
     case('31-byte-sdl-limit', '𠀀' * 7 + '中'),
-    case('native-height-fitting', 'A' * 27 + '𠀀', expected='A' * 13),
+    case('native-height-fitting', 'A' * 27 + '𠀀', expected='A' * 12),
     case('append-byte-limit', '𠀀', expected='A中', before='A中', caret=4, budget=6),
     case('middle-byte-limit', '𠀀', expected='A𠀀', before='A中Z', caret=1, budget=6),
     case('family-byte-limit', '👩‍👩‍👧‍👦', expected='A', before='A', caret=1, budget=16),

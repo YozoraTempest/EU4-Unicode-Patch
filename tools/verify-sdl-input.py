@@ -45,6 +45,19 @@ def verify(path):
         after = list(fixture['expected'].encode('utf-8'))
         if result.get('after') != after or result.get('after_caret') != fixture.get('expected_caret', len(after)):
             raise ValueError('Incorrect native SDL text or caret: ' + fixture['name'])
+        if fixture['name'] == 'native-height-fitting':
+            geometry = result.get('height_geometry', {})
+            contract = dict(width=164, height=15, font_margin=14, font_height=16, flags=0,
+                            measure_rva='0x159b7c0', row_limit=-1, height_bypass=0, row_count=1)
+            if any(geometry.get(key) != value for key, value in contract.items()):
+                raise ValueError('Missing or incorrect live editor geometry')
+            prefixes = geometry.get('prefix_widths', [])
+            if prefixes != [[n, n * 12] for n in range(1, 28)] + [[31, 340]]:
+                raise ValueError('Native complete-prefix font measurements differ')
+            available = geometry['width'] - geometry['font_margin']
+            count = max(n for n, width in prefixes if width <= available)
+            if after != fixture['payload'][:count] or geometry.get('rows') != [after]:
+                raise ValueError('Height fitting did not retain the longest fitting native row')
         commit = expected_commit(fixture['payload'])
         filtered = ''.join(c for c in commit if c not in prohibited) if commit is not None else ''
         expected_inserts = [list(filtered.encode('utf-8'))] if filtered else []
@@ -83,7 +96,7 @@ def verify(path):
     if len(budget) != 1 or budget[0].get('original_byte_limit') != 250:
         raise ValueError('Unexpected native editor budget')
     return dict(artifact=artifact, passed=True, cases=results,
-                scope='Synthetic SDL_TEXTINPUT in the actual polling loop, native queue copies, single insertion, native notifications and programmatically seeded single-line selections; not physical keyboard, IME composition or mouse selection')
+                scope='Synthetic SDL_TEXTINPUT in the actual polling loop, native queue copies, single insertion, native notifications, programmatically seeded single-line selections and live height-limited row cache; not physical keyboard, IME composition, mouse selection or general multiline controls')
 
 
 def main():

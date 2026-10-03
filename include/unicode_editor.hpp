@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -13,6 +14,11 @@ struct EditPlan {
 EditPlan plan_edit(std::string_view text,std::size_t caret,EditKey key);
 // Return the largest complete grapheme prefix within a native byte budget.
 std::size_t grapheme_prefix(std::string_view text,std::size_t byte_limit);
+// The native bitmap font measures increasing prefixes in pixels. Only complete
+// grapheme prefixes are sent to it, and equal-distance hits choose the left edge.
+using PrefixMeasure=std::function<int(std::size_t)>;
+std::size_t fitting_grapheme_prefix(std::string_view text,int pixels,const PrefixMeasure& measure);
+std::size_t nearest_grapheme_boundary(std::string_view text,int pixels,const PrefixMeasure& measure);
 // Native edit-widget blacklist entries are single Latin-1 bytes, not UTF-8.
 std::string filter_editor_characters(std::string_view text,std::string_view blacklist);
 struct Selection { std::size_t anchor,caret; };

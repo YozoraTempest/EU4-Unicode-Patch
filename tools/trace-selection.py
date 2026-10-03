@@ -94,6 +94,7 @@ send({event:'ready',pid:Process.id});
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--duration', type=int, default=600)
+    parser.add_argument('--keep-open', action='store_true', help='Keep the observer until the owned game exits')
     args = parser.parse_args()
     if not 60 <= args.duration <= 1800:
         raise ValueError('Duration must be 60 to 1800 seconds')
@@ -127,7 +128,9 @@ def main():
             script.on('message', message)
             script.load()
             deadline = time.monotonic() + args.duration
-            while process.is_running() and not errors and not complete and time.monotonic() < deadline:
+            while process.is_running() and time.monotonic() < deadline:
+                if errors or (not args.keep_open and complete):
+                    break
                 time.sleep(.25)
         if errors or not complete:
             raise RuntimeError('Selection probe did not complete')

@@ -31,6 +31,28 @@ let armed=false,waiting=false,pending=false,deliveredAt=0,inserts=[],notificatio
 let selectionBefore=null;
 function selectionState(){return {anchor:widget.add(0x92).readU16(),caret:widget.add(0x54).readU16(),
   selected:bytes(widget.add(0x70)),active:widget.add(0x90).readU8()!==0};}
+function heightGeometry(c){
+  const font=widget.add(0x98).readPointer(),flags=widget.add(0xe4).readU8(),vtable=font.readPointer();
+  const measure=new NativeFunction(vtable.add(0x60).readPointer(),'int',['pointer','pointer','int','uchar']);
+  const margin=new NativeFunction(vtable.add(0xa8).readPointer(),'int',['pointer','uchar'])(font,flags);
+  const lineHeight=new NativeFunction(vtable.add(0x68).readPointer(),'int',['pointer'])(font);
+  const vector=new NativeFunction(widget.readPointer().add(0x1a0).readPointer(),'pointer',['pointer'])(widget);
+  const begin=vector.readPointer(),end=vector.add(8).readPointer(),rows=[];
+  const count=end.sub(begin).toInt32()/40;
+  if(!Number.isInteger(count)||count<0||count>32)throw new Error('Unexpected native row cache');
+  for(let i=0;i<count;++i)rows.push(bytes(begin.add(i*40)));
+  // The fixture has 27 independent ASCII graphemes and one supplementary scalar.
+  // Measure every complete prefix with the live font, independently of the fitter.
+  const prefixes=[];
+  for(const n of Array.from({length:27},(_,i)=>i+1).concat([31])){
+    const value=Memory.alloc(n+1);value.writeByteArray(c.payload.slice(0,n).concat([0]));
+    prefixes.push([n,measure(font,value,n,flags)]);
+  }
+  return {width:widget.add(0x68).readU16(),height:widget.add(0x6a).readU16(),font_margin:margin,
+    font_height:lineHeight,flags,measure_rva:String(vtable.add(0x60).readPointer().sub(base)),
+    row_limit:widget.add(0xdc).readS32(),height_bypass:widget.add(0xd9).readU8(),
+    row_count:widget.add(0x60).readU16(),rows,prefix_widths:prefixes};
+}
 rpc.exports.arm=function(){armed=true;};
 function fail(error) {
   armed=false;
@@ -82,6 +104,7 @@ Interceptor.attach(base.add(0x15988e0),{onEnter(){
       if(!deliveredAt||Date.now()-deliveredAt<750)return;
       send({event:'native-sdl-result',...cases[index],after:bytes(widget.add(0x30)),
         after_caret:widget.add(0x54).readU16(),inserts,notifications,queue_copies:copies,
+        ...(cases[index].name==='native-height-fitting'?{height_geometry:heightGeometry(cases[index])}:{}),
         ...(cases[index].selection?{selection_before:selectionBefore,selection_after:selectionState()}:{} )});
       waiting=false;++index;
     }

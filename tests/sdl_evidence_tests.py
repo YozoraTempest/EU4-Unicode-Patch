@@ -30,6 +30,30 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 module.verify(path)
 
+    def height_result(self):
+        return next(r['payload'] for r in self.records
+                    if r.get('payload', {}).get('name') == 'native-height-fitting'
+                    and r['payload'].get('event') == 'native-sdl-result')
+
+    def test_valid_evidence(self):
+        self.assertTrue(module.verify(ROOT / 'docs/evidence/native-sdl-input.jsonl')['passed'])
+
+    def test_missing_live_geometry(self):
+        self.height_result().pop('height_geometry')
+        self.rejected()
+
+    def test_incorrect_live_row_cache(self):
+        self.height_result()['height_geometry']['rows'][0].append(65)
+        self.rejected()
+
+    def test_incorrect_native_measurement(self):
+        self.height_result()['height_geometry']['prefix_widths'][12][1] = 150
+        self.rejected()
+
+    def test_incorrect_width_contract(self):
+        self.height_result()['height_geometry']['width'] = 170
+        self.rejected()
+
     def test_partial_scalar_insert(self):
         self.result()['inserts'] = [[0xf0], [0xa0], [0x80], [0x80]]
         self.rejected()

@@ -1,4 +1,4 @@
-param([switch]$Fresh)
+param([switch]$Fresh,[string]$BuildDirectory='build')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
@@ -15,10 +15,10 @@ foreach ($line in $envLines) {
 $env:VSLANG = '1033'
 $cmake = Join-Path $vsRoot 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
 if (!(Test-Path $cmake)) { $cmake = (Get-Command cmake -ErrorAction Stop).Source }
-$configure = @('-S',$projectRoot,'-B',(Join-Path $projectRoot 'build'),'-G','Ninja','-DCMAKE_BUILD_TYPE=RelWithDebInfo')
+$buildRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot $BuildDirectory))
+$configure = @('-S',$projectRoot,'-B',$buildRoot,'-G','Ninja','-DCMAKE_BUILD_TYPE=RelWithDebInfo')
 # CMake's localized compiler probe can decode UTF-8 diagnostics as an ANSI
 # code page. Obtain the actual prefix so Ninja records header dependencies.
-$buildRoot = Join-Path $projectRoot 'build'
 New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
 $probeSource = Join-Path $buildRoot 'dependency-prefix.c'
 [IO.File]::WriteAllText($probeSource,"#include <stdio.h>`n",[Text.Encoding]::ASCII)
@@ -44,7 +44,7 @@ $configure += "-DSHOWINCLUDES_PREFIX_OVERRIDE:STRING=$prefix"
 if ($Fresh) { $configure += '--fresh' }
 & $cmake @configure
 if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
-& $cmake --build (Join-Path $projectRoot 'build')
+& $cmake --build $buildRoot
 if ($LASTEXITCODE -ne 0) { throw 'Build failed. Exit the isolated game before rebuilding; its debugger may hold the PDB open.' }
-& (Join-Path (Split-Path $cmake) 'ctest.exe') --test-dir (Join-Path $projectRoot 'build') --output-on-failure
+& (Join-Path (Split-Path $cmake) 'ctest.exe') --test-dir $buildRoot --output-on-failure
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }

@@ -29,3 +29,5 @@ jobs:
         run: python tests/selection_evidence_tests.py
       - name: Native font lifetime evidence validation
         run: python tests/font_lifetime_evidence_tests.py
+      - name: Native editor pixel geometry evidence validation
+        run: python tests/geometry_evidence_tests.py

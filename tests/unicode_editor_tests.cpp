@@ -68,5 +68,23 @@ int main() {
     try { replace_selection("A",1,1,"\xf0\x9f",100); } catch(const std::invalid_argument&) { rejected=true; }
     check(rejected,"truncated input cannot enter editor state");
     check(plan_edit("",0,EditKey::backspace).caret==0,"empty editor edge");
+    const std::string measured=u8"A中𠀀e\u0301🇨🇳👩‍👩‍👧‍👦Z";
+    const auto edges=grapheme_boundaries(measured);
+    const std::vector<int> widths={0,7,25,43,51,70,96,103};
+    PrefixMeasure measure=[&](std::size_t prefix) {
+        const auto found=std::lower_bound(edges.begin(),edges.end(),prefix);
+        check(found!=edges.end()&&*found==prefix,"native measurement receives only complete graphemes");
+        return widths[static_cast<std::size_t>(found-edges.begin())];
+    };
+    for(int pixel=-1;pixel<=110;++pixel) {
+        std::size_t fits=0,nearest=0;
+        for(std::size_t i=0;i<edges.size();++i) {
+            if(widths[i]<=pixel) fits=edges[i];
+            if(std::abs(widths[i]-pixel)<std::abs(widths[nearest]-pixel)) nearest=i;
+        }
+        check(fitting_grapheme_prefix(measured,pixel,measure)==fits,"pixel fitting matches complete measured prefixes");
+        check(nearest_grapheme_boundary(measured,pixel,measure)==edges[nearest],"pixel hits match the closest complete edge, including ties");
+    }
+    check(fitting_grapheme_prefix("",10,measure)==0&&nearest_grapheme_boundary("",10,measure)==0,"empty measured editor has one edge");
     std::cout<<"UTF-8 editor interior-byte, selection, commit and budget checks passed.\n";
 }

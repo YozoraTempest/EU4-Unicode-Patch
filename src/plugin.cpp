@@ -119,6 +119,13 @@ using EditorKey=bool(*)(void*,const KeyEvent*);
 EditorKey original_editor_key=nullptr;
 using EditorAction=void(*)(void*);
 EditorAction original_editor_left=nullptr,original_editor_right=nullptr,original_editor_selection=nullptr;
+struct EditorPoint { int x,y; };
+using EditorPointHit=void(*)(void*,const EngineString*,const EditorPoint*);
+using EditorWidthFit=int(*)(void*,const EngineString*);
+using EditorWordBreak=int(*)(void*,const EngineString*,int);
+EditorPointHit original_editor_point=nullptr;
+EditorWidthFit original_editor_width_fit=nullptr;
+EditorWordBreak original_editor_word_break=nullptr;
 using FontTableDestroy=void(*)(void* const*);
 FontTableDestroy original_font_table_destroy=nullptr;
 void destroy_font_table(void* const* table) {
@@ -133,6 +140,57 @@ bool single_line_editor(void* widget,std::string_view& value) {
        *reinterpret_cast<const std::uint16_t*>(base+0x54)>text->size) return false;
     value={text->data(),static_cast<std::size_t>(text->size)};
     return value.find('\n')==std::string_view::npos&&eu4unicode::valid_utf8(value);
+}
+eu4unicode::PrefixMeasure native_editor_measure(void* widget,std::string_view text) {
+    const auto base=static_cast<const std::byte*>(widget);
+    const auto font=*reinterpret_cast<void* const*>(base+0x98);
+    const auto flags=*reinterpret_cast<const unsigned char*>(base+0xe4);
+    using Measure=int(*)(void*,const char*,int,unsigned char);
+    const auto measure=reinterpret_cast<Measure>((*static_cast<void***>(font))[0x60/8]);
+    return [font,flags,measure,text](std::size_t length) {
+        const std::string prefix(text.substr(0,length));
+        return measure(font,prefix.c_str(),static_cast<int>(length),flags);
+    };
+}
+void editor_point(void* widget,const EngineString* row,const EditorPoint* point) {
+    std::string_view value;
+    const auto row_text=std::string_view(row->data(),static_cast<std::size_t>(row->size));
+    if(!single_line_editor(widget,value)||value!=row_text||value.empty()||point->x<0||point->y<0) {
+        original_editor_point(widget,row,point); return;
+    }
+    try {
+        const auto hit=eu4unicode::nearest_grapheme_boundary(value,point->x,native_editor_measure(widget,value));
+        auto base=static_cast<std::byte*>(widget);
+        *reinterpret_cast<std::uint16_t*>(base+0x54)=static_cast<std::uint16_t>(hit);
+        *reinterpret_cast<std::uint16_t*>(base+0x56)=0;
+    } catch(...) { log("Unicode editor hit testing failed; caret preserved."); }
+}
+int editor_width_fit(void* widget,const EngineString* text) {
+    const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
+    if(text->size>32000||!eu4unicode::valid_utf8(value)) return original_editor_width_fit(widget,text);
+    auto line_end=value.find('\n');
+    if(line_end!=std::string_view::npos&&line_end&&value[line_end-1]=='\r') --line_end;
+    const auto line=value.substr(0,line_end);
+    try {
+        if(line.empty()) return 0;
+        const auto base=static_cast<const std::byte*>(widget);
+        const auto font=*reinterpret_cast<void* const*>(base+0x98);
+        using Margin=int(*)(void*,unsigned char);
+        const auto margin=reinterpret_cast<Margin>((*static_cast<void***>(font))[0xa8/8])(font,1);
+        const auto width=static_cast<int>(*reinterpret_cast<const std::uint16_t*>(base+0x68))-margin;
+        const auto fit=eu4unicode::fitting_grapheme_prefix(line,width,native_editor_measure(widget,line));
+        // Consume an oversized first grapheme so native row construction makes
+        // progress without splitting it or inserting unbounded empty rows.
+        return static_cast<int>(fit?fit:eu4unicode::grapheme_boundaries(line)[1]);
+    } catch(...) { log("Unicode editor width fitting failed; row kept whole."); return static_cast<int>(line.size()); }
+}
+int editor_word_break(void* widget,const EngineString* text,int fit) {
+    const auto result=original_editor_word_break(widget,text,fit);
+    const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
+    if(result<0||text->size>32000||!eu4unicode::valid_utf8(value)) return result;
+    try {
+        return static_cast<int>(eu4unicode::grapheme_prefix(value,static_cast<std::size_t>(result)+1))-1;
+    } catch(...) { log("Unicode editor word boundary failed; word break excluded."); return -1; }
 }
 void editor_arrow(void* widget,bool right) {
     const auto original=right?original_editor_right:original_editor_left;
@@ -607,6 +665,10 @@ bool initialize(HMODULE module) {
         ,{0x15384d0,"40574883ec200fb74154488bf96685c0"}
         ,{0x15385a0,"48895c2408574883ec40440fb74156"}
         ,{0x153b170,"48895c240848896c24104889742418574883ec40"}
+        ,{0x15361f0,"48895c2408488974241048897c24204c89442418"}
+        ,{0x1536340,"448b45d0ff50603906440f4ff3488b55"}
+        ,{0x1537210,"48895c240848896c2410488974241848897c2420"}
+        ,{0x1539820,"48895c241848896c242057415441574883ec204c"}
         ,{0x1538560,"40534883ec20488b01488bd9ff9068010000"}
         ,{0x1538670,"40534883ec20488b01488bd9ff9068010000"}
         ,{0x153857f,"488b03488bcbff90d8000000"}
@@ -759,6 +821,12 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_right))!=MH_OK ||
            MH_CreateHook(image+0x153b170,reinterpret_cast<void*>(editor_selection),
              reinterpret_cast<void**>(&original_editor_selection))!=MH_OK ||
+           MH_CreateHook(image+0x15361f0,reinterpret_cast<void*>(editor_point),
+             reinterpret_cast<void**>(&original_editor_point))!=MH_OK ||
+           MH_CreateHook(image+0x1537210,reinterpret_cast<void*>(editor_width_fit),
+             reinterpret_cast<void**>(&original_editor_width_fit))!=MH_OK ||
+           MH_CreateHook(image+0x1539820,reinterpret_cast<void*>(editor_word_break),
+             reinterpret_cast<void**>(&original_editor_word_break))!=MH_OK ||
            MH_CreateHook(image+0x95110,reinterpret_cast<void*>(assign_editor_prefix),
              reinterpret_cast<void**>(&original_assign_text))!=MH_OK ||
            MH_CreateHook(image+0xb19590,reinterpret_cast<void*>(filter_editor_text),
