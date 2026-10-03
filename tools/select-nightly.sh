@@ -15,5 +15,5 @@ if [ -n "${REQUESTED_COMMIT:-}" ]; then
     git submodule update --init --recursive
 fi
 
-build_date=$(TZ=Asia/Shanghai date +%Y%m%d)
+build_date=$(TZ=CST-8 date +%Y%m%d)
 printf 'date=%s\n' "$build_date" >> "$GITHUB_OUTPUT"
