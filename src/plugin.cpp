@@ -201,6 +201,7 @@ std::uintptr_t g_input_return;
 std::uintptr_t g_text_limit_return;
 std::uintptr_t g_font_allocate,g_font_duplicate,g_font_store_return,g_font_initialize,g_font_skip,g_engine_new;
 std::uintptr_t g_path_pair_return;
+std::uintptr_t g_wide_compare_left_return,g_wide_compare_right_return;
 void main_draw_hook(); void main_copy_hook(); void main_measure_hook();
 void bitmap_measure_hook(); void bitmap_split_hook();
 void heap_zero_hook();
@@ -218,6 +219,7 @@ void input_hook();
 void text_limit_hook();
 void font_lookup_hook(); void font_store_hook();
 void path_pair_hook();
+void wide_compare_left_hook(); void wide_compare_right_hook();
 void font_allocate_hook();
 void* allocate_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept {
     auto record=eu4unicode::allocate_unicode_glyph(table,scalar);
@@ -428,6 +430,8 @@ bool initialize(HMODULE module) {
         ,{0x1175c2c,"e84ff55800"}
         ,{0x1705180,"8b411085c00f840c010000"}
         ,{0x19fc097,"8bca4983c302c1e10a0bc885c97417"}
+        ,{0x19fbc23,"c1e10a0bc8eb05b93f0000004c8bfa"}
+        ,{0x19fbca2,"c1e10a0bc8eb05b93f0000004c8bea"}
         ,{0xefc33b,"e8b0406500"}
         ,{0xefc344,"e8278a8000"}
         ,{0xf16156,"e895a26300"}
@@ -490,6 +494,8 @@ bool initialize(HMODULE module) {
     g_font_skip=address(0x1595f01);
     g_engine_new=address(0x1a332d4);
     g_path_pair_return=address(0x19fc0a6);
+    g_wide_compare_left_return=address(0x19fbc2f);
+    g_wide_compare_right_return=address(0x19fbcae);
     repeat_text=reinterpret_cast<RepeatText>(address(0x90320));
     append_text=reinterpret_cast<AppendText>(address(0x932f0));
     register_text=reinterpret_cast<RegisterText>(address(0x16fa8d0));
@@ -531,7 +537,9 @@ bool initialize(HMODULE module) {
         {0x1595c9b,reinterpret_cast<void*>(font_lookup_hook)},
         {0x1595cad,reinterpret_cast<void*>(font_allocate_hook)},
         {0x1595ceb,reinterpret_cast<void*>(font_store_hook)},
-        {0x19fc097,reinterpret_cast<void*>(path_pair_hook)} };
+        {0x19fc097,reinterpret_cast<void*>(path_pair_hook)},
+        {0x19fbc23,reinterpret_cast<void*>(wide_compare_left_hook)},
+        {0x19fbca2,reinterpret_cast<void*>(wide_compare_right_hook)} };
     for(const auto& hook:hooks) {
         if(MH_CreateHook(image+hook.rva,hook.callback,nullptr)!=MH_OK) {
             log("Hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;

@@ -19,6 +19,7 @@ if(new NativeFunction(plugin.getExportByName('Eu4UnicodeProbeEnabled'),'int',[])
   throw new Error('The isolated Unicode patch is disabled');
 const encode=new NativeFunction(base.add(0x19fc030),'void',['pointer','pointer','uint64']);
 const decode=new NativeFunction(base.add(0x19fc590),'void',['pointer','pointer','uint64']);
+const compare=new NativeFunction(base.add(0x19fbb90),'int',['pointer','pointer']);
 // Fresh scratch buffers only: no game objects or files are modified.
 for(const value of ['ASCII','法兰西','𐀀','𠀀','😀','\u{10ffff}']) {
   const wide=Memory.allocUtf16String(value),bytes=Memory.alloc(128),again=Memory.alloc(128);
@@ -31,6 +32,21 @@ const narrow=Memory.alloc(5);
 encode(Memory.allocUtf16String('𠀀A'),narrow,5);
 if(narrow.readUtf8String()!=='𠀀') throw new Error('Native encoder split a scalar at its capacity');
 send({event:'path-capacity',passed:true,capacity:5,value:narrow.readUtf8String()});
+// Exercise both native surrogate-decoding branches and the original casefold
+// table. U+10000 must not act as NUL, and U+10041 must not alias ASCII A.
+for(const [left,right,expected] of [
+  ['ASCII','ascii',0],['Straße','STRASSE',0],['法兰西','法兰西',0],
+  ['\u{10000}','',1],['\u{10000}A','\u{10000}B',-1],
+  ['\u{10041}','A',1],['\u{20000}','\u{10000}',1],
+  ['\u{10400}','\u{10428}',0],['😀','\u{10ffff}',-1]
+]) {
+  for(const [a,b,sign] of [[left,right,expected],[right,left,-expected]]) {
+    const result=compare(Memory.allocUtf16String(a),Memory.allocUtf16String(b));
+    const passed=Math.sign(result)===sign;
+    send({event:'wide-path-compare',left:a,right:b,result,expected:sign,passed});
+    if(!passed)throw new Error('Native UTF-16 comparison failed');
+  }
+}
 for(const name of ['CreateFileW','CreateFileA']) {
   Interceptor.attach(Process.getModuleByName('KernelBase.dll').getExportByName(name),{
     onEnter(args) {
@@ -75,7 +91,7 @@ def main():
                 if value.get("type") == "error":
                     errors.append(value)
                     print(value, flush=True)
-                if value.get("payload", {}).get("event") in {"ready", "path-conversion", "path-capacity"}:
+                if value.get("payload", {}).get("event") in {"ready", "path-conversion", "path-capacity", "wide-path-compare"}:
                     print(json.dumps(value["payload"], ensure_ascii=True), flush=True)
             script.on("message", message)
             script.load()
