@@ -1,13 +1,13 @@
 # 字体
 
-玩家包内置三个开源字体原文件，运行时使用进程私有的 DirectWrite 字体集合。
+补丁优先使用玩家的 Windows 系统字体。系统缺字时，使用已放入游戏目录的可选字体包；未安装字体包也可正常加载。
 
 | 字体 | 版本 | 用途 |
 | --- | --- | --- |
-| [Source Han Sans SC Regular](https://github.com/adobe-fonts/source-han-sans/releases/tag/2.005R) | 2.005R | 中文界面，优先使用 |
+| [Source Han Sans SC Regular](https://github.com/adobe-fonts/source-han-sans/releases/tag/2.005R) | 2.005R | 补充中文及其他字形 |
 | [Plangothic P1 / P2 Regular](https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic_Project) | V2.9.5795 | 扩展汉字 |
 
-字体固定版本与 SHA-256 见[清单](../fixtures/open-fonts.json)，SIL OFL 1.1 许可证随包提供。字体不安装到 Windows。
+三个原文件单独发布在可选字体包中，放入 `plugins/eu4_unicode_patch/fonts/` 后重启游戏即可使用。字体固定版本与 SHA-256 见[清单](../fixtures/open-fonts.json)，SIL OFL 1.1 许可证随包提供，字体不安装到 Windows。安装后仍以系统字体为先。
 
 ## 覆盖
 
@@ -15,7 +15,7 @@
 
 ## 图集
 
-玩家包预生成 14、16、18、24、88px 五张 2048×4096 图集，每张初始包含 192 个拉丁字符及省略号。图集仅从包内开源字体生成。原版文字字体路径在加载时转到补丁的独立目录；颜色与效果仍由原生字体定义控制。
+主包保留 14、16、18、24、88px 五张 2048×4096 基础图集，每张初始包含 192 个拉丁字符及省略号。这些图集从思源黑体生成，主包不附完整字体文件。原版文字字体路径在加载时转到补丁的独立目录，颜色与效果仍由原生字体定义控制。
 
 未收录字符首次出现时生成字形并排队，在游戏原生纹理查找阶段上传。旧坐标和 UV 保留。共享纹理的字体共用一页，Reset 后从 CPU staging 恢复像素。
 
@@ -27,6 +27,7 @@
 
 ```powershell
 .\tools\prepare-player-assets.ps1
+.\build\native_font_atlas_tests.exe build\player-assets private\no-font-pack --system-only
 .\build\native_font_atlas_tests.exe build\player-assets private\open-fonts --player
 ```
 

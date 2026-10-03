@@ -1,0 +1,118 @@
+{
+  "distribution": "player overlay",
+  "font_preference": "system first",
+  "game_version": "1.37.5.0 Inca Windows x64",
+  "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+  "dll_sha256": "f052a9534e0729803176ac8b2cf3b8bd1c48126b71574850ba9a0c10e4566e0a",
+  "loader_sha256": "570ac1afd441e5c1344ba6aff64a23bb535fdee2408ffaa76995e3f9c5bfcf7a",
+  "vanilla_core_sha256": "df3df3caf92db0cae8e5d7168de3d250a223d8a7e5856c1f9c19f0eba4eb23ab",
+  "enabled_mods": [],
+  "loaded_modules": {
+    "enabled": 1,
+    "legacy_loaded": false,
+    "probe_loaded": false,
+    "menu_patch_loaded": true,
+    "loader_loaded": true
+  },
+  "game_startup": {
+    "ordinary_directory": true,
+    "debug_argument": false,
+    "optional_font_files": 0,
+    "observer": "OS module enumeration and startup log; no injected agent",
+    "observed_seconds": 60,
+    "ui_upload_sizes": [
+      18
+    ],
+    "ui_scalars": [
+      "U+6CD5",
+      "U+5170",
+      "U+897F"
+    ],
+    "log": "player-system-fonts-startup.log"
+  },
+  "assets": [
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-14.dds",
+      "bytes": 33554560,
+      "sha256": "342f2753ec8f44ff0b77dfe322293f7dc121a9f39c5c06ba609c211ae99ba321"
+    },
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-14.fnt",
+      "bytes": 15427,
+      "sha256": "485d2db3ababb047215fa62fcdaca01f99eff17c1b36ed567f230be51025e0bb"
+    },
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-16.dds",
+      "bytes": 33554560,
+      "sha256": "ba9d49b803c89422e71b7597c662bca57e4e13b97560a0e76e591b69bde25eae"
+    },
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-16.fnt",
+      "bytes": 15507,
+      "sha256": "e487de333b12ecd1d6cb212944aa140e2762999f0f3571ca2294a2abcc1278f4"
+    },
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-18.dds",
+      "bytes": 33554560,
+      "sha256": "e8803ae1afb12eab8c29c4a6d3d10c0244c7cdbc7a0ea75a75719d471be8ed8b"
+    },
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-18.fnt",
+      "bytes": 15644,
+      "sha256": "e67dab89503238a8cf59390e346a3ecbd0b8aa2a37cfc45b32292dcc1fe20505"
+    },
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-24.dds",
+      "bytes": 33554560,
+      "sha256": "9d47c9e2b838a1a54ff7bb49fe762bcfca83c8688a71e4142f0400214222282c"
+    },
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-24.fnt",
+      "bytes": 15733,
+      "sha256": "f464d46b96d34ca727047749911256f27e071e019fcaee1ca6a8d775d637f6e9"
+    },
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-map.dds",
+      "bytes": 33554560,
+      "sha256": "6b2a6edd8d35c9884b4be0522b94fd6dc193dc0825aabbcaf2c1d079b2c80f9d"
+    },
+    {
+      "path": "gfx/fonts/eu4-unicode/zh-hans-map.fnt",
+      "bytes": 16097,
+      "sha256": "8bdce7ac0ba35a41a1754771c8453b10716f758d82bece6c1abf5cfc76506c69"
+    }
+  ],
+  "d3d9_component": {
+    "sizes": [
+      14,
+      16,
+      18,
+      24,
+      88
+    ],
+    "exact_alpha": true,
+    "system_only": true,
+    "optional_font_pack": true,
+    "system_font_priority": true,
+    "optional_missing_system_scalar": "U+323B0",
+    "system_only_supplementary_scalar": "U+1F600",
+    "reset": true,
+    "stable_pointer": true,
+    "owner_release": true,
+    "system_log": "player-system-atlas-device.log",
+    "optional_log": "player-optional-atlas-device.log"
+  },
+  "input_validation": "Unchanged input implementation; prior development-build physical tests retained; full v0.1.2 physical sequence not rerun",
+  "scope": "Normal game startup without font files or injected agents; UI dynamic uploads logged; exact D3D9 component pixel checks separately in both font modes; no new full in-game GPU or physical IME claim",
+  "optional_game_startup": {
+    "ordinary_directory": true,
+    "debug_argument": false,
+    "optional_font_files": 3,
+    "observer": "OS module enumeration and startup log; no injected agent",
+    "observed_seconds": 55,
+    "ui_upload_sizes": [
+      18
+    ],
+    "log": "player-optional-fonts-startup.log"
+  }
+}

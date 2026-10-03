@@ -713,7 +713,7 @@ bool initialize(HMODULE module) {
         log("Refused: executable is outside the isolated research fixture."); return false;
     }
 #else
-    log("EU4 Unicode Patch v0.1.1-experimental initializing.");
+    log("EU4 Unicode Patch v0.1.2-experimental initializing.");
 #endif
     if(!hash_matches(exe)) { log("Refused: executable hash mismatch."); return false; }
     if(GetModuleHandleW(L"plugin64.dll")
@@ -730,11 +730,6 @@ bool initialize(HMODULE module) {
         if(!std::filesystem::is_regular_file(assets/(std::wstring(name)+L".fnt"))||
            !std::filesystem::is_regular_file(assets/(std::wstring(name)+L".dds"))) {
             log("Refused: bundled font atlases are missing; copy the complete player package.");return false;
-        }
-    }
-    for(const auto name:{L"SourceHanSansSC-Regular.otf",L"PlangothicP1-Regular.ttf",L"PlangothicP2-Regular.ttf"}) {
-        if(!std::filesystem::is_regular_file(fonts/name)) {
-            log("Refused: bundled open fonts are missing; copy the complete player package.");return false;
         }
     }
 #endif
@@ -973,7 +968,7 @@ bool initialize(HMODULE module) {
     eu4unicode::configure_font_atlases(exe.parent_path().parent_path()/L"test-mod",
         std::filesystem::path(dll_path).parent_path()/L"fonts",log);
 #else
-    eu4unicode::configure_font_atlases(exe.parent_path(),fonts,log,"gfx/fonts/eu4-unicode/");
+    eu4unicode::configure_font_atlases(exe.parent_path(),fonts,log,"gfx/fonts/eu4-unicode/",true);
 #endif
     if(MH_CreateHook(image+0x15953c0,reinterpret_cast<void*>(load_font_atlas),
         reinterpret_cast<void**>(&original_font_load))!=MH_OK||

@@ -2,6 +2,14 @@
 
 测试平台：本机 Windows / Steam EU4 1.37.5.0 x64，非铁人。游戏验证使用独立用户目录与自有副本。
 
+## v0.1.2 系统字体与可选字库
+
+主包不附完整字体文件。无字库和装有可选字库两种安装均通过普通目录的游戏启动检查，记录了 18px 中文字形上传。检查使用系统模块枚举和日志，未注入观察工具；字体优先级为系统字体，原版字体定义保持原样。[报告](evidence/player-system-fonts.json) · [主包启动日志](evidence/player-system-fonts-startup.log) · [可选字库启动日志](evidence/player-optional-fonts-startup.log)
+
+两种模式均通过 14、16、18、24、88px 五种字号的真实 D3D9 逐 alpha 字节检查。装有可选字库时，常用汉字像素仍与系统字体一致；系统缺少的 U+323B0 由可选字库补充。未装字库时，该缺字保留占位行为，常用汉字仍可生成。另检查工作线程仅生成 CPU 数据、旧区域保留、Reset 恢复、稳定指针和释放。[系统字体记录](evidence/player-system-atlas-device.log) · [可选字库记录](evidence/player-optional-atlas-device.log)
+
+本版输入逻辑沿用已有实现，尚未完成整套人工输入复验。设备组件的像素检查与游戏内文字显示分别记录。
+
 ## v0.1.1 玩家版
 
 正式 DLL 的 SHA-256：

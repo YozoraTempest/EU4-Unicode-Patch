@@ -1,4 +1,4 @@
-EU4 Unicode Patch v0.1.1-experimental
+EU4 Unicode Patch v0.1.2-experimental
 适用：EU4 1.37.5.0 Inca，Windows x64，Windows 10 1903 或更新版本。
 
 安装
@@ -10,10 +10,15 @@ EU4 Unicode Patch v0.1.1-experimental
 eu4.exe
 VERSION.dll
 plugins/eu4_unicode_patch.dll
-plugins/eu4_unicode_patch/fonts/三个开源字体原文件
 gfx/fonts/eu4-unicode/五套 .fnt 和 .dds
 
 不需要运行脚本、编译、复制游戏或安装系统字体。
+
+可选字体
+主包优先使用系统字体，不附完整字库。需要补充生僻字时，下载
+EU4UnicodePatch-fonts-v0.1.2-experimental.zip，同样覆盖进游戏目录后重启。
+三个字体文件位于 plugins/eu4_unicode_patch/fonts/，安装后仍优先使用系统字体。
+删除 fonts/ 文件夹即可取消可选字库；v0.1.1 留下的字库也按可选字体使用。
 
 旧双字节补丁
 本包的加载器跳过 plugins/plugin64.dll、开发探针 eu4_unicode_probe.dll
@@ -30,7 +35,7 @@ gfx/fonts/eu4-unicode/五套 .fnt 和 .dds
 
 卸载
 退出游戏，删除 plugins/eu4_unicode_patch.dll、plugins/eu4_unicode_patch/、
-gfx/fonts/eu4-unicode/、EU4UnicodePatch.README.txt。
+gfx/fonts/eu4-unicode/、EU4UnicodePatch.README.txt 和 EU4UnicodePatch.FONTS.txt。
 曾备份 VERSION.dll 时恢复备份；若本包是首次安装的加载器，删除本包的 VERSION.dll。
 恢复旧加载器后，留下的旧双字节插件及其自动更新会恢复原来的行为。
 

@@ -27,6 +27,8 @@
 
 ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径通过游戏的字符串赋值函数替换，使用原生分配器；其他模组字体路径不改写。
 
+玩家版按需字形先用系统 DirectWrite 字体；缺字后才加载游戏目录中的可选字体文件。开发探针保留文件字体优先的验证方式。安装或移除字体包后需重启游戏。
+
 测宽阶段只生成 CPU 字形，纹理查找阶段上传。补丁不持有 default-pool 纹理引用。字体拥有者和设备 Reset 的处理见[字体说明](open-fonts.md)。
 
 编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。外交搜索只修改已观察的国家名过滤调用者。
@@ -61,6 +63,8 @@ python tools\migrate-localisation.py '旧模组的localisation目录' private\mi
 ```
 
 玩家副本位于 `private/player-install/Europa Universalis IV`，独立用户目录为 `private/player-userdir`。脚本保留原版字体定义和原安装的旧插件，覆盖玩家包，不修改原安装。`-SaveFile` 可省略。EU4 的 `userdir.txt` 路径不要带尾部换行。
+
+默认测试无可选字体的主包；加上 `-OptionalFonts` 可测试字体包安装后的行为。
 
 ## 原生探针
 

@@ -42,6 +42,7 @@ std::filesystem::path fixture_path,font_path;
 std::string atlas_prefix;
 FontLog logger=nullptr;
 std::shared_ptr<const TextFonts> text_fonts;
+bool prefer_system=false,font_files_checked=false;
 std::unordered_map<const void*,std::shared_ptr<Atlas>> bindings;
 std::recursive_mutex mutex;
 using DeviceReset=HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*,D3DPRESENT_PARAMETERS*);
@@ -71,6 +72,26 @@ int property(const std::string& line,const char* key) {
     return std::stoi(line.substr(pos+name.size()));
 }
 IDirect3DTexture9* texture_of(void* wrapper) { return wrapper?*static_cast<IDirect3DTexture9**>(wrapper):nullptr; }
+ScalarGlyph atlas_glyph(std::uint32_t scalar,int size) {
+    if(prefer_system) {
+        try { return rasterize_scalar(scalar,size); }
+        catch(const std::domain_error&) {}
+    }
+    if(!font_files_checked) {
+        font_files_checked=true;
+        std::vector<std::filesystem::path> files;
+        for(const auto name:{L"SourceHanSansSC-Regular.otf",L"PlangothicP1-Regular.ttf",L"PlangothicP2-Regular.ttf"}) {
+            const auto file=font_path/name;
+            if(!prefer_system||std::filesystem::is_regular_file(file)) files.push_back(file);
+        }
+        if(!files.empty()) text_fonts=std::make_shared<TextFonts>(files);
+        if(logger&&prefer_system) {
+            char message[100];std::snprintf(message,sizeof(message),"Optional font files loaded: %zu",files.size());logger(message);
+        }
+    }
+    if(!text_fonts) throw std::domain_error("System fonts have no glyph; the optional font pack may supply it.");
+    return rasterize_scalar(scalar,size,text_fonts);
+}
 void prepare_staging(Atlas& a,IDirect3DTexture9* texture) {
     ComPtr<IDirect3DDevice9> device;
     checked(texture->GetDevice(&device));
@@ -131,8 +152,11 @@ void sync(Atlas& a,void* wrapper) {
     a.pending.clear();
 }
 }
-void configure_font_atlases(const std::filesystem::path& fixture,const std::filesystem::path& fonts,FontLog log,std::string_view prefix) {
+void configure_font_atlases(const std::filesystem::path& fixture,const std::filesystem::path& fonts,FontLog log,std::string_view prefix,bool prefer_system_fonts) {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
     fixture_path=fixture;font_path=fonts;logger=log;atlas_prefix=prefix;
+    prefer_system=prefer_system_fonts;font_files_checked=false;text_fonts.reset();
+    if(logger&&prefer_system) logger("Font source: system fonts first; optional font files supplement missing glyphs.");
 }
 void register_font_atlas(void* object) noexcept {
     try {
@@ -182,9 +206,7 @@ NativeGlyph* find_dynamic_glyph(void* const* table,std::uint32_t scalar) noexcep
         if(a.rejected.count(scalar)) return nullptr;
         auto found=a.glyphs.find(scalar);
         if(found==a.glyphs.end()) {
-            if(!text_fonts) text_fonts=std::make_shared<TextFonts>(std::vector<std::filesystem::path>{
-                font_path/L"SourceHanSansSC-Regular.otf",font_path/L"PlangothicP1-Regular.ttf",font_path/L"PlangothicP2-Regular.ttf"});
-            auto glyph=rasterize_scalar(scalar,a.size,text_fonts);
+            auto glyph=atlas_glyph(scalar,a.size);
             auto x=a.x,y=a.y,row=a.row;
             if(x+glyph.metrics.width+1>a.width) { x=1;y+=row+1;row=0; }
             if(glyph.metrics.width+2>a.width||y+glyph.metrics.height+1>a.height) throw std::length_error("Native font atlas capacity exhausted");

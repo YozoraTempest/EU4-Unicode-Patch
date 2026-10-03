@@ -26,10 +26,11 @@ cd EU4UnicodePatch
 ```powershell
 .\tools\prepare-player-assets.ps1
 .\build\open_font_tests.exe private\open-fonts private\open-fonts.png
+.\build\native_font_atlas_tests.exe build\player-assets private\no-font-pack --system-only
 .\build\native_font_atlas_tests.exe build\player-assets private\open-fonts --player
 ```
 
-生成图集时只允许固定开源字体提供字形，发现系统字体或缺字即失败。设备检查使用真实 D3D9，覆盖五种字号、扩展汉字、旧区域保留、Reset、纹理地址复用与释放。
+基础图集只从固定开源字体生成。运行时系统字体由玩家本机提供。设备检查分别验证无字库和可选字库模式，覆盖五种字号、系统优先、缺字补充、旧区域保留、Reset 与释放。
 
 历史证据检查：
 
@@ -44,12 +45,13 @@ Get-ChildItem tests\*.py | ForEach-Object {
 
 ```powershell
 .\tools\stage-player.ps1
+.\tools\stage-fonts.ps1
 .\tools\package.ps1
 ```
 
-生成 `dist/EU4UnicodePatch-1.37.5-v0.1.1-experimental-drop-in.zip` 和 `dist/SHA256SUMS.txt`。ZIP 顶层为 `VERSION.dll`、`plugins/`、`gfx/` 和安装说明。源码、准备脚本、测试模组和游戏资源不进入玩家包。
+生成主包 `dist/EU4UnicodePatch-1.37.5-v0.1.2-experimental-drop-in.zip`、可选字体包 `dist/EU4UnicodePatch-fonts-v0.1.2-experimental.zip` 和 `dist/SHA256SUMS.txt`。两个 ZIP 均直接覆盖进游戏目录，源码、测试模组和游戏资源不进入玩家包。
 
-打包脚本核对正式 DLL、加载器、已验收图集及固定字体的 SHA-256。包内 `plugins/eu4_unicode_patch/manifest.json` 记录源提交与文件校验值。发布说明见 [v0.1.1](releases/v0.1.1-experimental.md)。
+打包脚本核对正式 DLL、加载器、已验收图集及固定字体的 SHA-256。主包的 `manifest.json` 和字体包的 `font-manifest.json` 记录源提交与文件校验值，互不覆盖。发布说明见 [v0.1.2](releases/v0.1.2-experimental.md)。
 
 ## 版本校验
 

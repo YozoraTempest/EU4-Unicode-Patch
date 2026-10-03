@@ -1,0 +1,23 @@
+EU4 Unicode Patch 可选字体包
+
+用于补充系统字体缺少的汉字。包含思源黑体 SC Regular 与遍黑 P1/P2 Regular。
+
+安装
+1. 先安装 EU4 Unicode Patch 主包。
+2. 退出游戏，将本 ZIP 全部内容复制到 eu4.exe 所在目录，合并文件夹。
+3. 重新启动游戏。
+
+字体位于 plugins/eu4_unicode_patch/fonts/，仅在游戏内加载，无需安装到 Windows。
+补丁仍优先使用系统字体，系统缺字时才使用此包。
+
+移除
+退出游戏，删除 plugins/eu4_unicode_patch/fonts/ 和 EU4UnicodePatch.FONTS.txt。
+
+思源黑体：Adobe，2.005R。
+遍黑：Fitzgerald P. Köeingsegg，V2.9.5795。
+字体保留原有名称和内容，采用 SIL Open Font License 1.1。
+完整许可证位于 plugins/eu4_unicode_patch/licenses/。
+
+项目：https://github.com/YozoraTempest/EU4-Unicode-Patch
+QQ 交流群：欧陆风云 · 永夜的星月回廊
+https://qm.qq.com/q/Csnqqd8rUO

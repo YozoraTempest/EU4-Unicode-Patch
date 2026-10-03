@@ -1,6 +1,6 @@
 # 安装与卸载
 
-下载 Release 中的 `EU4UnicodePatch-1.37.5-v0.1.1-experimental-drop-in.zip`。GitHub 自动生成的 Source code 是源码，不是玩家补丁。
+下载 Release 中的 `EU4UnicodePatch-1.37.5-v0.1.2-experimental-drop-in.zip`。GitHub 自动生成的 Source code 是源码，不是玩家补丁。
 
 ## 安装
 
@@ -13,9 +13,6 @@
 ```text
 VERSION.dll
 plugins/eu4_unicode_patch.dll
-plugins/eu4_unicode_patch/fonts/SourceHanSansSC-Regular.otf
-plugins/eu4_unicode_patch/fonts/PlangothicP1-Regular.ttf
-plugins/eu4_unicode_patch/fonts/PlangothicP2-Regular.ttf
 gfx/fonts/eu4-unicode/zh-hans-14.fnt / .dds
 gfx/fonts/eu4-unicode/zh-hans-16.fnt / .dds
 gfx/fonts/eu4-unicode/zh-hans-18.fnt / .dds
@@ -24,6 +21,12 @@ gfx/fonts/eu4-unicode/zh-hans-map.fnt / .dds
 ```
 
 无需脚本、编译或系统字体安装。不要把 ZIP 整个放进 `plugins`，也不要多套一层 `EU4UnicodePatch` 文件夹。
+
+## 可选字体包
+
+补丁优先使用系统字体。需要生僻字或系统缺少的汉字时，下载 `EU4UnicodePatch-fonts-v0.1.2-experimental.zip`，退出游戏后将其中全部内容复制到同一游戏目录，再重新启动。
+
+三个字体文件放在 `plugins/eu4_unicode_patch/fonts/`，仅供游戏使用。安装后仍优先使用系统字体；删除这个文件夹即可移除可选字库。
 
 ## 旧补丁与汉化
 
@@ -35,6 +38,8 @@ gfx/fonts/eu4-unicode/zh-hans-map.fnt / .dds
 
 退出游戏后，把新版玩家包覆盖到同一目录。
 
+从 v0.1.1 更新时，原有 `fonts/` 文件夹会作为可选字库继续使用；只用系统字体时可删除它。
+
 ## 卸载
 
 退出游戏，删除以下补丁文件：
@@ -45,6 +50,7 @@ plugins/eu4_unicode_patch/
 plugins/eu4_unicode_patch.log
 gfx/fonts/eu4-unicode/
 EU4UnicodePatch.README.txt
+EU4UnicodePatch.FONTS.txt
 ```
 
 恢复备份的 `VERSION.dll`；此前没有加载器时，删除本包的 `VERSION.dll`。其他插件需要加载器时保留或重新安装所需加载器。恢复旧加载器后，旧双字节补丁及其自动更新恢复原来的行为。

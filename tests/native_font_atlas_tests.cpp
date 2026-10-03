@@ -40,8 +40,9 @@ std::vector<std::uint8_t> readback(IDirect3DDevice9* device,IDirect3DTexture9* t
 int wmain(int argc,wchar_t** argv) {
     HWND window=nullptr;
     try {
-        if(argc!=3&&argc!=4) throw std::invalid_argument("Usage: native_font_atlas_tests ASSET_DIRECTORY FONT_DIRECTORY [--player]");
-        const bool player=argc==4&&std::wstring_view(argv[3])==L"--player";
+        if(argc!=3&&argc!=4) throw std::invalid_argument("Usage: native_font_atlas_tests ASSET_DIRECTORY FONT_DIRECTORY [--player|--system-only]");
+        const bool system_only=argc==4&&std::wstring_view(argv[3])==L"--system-only";
+        const bool player=system_only||(argc==4&&std::wstring_view(argv[3])==L"--player");
         if(argc==4&&!player) throw std::invalid_argument("Unknown atlas test option");
         require(MH_Initialize()==MH_OK,"MinHook initialization failed");
         WNDCLASSW type{};type.lpfnWndProc=DefWindowProcW;type.hInstance=GetModuleHandleW(nullptr);type.lpszClassName=L"EU4UnicodeFontGpuTests";
@@ -69,18 +70,27 @@ int wmain(int argc,wchar_t** argv) {
         *reinterpret_cast<int*>(f+0x970)=1;*reinterpret_cast<int*>(f+0x978)=2048;*reinterpret_cast<int*>(f+0x97c)=4096;
         eu4unicode::original_texture_lookup=lookup;
         graphics_thread=GetCurrentThreadId();
-        eu4unicode::configure_font_atlases(argv[1],argv[2],log,player?"gfx/fonts/eu4-unicode/":"gfx/fonts/");
+        eu4unicode::configure_font_atlases(argv[1],argv[2],log,player?"gfx/fonts/eu4-unicode/":"gfx/fonts/",player);
         eu4unicode::register_font_atlas(f);
         const std::filesystem::path fonts_directory(argv[2]);
-        auto fonts=std::make_shared<eu4unicode::TextFonts>(std::vector<std::filesystem::path>{fonts_directory/L"SourceHanSansSC-Regular.otf",
+        std::shared_ptr<const eu4unicode::TextFonts> fonts;
+        if(!system_only) fonts=std::make_shared<eu4unicode::TextFonts>(std::vector<std::filesystem::path>{fonts_directory/L"SourceHanSansSC-Regular.otf",
             fonts_directory/L"PlangothicP1-Regular.ttf",fonts_directory/L"PlangothicP2-Regular.ttf"});
+        const auto expected=[player,fonts](std::uint32_t scalar,int size) {
+            if(player) {
+                try { return eu4unicode::rasterize_scalar(scalar,size); }
+                catch(const std::domain_error&) { if(!fonts) throw; }
+            }
+            return eu4unicode::rasterize_scalar(scalar,size,fonts);
+        };
+        const auto supplementary_scalar=system_only?0x1f600u:0x30000u;
         auto task=std::async(std::launch::async,[table]{return eu4unicode::find_dynamic_glyph(table,0x5b54);});
         auto glyph=task.get();
         require(glyph!=nullptr,"On-demand native glyph was not allocated");
         eu4unicode::synchronize_font_texture(&wrapper,1);
-        const auto reference=eu4unicode::rasterize_scalar(0x5b54,16,fonts);
+        const auto reference=expected(0x5b54,16);
         require(readback(device.Get(),texture.Get(),*glyph)==reference.alpha,"First native GPU upload differs from its raster");
-        auto supplementary=eu4unicode::find_dynamic_glyph(table,0x30000);
+        auto supplementary=eu4unicode::find_dynamic_glyph(table,supplementary_scalar);
         require(supplementary!=nullptr,"Supplementary native glyph missing");
         eu4unicode::synchronize_font_texture(&wrapper,1);
         require(readback(device.Get(),texture.Get(),*glyph)==reference.alpha,"Second upload damaged the first region");
@@ -90,7 +100,7 @@ int wmain(int argc,wchar_t** argv) {
         wrapper.texture=texture.Get();
         eu4unicode::synchronize_font_texture(&wrapper,1);
         require(readback(device.Get(),texture.Get(),*glyph)==reference.alpha,"Device reset lost the cached glyph region");
-        require(readback(device.Get(),texture.Get(),*supplementary)==eu4unicode::rasterize_scalar(0x30000,16,fonts).alpha,"Device reset lost the supplementary glyph");
+        require(readback(device.Get(),texture.Get(),*supplementary)==expected(supplementary_scalar,16).alpha,"Device reset lost the supplementary glyph");
         require(eu4unicode::find_dynamic_glyph(table,0x5b54)==glyph,"Native glyph pointer changed after reset");
         std::cout<<"Device reset restored both cached GPU regions; native pointer reuse="<<(previous==texture.Get())<<".\n";
         eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
@@ -102,17 +112,42 @@ int wmain(int argc,wchar_t** argv) {
                 *reinterpret_cast<const char**>(f+0xe0)=size_path.c_str();
                 *reinterpret_cast<std::uint64_t*>(f+0xf0)=size_path.size();
                 eu4unicode::register_font_atlas(f);
-                for(const auto scalar:{0x4e2du,0x30000u}) {
+                for(const auto scalar:{0x4e2du,supplementary_scalar}) {
                     auto record=eu4unicode::find_dynamic_glyph(table,scalar);
                     require(record!=nullptr,"Player size has no dynamic glyph");
                     eu4unicode::synchronize_font_texture(&wrapper,1);
-                    require(readback(device.Get(),texture.Get(),*record)==eu4unicode::rasterize_scalar(scalar,size,fonts).alpha,
+                    require(readback(device.Get(),texture.Get(),*record)==expected(scalar,size).alpha,
                             "Player UI/map atlas GPU region differs from its raster");
                 }
                 eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
             }
             require(eu4unicode::unicode_glyph_usage().glyphs==0,"Player size loop leaked records");
             std::cout<<"Player assets: all five UI/map sizes match real D3D9 texture pixels.\n";
+        }
+        if(player) {
+            // This CJK Extension J scalar is absent from the local system fonts.
+            // Its control layout distinguishes system coverage from the add-on.
+            bool system_has_glyph=true;
+            try { eu4unicode::rasterize_scalar(0x323b0,16); }
+            catch(const std::domain_error&) { system_has_glyph=false; }
+            require(!system_has_glyph,"System font control unexpectedly covers the optional-font sample");
+            *reinterpret_cast<const char**>(f+0xe0)=path;
+            *reinterpret_cast<std::uint64_t*>(f+0xf0)=std::strlen(path);
+            eu4unicode::register_font_atlas(f);
+            auto rare=eu4unicode::find_dynamic_glyph(table,0x323b0);
+            if(system_only) {
+                require(rare==nullptr,"A missing system glyph appeared without the optional font pack");
+                require(eu4unicode::find_dynamic_glyph(table,0x4e2d)!=nullptr,"A missing optional font disabled ordinary system glyphs");
+                std::cout<<"System-only mode: common Chinese and supplementary glyphs work without font files; absent CJK stays missing.\n";
+            } else {
+                require(rare!=nullptr,"Optional font pack did not supply a missing system glyph");
+                eu4unicode::synchronize_font_texture(&wrapper,1);
+                require(readback(device.Get(),texture.Get(),*rare)==eu4unicode::rasterize_scalar(0x323b0,16,fonts).alpha,
+                        "Optional font GPU pixels differ from the file-backed glyph");
+                std::cout<<"Optional-font mode: system pixels retain priority; missing CJK glyph uses the file-backed font.\n";
+            }
+            eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
+            require(eu4unicode::unicode_glyph_usage().glyphs==0,"Optional-font coverage check leaked records");
         }
         require(MH_Uninitialize()==MH_OK,"MinHook cleanup failed");
         std::cout<<"Native GPU upload, preserved region, supplementary glyph, device reset, stable pointer and font release passed.\n";

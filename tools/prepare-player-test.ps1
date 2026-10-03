@@ -1,4 +1,4 @@
-param([string]$GameDirectory='D:\SteamLibrary\steamapps\common\Europa Universalis IV',[string]$SaveFile='')
+param([string]$GameDirectory='D:\SteamLibrary\steamapps\common\Europa Universalis IV',[string]$SaveFile='',[switch]$OptionalFonts)
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $runtime=Join-Path $projectRoot 'private/player-install/Europa Universalis IV'
@@ -19,6 +19,20 @@ foreach ($name in @('plugin64.dll','Plugin.dll','eu4_menu_patch.dll','autoupdate
 }
 & robocopy (Join-Path $projectRoot 'build/player-package') $runtime /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
 if ($LASTEXITCODE -gt 7) { throw 'Player overlay copy failed.' }
+$testFonts=Join-Path $runtime 'plugins/eu4_unicode_patch/fonts'
+if (Test-Path -LiteralPath $testFonts) {
+    $resolvedFonts=(Resolve-Path -LiteralPath $testFonts).Path
+    if ($resolvedFonts -ne [IO.Path]::GetFullPath($testFonts) -or
+        !$resolvedFonts.StartsWith([IO.Path]::GetFullPath($runtime)+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Unexpected owned test font path.'
+    }
+    Remove-Item -LiteralPath $resolvedFonts -Recurse -Force
+}
+if ($OptionalFonts) {
+    & (Join-Path $PSScriptRoot 'stage-fonts.ps1') | Out-Null
+    & robocopy (Join-Path $projectRoot 'build/player-fonts') $runtime /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
+    if ($LASTEXITCODE -gt 7) { throw 'Optional test font copy failed.' }
+}
 [IO.File]::WriteAllText((Join-Path $runtime 'userdir.txt'),$userdir.Replace('\','/'),[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path $runtime 'steam_appid.txt'),'236850',[Text.Encoding]::ASCII)
 Copy-Item -LiteralPath (Join-Path $projectRoot 'fixtures/player-settings.txt') -Destination (Join-Path $userdir 'settings.txt') -Force
