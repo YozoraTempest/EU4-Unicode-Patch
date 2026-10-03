@@ -44,3 +44,9 @@ function Get-ReleaseInfo([string]$Channel,[string]$BuildDate='') {
 function Get-Sha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
+
+function Get-AutomatedTestNames {
+    return @('unicode_text','unicode_services','unicode_layout','glyph_registry','unicode_editor',
+        'unicode_search','native_search','native_steam_presence','native_script_bom','native_ime',
+        'font_assets','font_draw_batches','font_cache','version_proxy')
+}

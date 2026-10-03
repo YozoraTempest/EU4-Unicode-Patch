@@ -20,7 +20,7 @@ if (!$ctest) {
 & $ctest --test-dir $root --output-on-failure --output-junit (Join-Path $root 'ctest-results.xml')
 if ($LASTEXITCODE -ne 0) { throw 'CTest failed.' }
 [xml]$junit=Get-Content -LiteralPath (Join-Path $root 'ctest-results.xml') -Raw
-$expected=@('unicode_text','unicode_services','unicode_layout','glyph_registry','unicode_editor','unicode_search','native_search','native_steam_presence','native_script_bom','native_ime','font_assets','font_draw_batches','font_cache','version_proxy')
+$expected=Get-AutomatedTestNames
 $actual=@($junit.testsuite.testcase | ForEach-Object { $_.name })
 if ((Compare-Object $expected $actual) -or [int]$junit.testsuite.failures -ne 0 -or [int]$junit.testsuite.skipped -ne 0) {
     throw 'The complete CTest suite must pass without skipped tests.'
