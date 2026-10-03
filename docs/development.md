@@ -2,12 +2,15 @@
 
 补丁针对已校验的 EU4 1.37.5.0 x64。文本存储为标准 UTF-8，引擎字符串与光标位置使用字节偏移。
 
+脚本支持 UTF-8 with BOM：解析器初始化时跳过输入开头的 BOM，保留文件原始字节和正文中的 `U+FEFF`。ParaTranz 导出的脚本无需移除 BOM。
+
 ## 模块
 
 | 模块 | 职责 |
 | --- | --- |
 | `unicode_text` / `unicode_services` | UTFCPP 编解码，ICU 字素、行边界与搜索键 |
 | `unicode_editor` / `unicode_search` | 单行编辑、选区、字节预算与外交国家名过滤 |
+| `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
 | `glyph_registry` / `scalar_glyph` / `native_font_atlas` | 稀疏字形记录、按需图集和设备恢复 |
 | `font_assets` / `font_atlas_assets` | 原版字体路径映射与运行时基础图集生成 |

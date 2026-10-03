@@ -7,6 +7,7 @@
 #include "native_text_event.hpp"
 #include "unicode_search.hpp"
 #include "native_steam_presence.hpp"
+#include "native_script_bom.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
 #include "native_font_atlas.hpp"
@@ -813,6 +814,12 @@ bool initialize(HMODULE module) {
         {0x1595cad,"b910000000e81dd64900"},
         {0x1595ceb,"4c8bbd30110000498984ff20010000"},
         {0x16fd650,"48895c240848896c2410488974241848"},
+        {0x170ca20,"48895c241848896c242048895424105657415441564157"},
+        {0x170cd10,"48895c2420488954241055565741564157488d6c2480"},
+        {0x170d1d0,"48895c2408574883ec2048895108488d05bb276b00488901"},
+        {0x171eed0,"48896c2418565741564883ec208b69484c8bf24963f0"},
+        {0x171efb0,"488b41384c8bc94885c07409448b4008442b00eb034533c0"},
+        {0x153d4a0,"4863414cc3"},
         {0x15995b0,"4c63cf488b55f84c03ca4863ce410fb6014c8d1d08a7e90042880419ffc6"},
         {0x1599728,"410fb601498b8cc62001000048894d004885c9"},
         {0x159a796,"460fb60409f3410f109e680900004b8b94c620010000"},
@@ -1056,6 +1063,14 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&original_transliterate))!=MH_OK) {
         log("Save path hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
+    if(MH_CreateHook(image+0x170cd10,reinterpret_cast<void*>(eu4unicode::construct_script_file),
+        reinterpret_cast<void**>(&eu4unicode::original_script_file))!=MH_OK||
+       MH_CreateHook(image+0x170ca20,reinterpret_cast<void*>(eu4unicode::construct_script_file_mode),
+        reinterpret_cast<void**>(&eu4unicode::original_script_file_mode))!=MH_OK||
+       MH_CreateHook(image+0x170d1d0,reinterpret_cast<void*>(eu4unicode::construct_script_stream),
+        reinterpret_cast<void**>(&eu4unicode::original_script_stream))!=MH_OK) {
+        log("Script lexer hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
     if(MH_CreateHook(image+0x1706010,reinterpret_cast<void*>(convert_steam_presence),
         reinterpret_cast<void**>(&original_presence_conversion))!=MH_OK) {
         log("Steam Rich Presence hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
@@ -1159,6 +1174,7 @@ bool initialize(HMODULE module) {
     }
     patch_enabled.store(true,std::memory_order_release);
     log("UTF-8 import, UI, format, map and bitmap iterators enabled.");
+    log("Script lexer UTF-8 BOM handling enabled.");
     log("Steam Rich Presence UTF-8 passthrough enabled.");
     return true;
 }
