@@ -1,4 +1,4 @@
-EU4 Unicode Patch v0.1.5-experimental initializing; author=VulonLok.
+EU4 Unicode Patch v0.1.6-experimental initializing; author=VulonLok.
 Font source: system fonts first; optional font files supplement missing glyphs.
 Experimental UTF-8 input and single-line grapheme editing enabled.
 Native Windows IME candidate UI and caret exclusion rectangle enabled.
@@ -7,7 +7,67 @@ Registered FE_SINGLE_PLAYER without single-byte conversion:
 Single Player
 Registered FE_SINGLE_PLAYER without single-byte conversion:
 Single Player
-Dynamic glyph U+6CD5 queued: size=18 rect=1,21,18,16 advance=18
-Dynamic glyph U+5170 queued: size=18 rect=20,21,18,16 advance=18
-Dynamic glyph U+897F queued: size=18 rect=39,21,18,16 advance=18
+Mod font retained: gfx/fonts/Arial12_bold
+Dynamic font texture uploaded: size=24 glyphs=16
+Dynamic font texture uploaded: size=24 glyphs=27
+Dynamic font texture uploaded: size=24 glyphs=11
+Dynamic font texture uploaded: size=24 glyphs=2
+Dynamic font texture uploaded: size=24 glyphs=1
+Dynamic font texture uploaded: size=24 glyphs=2
+Dynamic font texture uploaded: size=24 glyphs=2
+Dynamic font texture uploaded: size=24 glyphs=2
+Dynamic font page allocated: size=88 page=1 bytes=33554432
+Map font geometry capture enabled.
+Map font vertex upload captured.
+Dynamic font texture uploaded: size=16 glyphs=2
+Dynamic font texture uploaded: size=16 glyphs=2
+Dynamic font texture uploaded: size=88 glyphs=956
+Dynamic font texture uploaded: size=88 glyphs=135
+Map font draw contract: type=4 base=0 minimum=0 vertices=20 start=0 primitives=10 stride=20
+Dynamic font texture uploaded: size=16 glyphs=86
+Dynamic font texture uploaded: size=16 glyphs=2
 Dynamic font texture uploaded: size=18 glyphs=3
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic font texture uploaded: size=16 glyphs=4
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic font texture uploaded: size=16 glyphs=2
+Dynamic font texture uploaded: size=24 glyphs=4
+Dynamic font texture uploaded: size=16 glyphs=2
+Dynamic font texture uploaded: size=16 glyphs=4
+Dynamic font texture uploaded: size=16 glyphs=4
+Dynamic font texture uploaded: size=16 glyphs=2
+Dynamic font texture uploaded: size=16 glyphs=6
+Dynamic font texture uploaded: size=16 glyphs=4
+Dynamic font texture uploaded: size=16 glyphs=4
+Dynamic font texture uploaded: size=16 glyphs=4
+Dynamic font texture uploaded: size=16 glyphs=3
+Dynamic font texture uploaded: size=16 glyphs=883
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic font texture uploaded: size=18 glyphs=443
+Dynamic font texture uploaded: size=18 glyphs=1
+Dynamic font texture uploaded: size=24 glyphs=5
+Dynamic font texture uploaded: size=16 glyphs=40
+Dynamic font texture uploaded: size=24 glyphs=4
+Dynamic font texture uploaded: size=18 glyphs=1
+Dynamic font texture uploaded: size=18 glyphs=2
+Paged map font draw: pages=2 batches=2 vertices=20
+Dynamic font texture uploaded: size=16 glyphs=14
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic font texture uploaded: size=16 glyphs=3
+Dynamic font texture uploaded: size=16 glyphs=2
+Dynamic font texture uploaded: size=16 glyphs=5
+Dynamic font texture uploaded: size=24 glyphs=4
+Dynamic font texture uploaded: size=16 glyphs=3
+Dynamic font texture uploaded: size=16 glyphs=2
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic font texture uploaded: size=24 glyphs=8
+Dynamic font texture uploaded: size=16 glyphs=10
+Dynamic font texture uploaded: size=16 glyphs=12
+Dynamic font texture uploaded: size=16 glyphs=6
+Dynamic font texture uploaded: size=16 glyphs=3
+Dynamic font texture uploaded: size=16 glyphs=2
+Dynamic font texture uploaded: size=16 glyphs=1
+Dynamic font texture uploaded: size=16 glyphs=1

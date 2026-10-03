@@ -1,9 +1,17 @@
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$patchVersion='0.1.5-experimental'
+$patchVersion='0.1.6-experimental'
 $packageName="EU4UnicodePatch-1.37.5-v$patchVersion-drop-in.zip"
 $fontPackageName="EU4UnicodePatch-fonts-v$patchVersion.zip"
 $validation=Get-Content -LiteralPath (Join-Path $projectRoot 'tests/evidence/player-runtime-fonts.json') -Raw | ConvertFrom-Json
+$pages=Get-Content -LiteralPath (Join-Path $projectRoot 'tests/evidence/player-map-pages.json') -Raw | ConvertFrom-Json
+if ($pages.dll_sha256 -ne $validation.dll_sha256 -or $pages.exe_sha256 -ne $validation.exe_sha256 -or
+    $pages.gpu.glyphs -lt 2000 -or $pages.gpu.pages -lt 2 -or
+    $pages.gpu.exact_alpha -ne $true -or $pages.gpu.mixed_indexed_draw -ne $true -or
+    $pages.gpu.engine_state_restored -ne $true -or $pages.gpu.reset_restored -ne $true -or
+    $pages.mt.paged_draw -ne $true -or $pages.mt.capacity_errors -ne 0 -or $pages.mt.draw_errors -ne 0) {
+    throw 'Map font pagination validation is incomplete or belongs to a different build.'
+}
 foreach ($entry in @(
     @{Path='build/eu4_unicode_patch.dll';Hash=$validation.dll_sha256},
     @{Path='build/VERSION.dll';Hash=$validation.loader_sha256}
@@ -58,8 +66,8 @@ $manifest=[ordered]@{
     unicode_input_default=$true
     font_preference='system first; optional font pack supplies missing glyphs'
     optional_font_package=$fontPackageName
-    validation='Runtime system-font generation; ordinary-directory startup; native mod font overrides and custom paths; five D3D9 sizes, Reset and ownership verified'
-    validation_limits='Latest player physical IME and complete controlled SDL/GPU sequence pending; complex shaping, multi-page atlases, Ironman and multiplayer unverified'
+    validation='Runtime system fonts; native mod font overrides; five D3D9 sizes; 2000 CJK glyphs, mixed map pages, Reset and ownership; MT campaign startup'
+    validation_limits='UI pagination, latest player physical IME, complex shaping, in-game device recovery, long campaigns, Ironman and multiplayer unverified'
     files=$packageFiles
 }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $projectRoot 'build/player-manifest.json') -Encoding utf8NoBOM

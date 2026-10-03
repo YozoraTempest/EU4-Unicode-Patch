@@ -1,6 +1,6 @@
 {
   "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
-  "dll_sha256": "f9b32b9d3c05d6fac1f02eb323f31dcdbc71dc9d59b001e6f9c3c320508438f1",
+  "dll_sha256": "2353ed5d0c78e7c78adb3484c6a8b8e80612c05eee4455ec3a59ae9875fcf5ef",
   "method": "Native font loader, mounted resource selection, UTF-8 glyph lookup and real D3D9 pixel readback; controlled enlarged UI load; owned game closed before observer detach",
   "same_path_override": true,
   "custom_path": true,

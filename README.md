@@ -4,13 +4,13 @@
 
 作者：**VulonLok**。
 
-适用于 **EU4 1.37.5.0 Inca / Windows x64**。当前版本：**v0.1.5-experimental**。
+适用于 **EU4 1.37.5.0 Inca / Windows x64**。当前版本：**v0.1.6-experimental**。
 
-[下载补丁](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.5-experimental/EU4UnicodePatch-1.37.5-v0.1.5-experimental-drop-in.zip) · [可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.5-experimental/EU4UnicodePatch-fonts-v0.1.5-experimental.zip) · [发布说明](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.5-experimental) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
+[下载补丁](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.6-experimental/EU4UnicodePatch-1.37.5-v0.1.6-experimental-drop-in.zip) · [可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/download/v0.1.6-experimental/EU4UnicodePatch-fonts-v0.1.6-experimental.zip) · [发布说明](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/tag/v0.1.6-experimental) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
 
-## v0.1.5 更新
+## v0.1.6 更新
 
-基础图集改为运行时从系统字体生成，主包不再附带字体资源。同名覆盖及自定义路径的模组字体按游戏加载顺序保留，完整字库继续作为可选包。
+地图字体支持按需分页，修复大型汉化模组中单张图集用尽造成的缺字。主包继续使用系统字体，完整字库作为可选包；模组字体仍按游戏加载顺序保留。
 
 本版仍为实验版。支持 UTF-8 文字，不附带完整汉化；复杂文字排版、铁人和多人联机尚未完成验证。
 
@@ -52,8 +52,8 @@ Europa Universalis IV/
 - **游戏版本：** 仅支持 1.37.5.0 Inca，Windows x64。补丁会检查 EXE 的 SHA-256 和目标指令，校验失败时拒绝应用。
 - **旧双字节补丁：** 包内加载器跳过 `plugins/plugin64.dll`、开发探针 `eu4_unicode_probe.dll` 和旧补丁的自动更新，旧文件保留。其他插件仍正常加载；已测试与 MenuPatch 一起启动。安装 Unicode 补丁期间不要换回旧加载器，以免同时加载两套补丁。
 - **汉化模组：** 本地化应使用普通 UTF-8。旧双字节转义汉化需要先[转换](docs/development.md#旧汉化迁移)。模组的 `.fnt` 字宽、字号与位图字形保留，包括对原版同名路径的覆盖；缺字动态生成目前用于补丁自身图集。
-- **测试情况：** 本版验证运行时字体生成、十项 CTest、两种字体安装方式的启动、五种字号 D3D9 上传与设备恢复，以及目录和压缩包中的模组字体覆盖。完整输入与候选窗有此前开发版记录，本版尚未完成整套人工复验。
-- **当前限制：** 每字号一张固定图集；多页图集、阿拉伯文等复杂排版、所有控件及输入法、长期战役、铁人和联机仍待完善。详见[测试记录](docs/validation.md)。
+- **测试情况：** 本版验证十一项 CTest、2,000 个汉字的分页绘制、五种字号 D3D9 上传与设备恢复，以及模组字体覆盖。完整输入与候选窗有此前开发版记录，本版尚未完成整套人工复验。
+- **当前限制：** 地图图集有内存上限，UI 图集仍为单页；阿拉伯文等复杂排版、所有控件及输入法、长期战役、铁人和联机仍待完善。详见[测试记录](docs/validation.md)。
 
 ## 排查问题
 

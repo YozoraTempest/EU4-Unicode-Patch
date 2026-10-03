@@ -3,6 +3,9 @@ EXTERN copy_scalar:PROC
 EXTERN construct_map_scalar:PROC
 EXTERN map_scalar_size:PROC
 EXTERN map_scalar_gaps:PROC
+EXTERN mark_map_font_glyph:PROC
+EXTERN remember_map_font_glyph:PROC
+EXTERN mark_current_map_font_glyph:PROC
 EXTERN g_map_copy_return:QWORD
 EXTERN g_map_measure_return:QWORD
 EXTERN g_map_draw_return:QWORD
@@ -16,6 +19,8 @@ EXTERN g_map_adjust_glyph_return:QWORD
 EXTERN g_map_vertex_count_return:QWORD
 EXTERN g_map_upper_return:QWORD
 EXTERN g_map_lower_return:QWORD
+EXTERN g_map_page_tag_return:QWORD
+EXTERN g_map_justify_page_tag_return:QWORD
 include hook_context.inc
 
 .CODE
@@ -81,6 +86,34 @@ map_draw_hook PROC
     jmp qword ptr [g_map_draw_return]
 map_draw_hook ENDP
 
+map_page_tag_hook PROC
+    SAVE_CONTEXT
+    mov rcx, rdx
+    movsxd rax, edi
+    lea rax, [rax+rax*4]
+    lea rdx, [r10+rax*4]
+    call mark_map_font_glyph
+    RESTORE_CONTEXT
+    add edi, 6
+    movsx eax, word ptr [rdx+0ch]
+    movd xmm0, eax
+    cvtdq2ps xmm0, xmm0
+    jmp qword ptr [g_map_page_tag_return]
+map_page_tag_hook ENDP
+
+map_justify_page_tag_hook PROC
+    SAVE_CONTEXT
+    movsxd rax, r13d
+    lea rax, [rax+rax*4]
+    lea rcx, [r12+rax*4]
+    call mark_current_map_font_glyph
+    RESTORE_CONTEXT
+    add r13d, 6
+    mov rcx, [rbp+118h]
+    mov rdi, [rbp+7c8h]
+    jmp qword ptr [g_map_justify_page_tag_return]
+map_justify_page_tag_hook ENDP
+
 map_kern_hook PROC
     lea rcx, [rsp+78h]
     cmp rbx, 10h
@@ -115,6 +148,10 @@ map_justify_draw_hook PROC
 map_justify_marker_done:
     movss xmm12, dword ptr [rdx+848h]
     LOOKUP_GLYPH r14, rdx, rax, 0
+    SAVE_CONTEXT
+    mov rcx, r14
+    call remember_map_font_glyph
+    RESTORE_CONTEXT
     test r14, r14
     jmp qword ptr [g_map_justify_draw_return]
 map_justify_draw_hook ENDP

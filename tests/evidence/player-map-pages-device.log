@@ -1,0 +1,3 @@
+Dynamic font page allocated: size=88 page=1 bytes=33554432
+Paged map font draw: pages=2 batches=3 vertices=12
+2000 CJK glyphs across 2 pages: stable first-page pixels, real mixed-page indexed drawing, restored engine state, reset and font release passed.

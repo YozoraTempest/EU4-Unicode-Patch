@@ -9,6 +9,7 @@
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
 #include "native_font_atlas.hpp"
+#include "native_font_draw.hpp"
 #include "font_assets.hpp"
 #include "font_atlas_assets.hpp"
 #include <array>
@@ -45,10 +46,10 @@ void log(const char* message) {
     FlushFileBuffers(log_file);
 }
 struct EngineString {
-    union { char small[16]; const char* pointer; } storage;
+    union { char inline_bytes[16]; const char* pointer; } storage;
     std::uint64_t size;
     std::uint64_t capacity;
-    const char* data() const { return capacity<16?storage.small:storage.pointer; }
+    const char* data() const { return capacity<16?storage.inline_bytes:storage.pointer; }
 };
 static_assert(sizeof(EngineString)==32);
 using Transliterate=void(*)(EngineString*);
@@ -473,7 +474,7 @@ bool consume_editor_commit(void* callback,const char* character) {
         EngineString text{};
         text.size=filtered.size();
         text.capacity=filtered.size()<16?15:filtered.size();
-        if(text.capacity<16) std::memcpy(text.storage.small,filtered.c_str(),filtered.size()+1);
+        if(text.capacity<16) std::memcpy(text.storage.inline_bytes,filtered.c_str(),filtered.size()+1);
         else text.storage.pointer=filtered.c_str();
         const auto previous=active_commit;
         struct Restore { ActiveCommit previous; ~Restore(){active_commit=previous;} } restore{previous};
@@ -589,6 +590,7 @@ std::uintptr_t g_map_copy_return,g_map_measure_return,g_map_draw_return,g_map_ke
 std::uintptr_t g_map_justify_draw_return,g_map_justify_measure_return,g_map_justify_advance_return;
 std::uintptr_t g_map_adjust_copy_return,g_map_adjust_glyph_return,g_map_upper_return,g_map_lower_return;
 std::uintptr_t g_map_vertex_count_return;
+std::uintptr_t g_map_page_tag_return,g_map_justify_page_tag_return;
 std::uintptr_t g_map_kern_call;
 std::uintptr_t g_input_return;
 std::uintptr_t g_editor_fit_return;
@@ -609,6 +611,7 @@ void map_copy_hook(); void map_measure_hook(); void map_draw_hook(); void map_ke
 void map_justify_draw_hook(); void map_justify_measure_hook(); void map_justify_advance_hook();
 void map_adjust_copy_hook(); void map_adjust_glyph_hook(); void map_upper_hook(); void map_lower_hook();
 void map_vertex_count_hook();
+void map_page_tag_hook();void map_justify_page_tag_hook();
 void input_hook();
 void editor_fit_hook();
 void text_limit_hook();
@@ -625,6 +628,11 @@ void* find_supplementary_glyph(void* const* table,std::uint32_t scalar) noexcept
     auto glyph=eu4unicode::find_unicode_glyph(table,scalar);
     return glyph?glyph:eu4unicode::find_dynamic_glyph(table,scalar);
 }
+void mark_map_font_glyph(const eu4unicode::NativeGlyph* glyph,eu4unicode::MapFontVertex* vertices) noexcept {
+    eu4unicode::mark_map_font_glyph(glyph,vertices);
+}
+void remember_map_font_glyph(const eu4unicode::NativeGlyph* glyph) noexcept { eu4unicode::remember_map_font_glyph(glyph); }
+void mark_current_map_font_glyph(eu4unicode::MapFontVertex* vertices) noexcept { eu4unicode::mark_current_map_font_glyph(vertices); }
 void* find_loaded_glyph(void* const* table,std::uint32_t scalar) noexcept {
     return scalar<=0xff?table[scalar]:eu4unicode::find_unicode_glyph(table,scalar);
 }
@@ -759,7 +767,7 @@ bool initialize(HMODULE module) {
         log("Refused: executable is outside the isolated research fixture."); return false;
     }
 #else
-    log("EU4 Unicode Patch v0.1.5-experimental initializing; author=VulonLok.");
+    log("EU4 Unicode Patch v0.1.6-experimental initializing; author=VulonLok.");
 #endif
     if(!hash_matches(exe)) { log("Refused: executable hash mismatch."); return false; }
     if(GetModuleHandleW(L"plugin64.dll")
@@ -820,6 +828,10 @@ bool initialize(HMODULE module) {
         ,{0xfd6680,"488d85900000004983fd10480f43c60fb60418884500"}
         ,{0xfd6bc0,"488d85900000004983fd10480f43c60fb60408498b14c6"}
         ,{0xfd7330,"488d43104983f9107204488b43100fb60401498b94c420010000"}
+        ,{0x159e400,"83c7060fbf420c660f6ec00f5bc0"}
+        ,{0xfd53a5,"4183c506488b8d18010000488bbdc8070000"}
+        ,{0xfd7200,"4c89442418488954241048894c2408"}
+        ,{0x16d6640,"4885d20f84a60000004889742418"}
         ,{0x14ba825,"0fbe0c28488d1c28e836065900ffc788038bc7"}
         ,{0x1550425,"0fbe0c28488d1c28e80aaa4f00ffc788038bc7"}
         ,{0x1569f91,"8b45bc32db3c8073050fb6d8eb12"}
@@ -930,6 +942,8 @@ bool initialize(HMODULE module) {
     g_map_adjust_copy_return=address(0xfd66ab);
     g_map_adjust_glyph_return=address(0xfd6bd7);
     g_map_vertex_count_return=address(0xfd734a);
+    g_map_page_tag_return=address(0x159e40e);
+    g_map_justify_page_tag_return=address(0xfd53b7);
     g_map_upper_return=address(0x14ba838);
     g_map_lower_return=address(0x1550438);
     g_input_return=address(0x156a22a);
@@ -979,6 +993,8 @@ bool initialize(HMODULE module) {
         {0xfd6680,reinterpret_cast<void*>(map_adjust_copy_hook)},
         {0xfd6bc0,reinterpret_cast<void*>(map_adjust_glyph_hook)},
         {0xfd7330,reinterpret_cast<void*>(map_vertex_count_hook)},
+        {0x159e400,reinterpret_cast<void*>(map_page_tag_hook)},
+        {0xfd53a5,reinterpret_cast<void*>(map_justify_page_tag_hook)},
         {0x14ba825,reinterpret_cast<void*>(map_upper_hook)},
         {0x1550425,reinterpret_cast<void*>(map_lower_hook)},
         {0x15989d8,reinterpret_cast<void*>(text_limit_hook)},
@@ -1014,7 +1030,11 @@ bool initialize(HMODULE module) {
     if(MH_CreateHook(image+0x15953c0,reinterpret_cast<void*>(load_font_atlas),
         reinterpret_cast<void**>(&original_font_load))!=MH_OK||
        MH_CreateHook(image+0x16c3f10,reinterpret_cast<void*>(eu4unicode::synchronize_font_texture),
-        reinterpret_cast<void**>(&eu4unicode::original_texture_lookup))!=MH_OK) {
+        reinterpret_cast<void**>(&eu4unicode::original_texture_lookup))!=MH_OK||
+       MH_CreateHook(image+0xfd7200,reinterpret_cast<void*>(eu4unicode::build_map_font_geometry),
+        reinterpret_cast<void**>(&eu4unicode::original_map_geometry))!=MH_OK||
+       MH_CreateHook(image+0x16d6640,reinterpret_cast<void*>(eu4unicode::upload_map_font_vertices),
+        reinterpret_cast<void**>(&eu4unicode::original_vertex_upload))!=MH_OK) {
         log("Dynamic font atlas hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
     if(experimental_input) {

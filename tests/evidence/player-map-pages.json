@@ -1,0 +1,47 @@
+{
+  "patch_version": "0.1.6-experimental",
+  "author": "VulonLok",
+  "dll_sha256": "2353ed5d0c78e7c78adb3484c6a8b8e80612c05eee4455ec3a59ae9875fcf5ef",
+  "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
+  "gpu": {
+    "glyphs": 2000,
+    "size": 88,
+    "pages": 2,
+    "exact_alpha": true,
+    "mixed_indexed_draw": true,
+    "engine_state_restored": true,
+    "first_page_preserved": true,
+    "reset_restored": true,
+    "stable_pointers": true,
+    "owner_release": true
+  },
+  "budget": {
+    "page_dimensions": [
+      2048,
+      4096
+    ],
+    "map_gpu_bytes": 268435456,
+    "max_map_pages": 8,
+    "vertex_cpu_bytes": 67108864
+  },
+  "mt": {
+    "base": "MEIOU and Taxes v3.0",
+    "translation": "Provided MT3.0 UTF-8 branch",
+    "optional_font_files": 0,
+    "dynamic_88px_glyphs": 1091,
+    "pages": 2,
+    "capacity_errors": 0,
+    "draw_errors": 0,
+    "paged_draw": true,
+    "campaign": "FRA, 1356.12.31, non-Ironman",
+    "debug_agent_loaded": false,
+    "campaign_display": "1280x720 window; temporary reduced GUI scale",
+    "player_display_settings_distributed": false,
+    "baseline_v015_dynamic_88px_glyphs": 956,
+    "baseline_v015_capacity_errors": 135
+  },
+  "scope": [
+    "Generated map atlases only; mod bitmap fonts retain the native path.",
+    "UI atlases remain single-page. Complex shaping, long campaigns, in-game device recovery, Ironman and multiplayer remain unverified."
+  ]
+}

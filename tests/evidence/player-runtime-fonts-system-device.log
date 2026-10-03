@@ -3,7 +3,7 @@ Dynamic glyph U+5B54 queued: size=16 rect=1,19,16,14 advance=16
 Dynamic font texture uploaded: size=16 glyphs=1
 Dynamic glyph U+1F600 queued: size=16 rect=18,19,18,17 advance=22
 Dynamic font texture uploaded: size=16 glyphs=1
-Device reset restored both cached GPU regions; native pointer reuse=1.
+Device reset restored both cached GPU regions; native pointer reuse=0.
 Dynamic glyph U+4E2D queued: size=14 rect=1,17,12,12 advance=14
 Dynamic font texture uploaded: size=14 glyphs=1
 Dynamic glyph U+1F600 queued: size=14 rect=14,17,15,16 advance=20

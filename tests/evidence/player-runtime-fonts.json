@@ -1,10 +1,10 @@
 {
-  "patch_version": "0.1.5-experimental",
+  "patch_version": "0.1.6-experimental",
   "author": "VulonLok",
   "distribution": "player overlay",
   "game_version": "1.37.5.0 Inca Windows x64",
   "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
-  "dll_sha256": "f9b32b9d3c05d6fac1f02eb323f31dcdbc71dc9d59b001e6f9c3c320508438f1",
+  "dll_sha256": "2353ed5d0c78e7c78adb3484c6a8b8e80612c05eee4455ec3a59ae9875fcf5ef",
   "loader_sha256": "570ac1afd441e5c1344ba6aff64a23bb535fdee2408ffaa76995e3f9c5bfcf7a",
   "font_preference": "system first",
   "loaded_modules": {
@@ -15,7 +15,7 @@
     "loader_loaded": true
   },
   "ctest": {
-    "passed": 10,
+    "passed": 11,
     "failed": 0
   },
   "runtime_generation": {
@@ -98,29 +98,27 @@
   },
   "game_startup": {
     "mode": "system",
-    "pid": 28752,
-    "observed_seconds": 29,
-    "window_title": "Europa Universalis IV",
+    "dll_sha256": "2353ed5d0c78e7c78adb3484c6a8b8e80612c05eee4455ec3a59ae9875fcf5ef",
     "optional_font_files": 0,
     "enabled": 1,
     "legacy_loaded": false,
     "probe_loaded": false,
     "menu_patch_loaded": true,
     "loader_loaded": true,
-    "observer": "OS module enumeration and startup log; no injected agent"
+    "debug_agent_loaded": false,
+    "scenario": "MT UTF-8 campaign startup"
   },
   "optional_game_startup": {
     "mode": "optional",
-    "pid": 20768,
-    "observed_seconds": 26,
-    "window_title": "Europa Universalis IV",
+    "dll_sha256": "2353ed5d0c78e7c78adb3484c6a8b8e80612c05eee4455ec3a59ae9875fcf5ef",
     "optional_font_files": 3,
     "enabled": 1,
     "legacy_loaded": false,
     "probe_loaded": false,
     "menu_patch_loaded": true,
     "loader_loaded": true,
-    "observer": "OS module enumeration and startup log; no injected agent"
+    "debug_agent_loaded": false,
+    "scenario": "vanilla menu startup"
   },
   "d3d9_component": {
     "sizes": [
@@ -154,11 +152,12 @@
     "exact_metrics_and_pixels": true
   },
   "mod_font_report": "player-runtime-mod-fonts.json",
+  "map_pages_report": "player-map-pages.json",
   "limitations": [
     "Mod bitmap fonts retain existing glyphs; dynamic missing-glyph generation is limited to patch-generated atlases.",
     "Enlarged UI font was loaded through a controlled native probe at scale 1.25; complete scaled UI interaction is unverified.",
     "Current player physical IME and complete controlled SDL/GPU input sequence have not been repeated.",
     "Complex shaping is implemented only in the standalone layout component, not integrated into game rendering.",
-    "Multi-page atlases, long campaigns, in-game device recovery, Ironman and multiplayer are unverified."
+    "Map atlas pagination passed component and MT campaign startup checks. UI pagination, long campaigns, in-game device recovery, Ironman and multiplayer are unverified."
   ]
 }
