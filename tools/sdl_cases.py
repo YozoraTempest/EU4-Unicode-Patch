@@ -1,10 +1,15 @@
 """Expected isolated SDL text-input results (byte offsets and native limits)."""
 
 
-def case(name, commit, expected=None, before='', caret=0, budget=80, raw=None):
+def case(name, commit, expected=None, before='', caret=0, budget=80, raw=None, selection=None, expected_caret=None):
     encoded = list(commit.encode('utf-8')) if raw is None else raw
-    return dict(name=name, payload=encoded, before=before, caret=caret,
-                byte_limit=budget, expected=commit if expected is None else expected)
+    result = dict(name=name, payload=encoded, before=before, caret=caret,
+                  byte_limit=budget, expected=commit if expected is None else expected)
+    if selection is not None:
+        result['selection'] = selection
+    if expected_caret is not None:
+        result['expected_caret'] = expected_caret
+    return result
 
 
 SDL_CASES = [
@@ -29,4 +34,14 @@ SDL_CASES = [
     case('invalid-surrogate', '', expected='', raw=[0xed, 0xa0, 0x80]),
     case('missing-terminator', '', expected='', raw=[0x41] * 32),
     case('empty-input', '', expected=''),
+    case('selected-supplementary-replacement', '中文', expected='A中中文Z', before='A中𠀀Z', caret=8,
+         selection=dict(anchor=8, caret=4, selected='𠀀'), expected_caret=10),
+    case('selected-family-replacement', '𠀀', expected='A𠀀Z', before='A👩‍👩‍👧‍👦Z', caret=26,
+         selection=dict(anchor=26, caret=1, selected='👩‍👩‍👧‍👦'), expected_caret=5),
+    case('selected-forward-cjk-replacement', '👧', expected='A👧𠀀Z', before='A中𠀀Z', caret=1,
+         selection=dict(anchor=1, caret=4, selected='中'), expected_caret=5),
+    case('selected-combining-replacement', '中', expected='A中Z', before='Ae\u0301Z', caret=4,
+         selection=dict(anchor=4, caret=1, selected='e\u0301'), expected_caret=4),
+    case('blocked-commit-preserves-selection', '@§', expected='A中𠀀Z', before='A中𠀀Z', caret=8,
+         selection=dict(anchor=8, caret=4, selected='𠀀'), expected_caret=4),
 ]

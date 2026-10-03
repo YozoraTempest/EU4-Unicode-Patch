@@ -117,12 +117,69 @@ EngineString* assign_editor_prefix(EngineString* target,const char* source,std::
 }
 using EditorKey=bool(*)(void*,const KeyEvent*);
 EditorKey original_editor_key=nullptr;
+using EditorAction=void(*)(void*);
+EditorAction original_editor_left=nullptr,original_editor_right=nullptr,original_editor_selection=nullptr;
+bool single_line_editor(void* widget,std::string_view& value) {
+    const auto base=static_cast<const std::byte*>(widget);
+    const auto text=reinterpret_cast<const EngineString*>(base+0x30);
+    if(*reinterpret_cast<const std::uint16_t*>(base+0x56)||
+       *reinterpret_cast<const std::uint16_t*>(base+0x60)>1||text->size>32000||
+       *reinterpret_cast<const std::uint16_t*>(base+0x54)>text->size) return false;
+    value={text->data(),static_cast<std::size_t>(text->size)};
+    return value.find('\n')==std::string_view::npos&&eu4unicode::valid_utf8(value);
+}
+void editor_arrow(void* widget,bool right) {
+    const auto original=right?original_editor_right:original_editor_left;
+    std::string_view value;
+    if(single_line_editor(widget,value)) {
+        auto column=reinterpret_cast<std::uint16_t*>(static_cast<std::byte*>(widget)+0x54);
+        try {
+            const auto target=eu4unicode::plan_edit(value,*column,
+                right?eu4unicode::EditKey::right:eu4unicode::EditKey::left).caret;
+            // Let the native one-byte mover reach the final complete boundary.
+            // It retains selection clearing, geometry and its ordinary callback.
+            if(right&&target>*column) *column=static_cast<std::uint16_t>(target-1);
+            else if(!right&&target<*column) *column=static_cast<std::uint16_t>(target+1);
+        } catch(...) { log("Unicode editor movement failed; key ignored."); return; }
+    }
+    original(widget);
+}
+void editor_left(void* widget) { editor_arrow(widget,false); }
+void editor_right(void* widget) { editor_arrow(widget,true); }
+void editor_selection(void* widget) {
+    auto base=static_cast<std::byte*>(widget);
+    std::string_view value;
+    if(single_line_editor(widget,value)&&!(*reinterpret_cast<std::uint16_t*>(base+0x94))) {
+        auto anchor=reinterpret_cast<std::uint16_t*>(base+0x92);
+        auto column=reinterpret_cast<std::uint16_t*>(base+0x54);
+        if(*anchor<=value.size()) {
+            try {
+                const auto selection=eu4unicode::align_selection(value,*anchor,*column);
+                *anchor=static_cast<std::uint16_t>(selection.anchor);
+                *column=static_cast<std::uint16_t>(selection.caret);
+                *reinterpret_cast<std::uint32_t*>(base+0x50)=*column;
+            } catch(...) { log("Unicode editor selection failed; selection update excluded."); return; }
+        }
+    }
+    original_editor_selection(widget);
+}
 bool editor_key(void* widget,const KeyEvent* event) {
     auto base=static_cast<std::byte*>(widget);
     auto text=reinterpret_cast<EngineString*>(base+0x30);
     auto column=reinterpret_cast<std::uint16_t*>(base+0x54);
     const auto row=*reinterpret_cast<std::uint16_t*>(base+0x56);
     const auto selection=*reinterpret_cast<std::uint64_t*>(base+0x80);
+    std::string_view single_line;
+    if(single_line_editor(widget,single_line)) {
+        if(selection) editor_selection(widget);
+        if(event->modifiers==4&&(event->key==0x40000050||event->key==0x4000004f)) {
+            // These native selection actions exist but the key handler does not
+            // dispatch Shift+arrows. They maintain the original selection ABI.
+            const auto vtable=*static_cast<void***>(widget);
+            reinterpret_cast<EditorAction>(vtable[(event->key==0x40000050?0xd0:0xe0)/8])(widget);
+            return true;
+        }
+    }
     if(event->modifiers || row || selection || *column>text->size)
         return original_editor_key(widget,event);
     const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
@@ -133,8 +190,6 @@ bool editor_key(void* widget,const KeyEvent* event) {
         switch(event->key) {
         case 8: key=eu4unicode::EditKey::backspace; break;
         case 127: key=eu4unicode::EditKey::forward_delete; break;
-        case 0x40000050: key=eu4unicode::EditKey::left; break;
-        case 0x4000004f: key=eu4unicode::EditKey::right; break;
         default: return original_editor_key(widget,event);
         }
         plan=eu4unicode::plan_edit(value,*column,key);
@@ -152,11 +207,7 @@ bool editor_key(void* widget,const KeyEvent* event) {
         *column=static_cast<std::uint16_t>(event->key==8?start+1:start);
         return original_editor_key(widget,event);
     }
-    const auto length=plan.caret>*column?plan.caret-*column:*column-plan.caret;
-    if(length<=1) return original_editor_key(widget,event);
-    bool handled=false;
-    for(std::size_t i=0;i<length;++i) handled=original_editor_key(widget,event)||handled;
-    return handled;
+    return original_editor_key(widget,event);
 }
 using EditorCharacter=bool(*)(void*,const char*);
 using EditorInsert=void(*)(void*,const EngineString*);
@@ -169,6 +220,7 @@ void insert_editor_commit(void* widget,const EngineString* text) {
         reinterpret_cast<std::uintptr_t>(image);
     if(caller==0x1535615&&active_commit.widget==widget&&active_commit.text)
         text=active_commit.text;
+    if(static_cast<std::byte*>(widget)[0x90]!=std::byte{0}) editor_selection(widget);
     original_editor_insert(widget,text);
 }
 bool consume_editor_commit(void* callback,const char* character) {
@@ -546,6 +598,13 @@ bool initialize(HMODULE module) {
         ,{0x1536e51,"488b07488bcfff9038010000"}
         ,{0x1536f50,"48895c2408488974241048897c24184c89642420"}
         ,{0x153aa90,"48895c240848896c2410488974241848897c2420"}
+        ,{0x15384d0,"40574883ec200fb74154488bf96685c0"}
+        ,{0x15385a0,"48895c2408574883ec40440fb74156"}
+        ,{0x153b170,"48895c240848896c24104889742418574883ec40"}
+        ,{0x1538560,"40534883ec20488b01488bd9ff9068010000"}
+        ,{0x1538670,"40534883ec20488b01488bd9ff9068010000"}
+        ,{0x153857f,"488b03488bcbff90d8000000"}
+        ,{0x153868f,"488b03488bcbff90e8000000"}
         ,{0x1174e95,"e8e6025900"}
         ,{0x13b9567,"e814bc3400"}
         ,{0x117519e,"e8ddff5800"}
@@ -681,6 +740,12 @@ bool initialize(HMODULE module) {
            MH_CreateHook(image+0x1536e51,reinterpret_cast<void*>(editor_fit_hook),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x15366c0,reinterpret_cast<void*>(editor_key),
              reinterpret_cast<void**>(&original_editor_key))!=MH_OK ||
+           MH_CreateHook(image+0x15384d0,reinterpret_cast<void*>(editor_left),
+             reinterpret_cast<void**>(&original_editor_left))!=MH_OK ||
+           MH_CreateHook(image+0x15385a0,reinterpret_cast<void*>(editor_right),
+             reinterpret_cast<void**>(&original_editor_right))!=MH_OK ||
+           MH_CreateHook(image+0x153b170,reinterpret_cast<void*>(editor_selection),
+             reinterpret_cast<void**>(&original_editor_selection))!=MH_OK ||
            MH_CreateHook(image+0x95110,reinterpret_cast<void*>(assign_editor_prefix),
              reinterpret_cast<void**>(&original_assign_text))!=MH_OK ||
            MH_CreateHook(image+0xb19590,reinterpret_cast<void*>(filter_editor_text),

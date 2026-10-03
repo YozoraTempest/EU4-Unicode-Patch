@@ -47,13 +47,19 @@ EditPlan plan_edit(std::string_view text,std::size_t caret,EditKey key) {
     }
     throw std::invalid_argument("Unknown edit key");
 }
-EditResult replace_selection(std::string_view text,std::size_t anchor,std::size_t caret,
-    std::string_view insertion,std::size_t byte_limit) {
+Selection align_selection(std::string_view text,std::size_t anchor,std::size_t caret) {
     if(anchor>text.size()||caret>text.size()) throw std::out_of_range("Selection exceeds text size");
-    if(!valid_utf8(insertion)) throw std::invalid_argument("Commit is not valid UTF-8");
     const auto boundaries=grapheme_boundaries(text);
     const auto start=floor_boundary(boundaries,(std::min)(anchor,caret));
     const auto end=anchor==caret?start:ceil_boundary(boundaries,(std::max)(anchor,caret));
+    return anchor<=caret?Selection{start,end}:Selection{end,start};
+}
+EditResult replace_selection(std::string_view text,std::size_t anchor,std::size_t caret,
+    std::string_view insertion,std::size_t byte_limit) {
+    if(!valid_utf8(insertion)) throw std::invalid_argument("Commit is not valid UTF-8");
+    const auto selection=align_selection(text,anchor,caret);
+    const auto start=(std::min)(selection.anchor,selection.caret);
+    const auto end=(std::max)(selection.anchor,selection.caret);
     const auto retained=text.size()-(end-start);
     if(retained>byte_limit||insertion.size()>byte_limit-retained)
         throw std::length_error("Commit exceeds editor byte limit");

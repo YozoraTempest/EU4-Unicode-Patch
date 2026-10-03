@@ -54,6 +54,20 @@ class EvidenceTests(unittest.TestCase):
         self.records.append({'type': 'error', 'description': 'access violation'})
         self.rejected()
 
+    def test_selection_omitted(self):
+        selected = next(r['payload'] for r in self.records
+                        if r.get('payload', {}).get('name') == 'selected-supplementary-replacement'
+                        and r['payload'].get('event') == 'native-sdl-result')
+        selected.pop('selection_before')
+        self.rejected()
+
+    def test_blocked_commit_cleared_selection(self):
+        blocked = next(r['payload'] for r in self.records
+                       if r.get('payload', {}).get('name') == 'blocked-commit-preserves-selection'
+                       and r['payload'].get('event') == 'native-sdl-result')
+        blocked['selection_after']['selected'] = []
+        self.rejected()
+
 
 if __name__ == '__main__':
     unittest.main()

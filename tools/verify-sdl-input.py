@@ -43,13 +43,27 @@ def verify(path):
         if delivery.get('name') != fixture['name'] or delivery.get('payload') != fixture['payload'] or delivery.get('window_id', 0) <= 0:
             raise ValueError('SDL delivery was not observed')
         after = list(fixture['expected'].encode('utf-8'))
-        if result.get('after') != after or result.get('after_caret') != len(after):
+        if result.get('after') != after or result.get('after_caret') != fixture.get('expected_caret', len(after)):
             raise ValueError('Incorrect native SDL text or caret: ' + fixture['name'])
         commit = expected_commit(fixture['payload'])
         filtered = ''.join(c for c in commit if c not in prohibited) if commit is not None else ''
         expected_inserts = [list(filtered.encode('utf-8'))] if filtered else []
         if result.get('inserts') != expected_inserts:
             raise ValueError('Commit was not one complete native insertion: ' + fixture['name'])
+        if 'selection' in fixture:
+            selection = fixture['selection']
+            before_selection = dict(anchor=selection['anchor'], caret=selection['caret'],
+                                    selected=list(selection['selected'].encode('utf-8')), active=True)
+            if result.get('selection_before') != before_selection:
+                raise ValueError('Incorrect native selection before queued commit')
+            after_selection = result.get('selection_after', {})
+            if after_selection.get('caret') != fixture['expected_caret']:
+                raise ValueError('Queued selection replacement left an incorrect caret')
+            if filtered:
+                if after_selection.get('active') is not False or after_selection.get('selected') != []:
+                    raise ValueError('Accepted commit did not clear the replaced selection')
+            elif after_selection != before_selection:
+                raise ValueError('Blocked commit changed the existing selection')
         copies = result.get('queue_copies', [])
         if commit is None:
             if copies or result.get('notifications'):
@@ -69,7 +83,7 @@ def verify(path):
     if len(budget) != 1 or budget[0].get('original_byte_limit') != 250:
         raise ValueError('Unexpected native editor budget')
     return dict(artifact=artifact, passed=True, cases=results,
-                scope='Synthetic SDL_TEXTINPUT in the actual polling loop, native queue copies, single insertion and native notifications; not physical keyboard, IME composition or selection')
+                scope='Synthetic SDL_TEXTINPUT in the actual polling loop, native queue copies, single insertion, native notifications and programmatically seeded single-line selections; not physical keyboard, IME composition or mouse selection')
 
 
 def main():

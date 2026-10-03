@@ -25,3 +25,5 @@ jobs:
         run: python tests/editor_evidence_tests.py
       - name: SDL input evidence validation
         run: python tests/sdl_evidence_tests.py
+      - name: Native selection evidence validation
+        run: python tests/selection_evidence_tests.py

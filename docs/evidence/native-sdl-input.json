@@ -2,7 +2,7 @@
   "artifact": {
     "event": "artifact",
     "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
-    "dll_sha256": "c6b32d4fd1e1c6c20a39680d5f255b31b04945ca6c4ff85468388d5b21555425",
+    "dll_sha256": "defdc5e398c90e7b8a73ceb0c6273776a7fc24b8c36257dd2d2baf6434bb70ca",
     "method": "Synthetic SDL_PollEvent result on the video thread, native queue and focused edit widget; not physical keyboard or IME"
   },
   "passed": true,
@@ -2239,7 +2239,705 @@
       "inserts": [],
       "notifications": [],
       "queue_copies": []
+    },
+    {
+      "event": "native-sdl-result",
+      "name": "selected-supplementary-replacement",
+      "payload": [
+        228,
+        184,
+        173,
+        230,
+        150,
+        135
+      ],
+      "before": "A中𠀀Z",
+      "caret": 8,
+      "byte_limit": 80,
+      "expected": "A中中文Z",
+      "selection": {
+        "anchor": 8,
+        "caret": 4,
+        "selected": "𠀀"
+      },
+      "expected_caret": 10,
+      "after": [
+        65,
+        228,
+        184,
+        173,
+        228,
+        184,
+        173,
+        230,
+        150,
+        135,
+        90
+      ],
+      "after_caret": 10,
+      "inserts": [
+        [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135
+        ]
+      ],
+      "notifications": [
+        [
+          65,
+          228,
+          184,
+          173,
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          90
+        ]
+      ],
+      "queue_copies": [
+        [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "selection_before": {
+        "anchor": 8,
+        "caret": 4,
+        "selected": [
+          240,
+          160,
+          128,
+          128
+        ],
+        "active": true
+      },
+      "selection_after": {
+        "anchor": 4,
+        "caret": 10,
+        "selected": [],
+        "active": false
+      }
+    },
+    {
+      "event": "native-sdl-result",
+      "name": "selected-family-replacement",
+      "payload": [
+        240,
+        160,
+        128,
+        128
+      ],
+      "before": "A👩‍👩‍👧‍👦Z",
+      "caret": 26,
+      "byte_limit": 80,
+      "expected": "A𠀀Z",
+      "selection": {
+        "anchor": 26,
+        "caret": 1,
+        "selected": "👩‍👩‍👧‍👦"
+      },
+      "expected_caret": 5,
+      "after": [
+        65,
+        240,
+        160,
+        128,
+        128,
+        90
+      ],
+      "after_caret": 5,
+      "inserts": [
+        [
+          240,
+          160,
+          128,
+          128
+        ]
+      ],
+      "notifications": [
+        [
+          65,
+          240,
+          160,
+          128,
+          128,
+          90
+        ]
+      ],
+      "queue_copies": [
+        [
+          240,
+          160,
+          128,
+          128,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          240,
+          160,
+          128,
+          128,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "selection_before": {
+        "anchor": 26,
+        "caret": 1,
+        "selected": [
+          240,
+          159,
+          145,
+          169,
+          226,
+          128,
+          141,
+          240,
+          159,
+          145,
+          169,
+          226,
+          128,
+          141,
+          240,
+          159,
+          145,
+          167,
+          226,
+          128,
+          141,
+          240,
+          159,
+          145,
+          166
+        ],
+        "active": true
+      },
+      "selection_after": {
+        "anchor": 1,
+        "caret": 5,
+        "selected": [],
+        "active": false
+      }
+    },
+    {
+      "event": "native-sdl-result",
+      "name": "selected-forward-cjk-replacement",
+      "payload": [
+        240,
+        159,
+        145,
+        167
+      ],
+      "before": "A中𠀀Z",
+      "caret": 1,
+      "byte_limit": 80,
+      "expected": "A👧𠀀Z",
+      "selection": {
+        "anchor": 1,
+        "caret": 4,
+        "selected": "中"
+      },
+      "expected_caret": 5,
+      "after": [
+        65,
+        240,
+        159,
+        145,
+        167,
+        240,
+        160,
+        128,
+        128,
+        90
+      ],
+      "after_caret": 5,
+      "inserts": [
+        [
+          240,
+          159,
+          145,
+          167
+        ]
+      ],
+      "notifications": [
+        [
+          65,
+          240,
+          159,
+          145,
+          167,
+          240,
+          160,
+          128,
+          128,
+          90
+        ]
+      ],
+      "queue_copies": [
+        [
+          240,
+          159,
+          145,
+          167,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          240,
+          159,
+          145,
+          167,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "selection_before": {
+        "anchor": 1,
+        "caret": 4,
+        "selected": [
+          228,
+          184,
+          173
+        ],
+        "active": true
+      },
+      "selection_after": {
+        "anchor": 1,
+        "caret": 5,
+        "selected": [],
+        "active": false
+      }
+    },
+    {
+      "event": "native-sdl-result",
+      "name": "selected-combining-replacement",
+      "payload": [
+        228,
+        184,
+        173
+      ],
+      "before": "AéZ",
+      "caret": 4,
+      "byte_limit": 80,
+      "expected": "A中Z",
+      "selection": {
+        "anchor": 4,
+        "caret": 1,
+        "selected": "é"
+      },
+      "expected_caret": 4,
+      "after": [
+        65,
+        228,
+        184,
+        173,
+        90
+      ],
+      "after_caret": 4,
+      "inserts": [
+        [
+          228,
+          184,
+          173
+        ]
+      ],
+      "notifications": [
+        [
+          65,
+          228,
+          184,
+          173,
+          90
+        ]
+      ],
+      "queue_copies": [
+        [
+          228,
+          184,
+          173,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          228,
+          184,
+          173,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "selection_before": {
+        "anchor": 4,
+        "caret": 1,
+        "selected": [
+          101,
+          204,
+          129
+        ],
+        "active": true
+      },
+      "selection_after": {
+        "anchor": 1,
+        "caret": 4,
+        "selected": [],
+        "active": false
+      }
+    },
+    {
+      "event": "native-sdl-result",
+      "name": "blocked-commit-preserves-selection",
+      "payload": [
+        64,
+        194,
+        167
+      ],
+      "before": "A中𠀀Z",
+      "caret": 8,
+      "byte_limit": 80,
+      "expected": "A中𠀀Z",
+      "selection": {
+        "anchor": 8,
+        "caret": 4,
+        "selected": "𠀀"
+      },
+      "expected_caret": 4,
+      "after": [
+        65,
+        228,
+        184,
+        173,
+        240,
+        160,
+        128,
+        128,
+        90
+      ],
+      "after_caret": 4,
+      "inserts": [],
+      "notifications": [],
+      "queue_copies": [
+        [
+          64,
+          194,
+          167,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          64,
+          194,
+          167,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "selection_before": {
+        "anchor": 8,
+        "caret": 4,
+        "selected": [
+          240,
+          160,
+          128,
+          128
+        ],
+        "active": true
+      },
+      "selection_after": {
+        "anchor": 8,
+        "caret": 4,
+        "selected": [
+          240,
+          160,
+          128,
+          128
+        ],
+        "active": true
+      }
     }
   ],
-  "scope": "Synthetic SDL_TEXTINPUT in the actual polling loop, native queue copies, single insertion and native notifications; not physical keyboard, IME composition or selection"
+  "scope": "Synthetic SDL_TEXTINPUT in the actual polling loop, native queue copies, single insertion, native notifications and programmatically seeded single-line selections; not physical keyboard, IME composition or mouse selection"
 }

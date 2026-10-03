@@ -46,6 +46,17 @@ int main() {
     }
     auto replaced=replace_selection(u8"A𠀀e\u0301Z",2,6,u8"中文",100);
     check(replaced.text==u8"A中文Z"&&replaced.caret==7,"selection expands to whole supplementary and combining graphemes");
+    for(std::size_t anchor=0;anchor<=text.size();++anchor) {
+        for(std::size_t caret=0;caret<=text.size();++caret) {
+            const auto aligned=align_selection(text,anchor,caret);
+            check(std::binary_search(boundaries.begin(),boundaries.end(),aligned.anchor)&&
+                std::binary_search(boundaries.begin(),boundaries.end(),aligned.caret),
+                "selection endpoints cannot divide scalars or graphemes");
+            if(anchor<caret) check(aligned.anchor<=anchor&&aligned.caret>=caret,"forward selection includes all touched graphemes");
+            if(anchor>caret) check(aligned.anchor>=anchor&&aligned.caret<=caret,"reverse selection keeps direction and all touched graphemes");
+            if(anchor==caret) check(aligned.anchor==aligned.caret&&aligned.caret<=caret,"collapsed selection stays collapsed");
+        }
+    }
     replaced=replace_selection(u8"AeZ",2,2,u8"\u0301",100);
     check(replaced.text==u8"Ae\u0301Z"&&replaced.caret==4,"new combining input joins the preceding grapheme");
     replaced=replace_selection(u8"A𠀀Z",3,3,"B",100);

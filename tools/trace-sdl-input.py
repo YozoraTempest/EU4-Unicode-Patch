@@ -20,6 +20,7 @@ if(new NativeFunction(Process.getModuleByName('eu4_unicode_probe.dll').getExport
 const cases=__CASES__;
 const assign=new NativeFunction(base.add(0x95110),'pointer',['pointer','pointer','uint64']);
 const destroy=new NativeFunction(base.add(0x95660),'void',['pointer']);
+const select=new NativeFunction(base.add(0x153b170),'void',['pointer']);
 function bytes(s) {
   const n=s.add(16).readU64().toNumber(),data=s.add(24).readU64().compare(16)<0?s:s.readPointer();
   if(n>32000)throw new Error('Unexpected native string size');
@@ -27,6 +28,9 @@ function bytes(s) {
 }
 let view=null,widget=null,index=0,windowId=0,originalLimit=null;
 let armed=false,waiting=false,pending=false,deliveredAt=0,inserts=[],notifications=[],copies=[];
+let selectionBefore=null;
+function selectionState(){return {anchor:widget.add(0x92).readU16(),caret:widget.add(0x54).readU16(),
+  selected:bytes(widget.add(0x70)),active:widget.add(0x90).readU8()!==0};}
 rpc.exports.arm=function(){armed=true;};
 function fail(error) {
   armed=false;
@@ -77,7 +81,8 @@ Interceptor.attach(base.add(0x15988e0),{onEnter(){
     if(waiting){
       if(!deliveredAt||Date.now()-deliveredAt<750)return;
       send({event:'native-sdl-result',...cases[index],after:bytes(widget.add(0x30)),
-        after_caret:widget.add(0x54).readU16(),inserts,notifications,queue_copies:copies});
+        after_caret:widget.add(0x54).readU16(),inserts,notifications,queue_copies:copies,
+        ...(cases[index].selection?{selection_before:selectionBefore,selection_after:selectionState()}:{} )});
       waiting=false;++index;
     }
     if(index===cases.length){
@@ -95,6 +100,12 @@ Interceptor.attach(base.add(0x15988e0),{onEnter(){
     if(widget.add(0x56).readU16()!==0||widget.add(0x80).readU64().compare(0)!==0)
       throw new Error('Widget is not a single unselected line');
     widget.add(0x54).writeU16(c.caret);widget.add(0xe0).writeS32(c.byte_limit);
+    widget.add(0x90).writeU8(0);
+    if(c.selection){
+      widget.add(0x92).writeU16(c.selection.anchor);widget.add(0x94).writeU16(0);
+      widget.add(0x54).writeU16(c.selection.caret);select(widget);widget.add(0x90).writeU8(1);
+      selectionBefore=selectionState();
+    }
     inserts=[];notifications=[];copies=[];deliveredAt=0;waiting=true;pending=true;
   } catch(error){fail(error);}
 }});

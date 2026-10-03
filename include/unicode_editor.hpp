@@ -15,6 +15,9 @@ EditPlan plan_edit(std::string_view text,std::size_t caret,EditKey key);
 std::size_t grapheme_prefix(std::string_view text,std::size_t byte_limit);
 // Native edit-widget blacklist entries are single Latin-1 bytes, not UTF-8.
 std::string filter_editor_characters(std::string_view text,std::string_view blacklist);
+struct Selection { std::size_t anchor,caret; };
+// Preserve selection direction while including every touched grapheme.
+Selection align_selection(std::string_view text,std::size_t anchor,std::size_t caret);
 struct EditResult { std::string text; std::size_t caret; };
 // Validate a complete commit before replacing an outward-aligned selection.
 // The returned text and caret form one state; a failed commit changes neither.

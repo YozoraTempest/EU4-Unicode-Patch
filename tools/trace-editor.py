@@ -56,7 +56,7 @@ Interceptor.attach(base.add(0x15988e0),{onEnter() {
       const nativeText=widget.add(0x30),nativeLength=nativeText.add(16).readU64().toNumber();
       const nativeData=nativeText.add(24).readU64().compare(16)<0?nativeText:nativeText.readPointer();
       send({event:'native-editor-fixture',name,native_bytes:Array.from(new Uint8Array(nativeData.readByteArray(nativeLength))),
-        size:nativeLength,width:widget.add(0x6a).readU16(),rows:widget.add(0x60).readU16(),
+        size:nativeLength,height:widget.add(0x6a).readU16(),rows:widget.add(0x60).readU16(),
         backspace_rva:widget.readPointer().add(0x138).readPointer().sub(base).toString(),
         delete_rva:widget.readPointer().add(0x140).readPointer().sub(base).toString()});
       if(text(widget.add(0x30))!==value||widget.add(0x56).readU16()!==0||widget.add(0x80).readU64().compare(0)!==0)

@@ -2,7 +2,7 @@
   "artifact": {
     "event": "artifact",
     "exe_sha256": "9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a",
-    "dll_sha256": "c6b32d4fd1e1c6c20a39680d5f255b31b04945ca6c4ff85468388d5b21555425",
+    "dll_sha256": "defdc5e398c90e7b8a73ceb0c6273776a7fc24b8c36257dd2d2baf6434bb70ca",
     "method": "programmatic native SetText and key handler on UI thread; not physical input or IME"
   },
   "passed": true,
