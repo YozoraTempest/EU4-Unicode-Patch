@@ -25,6 +25,7 @@ std::string_view trim(std::string_view text) {
     return first==std::string_view::npos?std::string_view{}:text.substr(first,text.find_last_not_of(" \t\r\n")-first+1);
 }
 Readings parse_readings(std::string_view text) {
+    if(trim(text).empty()) throw std::invalid_argument("Empty pinyin reading");
     Readings result;
     while(!text.empty()) {
         const auto end=text.find('|');
@@ -45,6 +46,7 @@ Readings parse_readings(std::string_view text) {
         result.push_back(std::move(parts));
         if(end==std::string_view::npos) break;
         text.remove_prefix(end+1);
+        if(trim(text).empty()) throw std::invalid_argument("Empty pinyin reading");
     }
     return result;
 }

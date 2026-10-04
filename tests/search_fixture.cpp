@@ -1,4 +1,9 @@
 #include "native_search.hpp"
+#include "unicode_search.hpp"
+
+extern "C" __declspec(dllexport) void SearchFixtureSetOptions(unsigned typo,unsigned fuzzy) noexcept {
+    eu4unicode::set_search_options({typo!=0,fuzzy!=0});
+}
 
 extern "C" __declspec(dllexport) std::uint64_t SearchFixtureFind(std::uintptr_t caller,
     const char* name,std::uint64_t length,std::uint64_t start,const char* query,

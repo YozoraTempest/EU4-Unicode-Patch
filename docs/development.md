@@ -51,6 +51,16 @@ ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径
 
 搜索接入外交国家列表与省份查找，支持中文、全拼、首字母、部分拼音、混合输入及简繁匹配。名称按当前显示内容建立索引，词组读音来自固定版本的 `phrase-pinyin-data`，其余汉字由系统 ICU 转写。
 
+至少 5 个字母的完整拼音默认容忍一次插入、删除、替换或相邻字母颠倒；首字母和中文查询不放宽。需要模糊音时，可创建 `plugins/eu4_unicode_patch/config.ini`，重启游戏后生效：
+
+```ini
+[search]
+typo_tolerance=1
+fuzzy_pinyin=1
+```
+
+`typo_tolerance` 默认 `1`，`fuzzy_pinyin` 默认 `0`。模糊音支持 `zh/z`、`ch/c`、`sh/s`、`n/l`、`en/eng` 和 `in/ing`；设为 `0` 可分别关闭。
+
 特殊读音可写入游戏目录的 `plugins/eu4_unicode_patch/pinyin.txt`，支持 UTF-8 和 UTF-8 BOM，重启游戏后生效。每个汉字对应一个拼音音节，重复词组可添加不同读音，`#` 开头为注释：
 
 ```text

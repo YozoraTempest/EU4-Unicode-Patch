@@ -28,7 +28,7 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/pinyin_data.inc
     DEPENDS tools/generate-pinyin-data.py "${PINYIN_SOURCE}/pinyin.txt"
         "${PINYIN_SOURCE}/LICENSE" "${PINYIN_SOURCE}/source.json"
     VERBATIM)
-add_library(unicode_search STATIC src/unicode_search.cpp src/unicode_pinyin.cpp src/native_search.cpp
+add_library(unicode_search STATIC src/unicode_search.cpp src/unicode_search_fuzzy.cpp src/unicode_pinyin.cpp src/native_search.cpp
     "${CMAKE_CURRENT_BINARY_DIR}/generated/pinyin_data.inc")
 target_include_directories(unicode_search PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set_source_files_properties(src/unicode_pinyin.cpp PROPERTIES COMPILE_OPTIONS /bigobj)
@@ -99,6 +99,9 @@ target_link_libraries(unicode_search_tests PRIVATE unicode_search)
 add_executable(native_search_tests tests/native_search_tests.cpp)
 target_link_libraries(native_search_tests PRIVATE unicode_search)
 target_compile_options(native_search_tests PRIVATE /W4 /utf-8 /EHsc)
+add_executable(pinyin_fuzzy_tests tests/pinyin_fuzzy_tests.cpp)
+target_link_libraries(pinyin_fuzzy_tests PRIVATE unicode_search)
+target_compile_options(pinyin_fuzzy_tests PRIVATE /W4 /utf-8 /EHsc)
 add_library(search_fixture SHARED tests/search_fixture.cpp)
 target_link_libraries(search_fixture PRIVATE unicode_search)
 target_compile_options(search_fixture PRIVATE /W4 /utf-8 /EHsc)
@@ -130,6 +133,7 @@ add_test(NAME glyph_registry COMMAND glyph_registry_tests)
 add_test(NAME unicode_editor COMMAND unicode_editor_tests)
 add_test(NAME unicode_search COMMAND unicode_search_tests)
 add_test(NAME native_search COMMAND native_search_tests)
+add_test(NAME pinyin_fuzzy COMMAND pinyin_fuzzy_tests)
 add_test(NAME native_steam_presence COMMAND native_steam_presence_tests)
 add_test(NAME native_script_bom COMMAND native_script_bom_tests)
 add_test(NAME native_ime COMMAND native_ime_tests)

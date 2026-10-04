@@ -2,7 +2,9 @@
 #include "unicode_services.hpp"
 #include "unicode_text.hpp"
 #include "unicode_pinyin.hpp"
+#include "unicode_search_fuzzy.hpp"
 #include <algorithm>
+#include <atomic>
 #include <list>
 #include <memory>
 #include <stdexcept>
@@ -15,7 +17,9 @@ namespace {
 struct Keys {
     std::string unicode,latin,simplified;
     std::vector<SearchSyllable> syllables;
+    std::vector<std::vector<std::vector<std::string>>> fuzzy_readings;
 };
+std::atomic<unsigned> options{1};
 struct CachedName {
     std::shared_ptr<const Keys> keys;
     std::list<std::string>::iterator position;
@@ -25,6 +29,7 @@ thread_local std::unordered_map<std::string,CachedName> cache;
 thread_local std::list<std::string> recent;
 thread_local std::size_t cache_bytes=0;
 thread_local std::uint64_t cache_generation=0;
+thread_local unsigned cache_options=1;
 std::uint32_t latin_equivalent(std::uint32_t scalar) {
     if((scalar>=0xc0&&scalar<=0xc6)||(scalar>=0xe0&&scalar<=0xe6)) return 'a';
     if(scalar==0xc7||scalar==0xe7) return 'c';
@@ -54,7 +59,10 @@ std::string display_text(std::string_view text) {
 }
 std::shared_ptr<const Keys> keys(std::string_view text) {
     const auto generation=pinyin_dictionary_generation();
-    if(generation!=cache_generation) { cache.clear();recent.clear();cache_bytes=0;cache_generation=generation; }
+    const auto configured=options.load(std::memory_order_acquire);
+    if(generation!=cache_generation||configured!=cache_options) {
+        cache.clear();recent.clear();cache_bytes=0;cache_generation=generation;cache_options=configured;
+    }
     const auto owned=std::string(text);
     const auto found=cache.find(owned);
     if(found!=cache.end()) {
@@ -67,11 +75,25 @@ std::shared_ptr<const Keys> keys(std::string_view text) {
     result->latin=latin_search_key(display);
     result->simplified=simplified_search_text(display);
     result->syllables=search_syllables(result->simplified);
+    if(configured&2) {
+        result->fuzzy_readings.resize(result->syllables.size());
+        for(std::size_t i=0;i<result->syllables.size();++i)
+            for(const auto& reading:result->syllables[i].readings)
+                result->fuzzy_readings[i].push_back(pinyin_fuzzy_forms(reading));
+    }
     auto bytes=sizeof(CachedName)+sizeof(Keys)+owned.size()*2+result->unicode.size()+
         result->latin.size()+result->simplified.size()+result->syllables.capacity()*sizeof(SearchSyllable);
     for(const auto& syllable:result->syllables) {
         bytes+=syllable.literal.size()+syllable.readings.capacity()*sizeof(std::string);
         for(const auto& reading:syllable.readings) bytes+=reading.size();
+    }
+    bytes+=result->fuzzy_readings.capacity()*sizeof(decltype(result->fuzzy_readings)::value_type);
+    for(const auto& readings:result->fuzzy_readings) {
+        bytes+=readings.capacity()*sizeof(std::vector<std::string>);
+        for(const auto& forms:readings) {
+            bytes+=forms.capacity()*sizeof(std::string);
+            for(const auto& form:forms) bytes+=form.size();
+        }
     }
     constexpr std::size_t budget=32*1024*1024;
     if(bytes<=budget) {
@@ -107,7 +129,8 @@ const Pattern& pattern(std::string_view query) {
     return *current;
 }
 bool prefix(std::string_view text,std::string_view value) { return text.substr(0,value.size())==value; }
-bool phonetic_contains(const std::vector<SearchSyllable>& units,const Pattern& query) {
+bool phonetic_contains(const Keys& candidate,const Pattern& query,bool fuzzy=false) {
+    const auto& units=candidate.syllables;
     if(query.phonetic.empty()) return false;
     const auto size=query.phonetic.size();
     std::vector<unsigned char> previous(size+1);
@@ -132,6 +155,13 @@ bool phonetic_contains(const std::vector<SearchSyllable>& units,const Pattern& q
                 for(std::size_t branch=1;branch<alternatives;++branch) {
                     if(selected&&selected!=branch) continue;
                     const auto& reading=unit.readings[branch-1];
+                    if(fuzzy) {
+                        for(const auto& form:candidate.fuzzy_readings[index][branch-1]) {
+                            accept(form,true,branch);
+                            if(query.initials) accept(std::string_view(form).substr(0,1),false,branch);
+                        }
+                        continue;
+                    }
                     accept(reading,true,branch);
                     if(query.initials) accept(std::string_view(reading).substr(0,1),false,branch);
                     if(reading.find('v')!=std::string::npos) {
@@ -149,6 +179,18 @@ bool phonetic_contains(const std::vector<SearchSyllable>& units,const Pattern& q
     }
     return false;
 }
+bool tolerant_contains(const Keys& candidate,const Pattern& query) {
+    const auto configured=search_options();
+    return (configured.fuzzy_pinyin&&!candidate.fuzzy_readings.empty()&&phonetic_contains(candidate,query,true))||
+        (configured.typo_tolerance&&pinyin_typo_matches(candidate.syllables,query.phonetic));
+}
+}
+void set_search_options(SearchOptions value) noexcept {
+    options.store((value.typo_tolerance?1u:0u)|(value.fuzzy_pinyin?2u:0u),std::memory_order_release);
+}
+SearchOptions search_options() noexcept {
+    const auto configured=options.load(std::memory_order_acquire);
+    return {(configured&1)!=0,(configured&2)!=0};
 }
 std::string latin_search_key(std::string_view text) {
     const auto canonical=canonical_text(text);
@@ -166,7 +208,7 @@ bool display_search_contains(std::string_view name,std::string_view query) {
     return candidate->unicode.find(match.unicode)!=std::string::npos||
         candidate->latin.find(match.latin)!=std::string::npos||
         candidate->simplified.find(match.simplified)!=std::string::npos||
-        phonetic_contains(candidate->syllables,match);
+        phonetic_contains(*candidate,match)||tolerant_contains(*candidate,match);
 }
 bool country_search_contains(std::string_view name,std::string_view query) { return display_search_contains(name,query); }
 std::pair<std::string,std::string> display_search_latin_keys(std::string_view name,std::string_view query) {
@@ -178,7 +220,8 @@ int display_search_distance(std::string_view name,std::string_view query) {
     const auto candidate=keys(name);
     if(candidate->unicode==match.unicode||candidate->latin==match.latin||candidate->simplified==match.simplified) return 0;
     if(candidate->unicode.find(match.unicode)!=std::string::npos||candidate->latin.find(match.latin)!=std::string::npos||
-       candidate->simplified.find(match.simplified)!=std::string::npos||phonetic_contains(candidate->syllables,match)) return 1;
+       candidate->simplified.find(match.simplified)!=std::string::npos||phonetic_contains(*candidate,match)) return 1;
+    if(tolerant_contains(*candidate,match)) return 2;
     return -1;
 }
 }

@@ -61,6 +61,8 @@ def verify(exe, build):
     fixture.SearchFixtureFind.restype = C.c_uint64
     fixture.SearchFixtureDistance.argtypes = [C.c_size_t, C.c_void_p, C.c_void_p, C.c_void_p]
     fixture.SearchFixtureDistance.restype = C.c_int64
+    fixture.SearchFixtureSetOptions.argtypes = [C.c_uint, C.c_uint]
+    fixture.SearchFixtureSetOptions.restype = None
     owned = []
 
     def assign_text(target, data):
@@ -163,9 +165,12 @@ def verify(exe, build):
         cases = [("flx", "法兰西"), ("法lanxi", "法兰西"), ("adl", "奥地利"),
                  ("cq", "重慶"), ("changan", "长安"), ("xz", "西藏"),
                  ("bldb", "勃兰登堡"), ("兰西", "法兰西"), ("長安", "长安"),
-                 ("𠮷", "𠮷野"), ("ecole", "École Straße Long Province")]
+                 ("𠮷", "𠮷野"), ("ecole", "École Straße Long Province"),
+                 ("falanix", "法兰西"), ("falaxi", "法兰西"), ("falaanxi", "法兰西"),
+                 ("falamxi", "法兰西"), ("congqin", "重慶")]
         count = 0
         for query, expected in cases:
+            fixture.SearchFixtureSetOptions(1, int(query == "congqin"))
             for strict in (0, 1):
                 records = C.create_string_buffer(0x90 * len(names))
                 begin = C.addressof(records)

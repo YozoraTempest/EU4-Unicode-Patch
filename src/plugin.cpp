@@ -73,9 +73,13 @@ void transliterate_save_path(EngineString* text) {
 eu4unicode::NativeFindText original_find_text=nullptr;
 eu4unicode::NativeSearchDistance original_search_distance=nullptr;
 std::filesystem::path search_dictionary_path;
-void load_search_dictionary() {
+void load_search_resources() {
     static std::once_flag loaded;
     std::call_once(loaded,[] {
+        const auto config=search_dictionary_path.parent_path()/L"config.ini";
+        eu4unicode::set_search_options({
+            GetPrivateProfileIntW(L"search",L"typo_tolerance",1,config.c_str())!=0,
+            GetPrivateProfileIntW(L"search",L"fuzzy_pinyin",0,config.c_str())!=0});
         try {
             if(!std::filesystem::exists(search_dictionary_path)) return;
             std::ifstream file(search_dictionary_path,std::ios::binary);
@@ -93,7 +97,7 @@ std::uint64_t find_country_name(const char* name,std::uint64_t length,std::uint6
         reinterpret_cast<std::uintptr_t>(image);
     if(!eu4unicode::display_find_caller(caller)) return original_find_text(name,length,start,query,query_length);
     try {
-        load_search_dictionary();
+        load_search_resources();
         return eu4unicode::find_display_name(caller,name,length,start,query,query_length,original_find_text);
     } catch(...) { log("Unicode display-name search failed; candidate excluded."); return UINT64_MAX; }
 }
@@ -102,7 +106,7 @@ std::int64_t find_province_distance(const EngineString* name,const EngineString*
         reinterpret_cast<std::uintptr_t>(image);
     if(!eu4unicode::province_distance_caller(caller)) return original_search_distance(name,query);
     try {
-        load_search_dictionary();
+        load_search_resources();
         return eu4unicode::province_search_distance(caller,name,query,original_search_distance);
     } catch(...) { log("Unicode province distance failed; candidate ranked last."); return INT32_MAX/2; }
 }

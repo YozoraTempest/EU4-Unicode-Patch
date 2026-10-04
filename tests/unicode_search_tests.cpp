@@ -28,7 +28,16 @@ int main() {
     check(!country_search_contains(u8"法兰西","f"),"one letter does not expand to pinyin matches");
     check(!country_search_contains(u8"法兰西","alan"),"pinyin starts at syllable boundaries");
     check(!country_search_contains(u8"法兰西",u8"花兰西"),"Chinese literals do not match homophones");
-    check(!country_search_contains(u8"法兰西","falanix"),"typo tolerance is not implicitly enabled");
+    for(const auto query:{"falanix","falaxi","falaanxi","falamxi"})
+        check(country_search_contains(u8"法兰西",query),"one pinyin transposition, deletion, insertion or substitution");
+    check(!country_search_contains(u8"法兰西","falamix"),"two pinyin edits remain unmatched");
+    check(!country_search_contains(u8"法兰西","fx")&&!country_search_contains(u8"法兰西","fxxx"),"short queries do not use typo tolerance");
+    check(!country_search_contains(u8"长安","changanxxy"),"extra trailing letters exceed the edit limit");
+    check(!country_search_contains("France","frnace"),"Latin names retain native fuzzy behavior");
+    eu4unicode::set_search_options({false,false});
+    check(!country_search_contains(u8"法兰西","falanix"),"typo tolerance can be disabled");
+    eu4unicode::set_search_options({true,false});
+    check(country_search_contains(u8"New 法兰西","newfalanix")&&country_search_contains(u8"法蘭西","falanix"),"typos apply to complete mixed and traditional names");
     check(country_search_contains(u8"奥地利","aodili")&&country_search_contains(u8"奥地利","adl"),"Austrian phrase pronunciation");
     check(country_search_contains(u8"勃兰登堡","bldb"),"longer initial sequence");
     check(country_search_contains(u8"重庆","chongqing")&&country_search_contains(u8"重庆","cq"),"Chongqing phrase pronunciation");
@@ -44,6 +53,16 @@ int main() {
     check(eu4unicode::display_search_distance(u8"长安",u8"長安")==0&&
         eu4unicode::display_search_distance(u8"长安","ca")==1&&
         eu4unicode::display_search_distance(u8"长安","paris")==-1,"province ranking contract");
+    check(eu4unicode::display_search_distance(u8"法兰西","falanix")==2,"tolerant pinyin has a distinct match quality");
+    eu4unicode::set_search_options({false,false});
+    check(!country_search_contains(u8"重庆","congqing")&&!country_search_contains(u8"南京","lanjing"),"phonetic ambiguity defaults off");
+    eu4unicode::set_search_options({false,true});
+    for(const auto query:{"congqing","chongqin","congqin"})
+        check(country_search_contains(u8"重庆",query),"optional retroflex and nasal ambiguity");
+    check(country_search_contains(u8"南京","lanjing")&&country_search_contains(u8"深圳","senzeng"),"optional n/l and combined syllable forms");
+    check(!country_search_contains(u8"法兰西",u8"花兰西"),"phonetic options never change typed Chinese literals");
+    eu4unicode::set_search_options({true,false});
+    check(!country_search_contains(u8"重庆","congqin"),"option changes invalidate fuzzy reading caches");
     std::string repeated;
     for(int i=0;i<120;++i) repeated+=u8"中";
     check(eu4unicode::transliterated_text(repeated,"Han-Latin").size()>repeated.size(),"transliterator expands its output buffer");
@@ -53,11 +72,21 @@ int main() {
     bool bad_dictionary=false;
     try { eu4unicode::set_pinyin_dictionary(u8"重庆: chong\n"); } catch(const std::invalid_argument&) { bad_dictionary=true; }
     check(bad_dictionary&&country_search_contains(u8"𠮷野","jy"),"invalid dictionary replacement is atomic");
+    for(const auto invalid:{u8"重庆:",u8"重庆: chong qing |",u8"重庆: | chong qing",u8"重庆: chong qing || zhong jing"}) {
+        bool rejected_reading=false;
+        try {eu4unicode::set_pinyin_dictionary(invalid);} catch(const std::invalid_argument&) {rejected_reading=true;}
+        check(rejected_reading&&country_search_contains(u8"𠮷野","jy"),"empty dictionary readings are rejected without replacing the active table");
+    }
     eu4unicode::set_pinyin_dictionary(u8"重庆: chong qing | zhong jing\n");
+    eu4unicode::set_search_options({false,false});
     check(country_search_contains(u8"重庆","chongqing")&&country_search_contains(u8"重庆","zhongjing")&&
         !country_search_contains(u8"重庆","chongjing"),"phrase alternatives keep their syllables together");
+    eu4unicode::set_search_options({true,false});
+    check(country_search_contains(u8"重庆","zhongjign")&&!country_search_contains(u8"重庆","chongjign"),"typo matching preserves complete phrase alternatives");
     eu4unicode::set_pinyin_dictionary("");
+    eu4unicode::set_search_options({false,false});
     check(!country_search_contains(u8"重庆","zhongqing")&&!country_search_contains(u8"𠮷野","jy"),"dictionary reload invalidates cached names");
+    eu4unicode::set_search_options({true,false});
     for(int i=0;i<1600;++i) check(country_search_contains(u8"法兰西"+std::to_string(i),"flx"),"large mod names exceed the previous cache count");
     check(country_search_contains(u8"法兰西0","flx"),"large lists remain searchable after repeated queries");
     bool rejected=false;

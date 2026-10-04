@@ -31,6 +31,9 @@ int main() {
         check(find_display_name(caller,name.data(),name.size(),0,"zz",2,native_find)==UINT64_MAX,"unmatched name");
     }
     check(find_display_name(0x17041cf,name.data(),name.size(),0,query.data(),query.size(),native_find)==7,"unrelated search preserves byte offsets");
+    const std::string french=u8"法兰西",typo="falanix";
+    for(const auto caller:{0xefc394,0x1141feb,0x11420e2})
+        check(find_display_name(caller,french.data(),french.size(),0,typo.data(),typo.size(),native_find)==0,"tolerant pinyin reaches each scoped native list");
     const auto native_name=view(name),native_query=view(query);
     for(const auto caller:{0x1142192,0x11421b2})
         check(province_search_distance(caller,&native_name,&native_query,native_distance)==1,"both province ranking callers accept pinyin");
