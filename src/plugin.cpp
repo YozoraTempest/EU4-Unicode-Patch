@@ -42,6 +42,7 @@ thread_local std::uint32_t button_extra=0;
 thread_local std::uint32_t button_slot=0;
 thread_local std::uint32_t last_scalar_bytes=1;
 thread_local std::shared_ptr<const eu4unicode::FormattedText> active_line_breaks,button_line_breaks;
+thread_local std::shared_ptr<const eu4unicode::FormattedText> popup_line_breaks;
 struct CachedFormattedText { std::shared_ptr<const eu4unicode::FormattedText> value; std::size_t bytes; };
 thread_local std::unordered_map<std::string,CachedFormattedText> formatted_cache;
 thread_local std::size_t formatted_cache_bytes=0;
@@ -648,6 +649,12 @@ std::uintptr_t g_split_format_return,g_split_plain_entry,g_list_format_return,g_
 std::uintptr_t g_alternate_format_return,g_alternate_plain_entry,g_alternate_end,g_alternate_advance_return;
 std::uintptr_t g_split_kern_return,g_list_kern_return,g_alternate_kern_return;
 std::uintptr_t g_button_wrap_return,g_button_wrap_branch;
+std::uintptr_t g_popup_entry_return,g_popup_end_return,g_popup_data;
+std::uintptr_t g_popup_copy_return,g_popup_color_copy_return,g_popup_icon_copy_return;
+std::uintptr_t g_popup_format_return,g_popup_plain_entry,g_popup_measure_return;
+std::uintptr_t g_popup_wrap_return,g_popup_advance_entry,g_popup_advance_return;
+std::uintptr_t g_popup_draw_format_return,g_popup_draw_plain_entry,g_popup_draw_return;
+std::uintptr_t g_popup_icon_end_return,g_popup_measure_kern_return,g_popup_draw_kern_return,g_popup_page_return;
 std::uintptr_t g_heap_pointer,g_heap_alloc,g_heap_return;
 std::uintptr_t g_button_copy_return,g_button_measure_return,g_button_draw_return,g_button_loop,g_button_end;
 std::uintptr_t g_alternate_measure_return,g_wrap_return,g_wrap_branch;
@@ -677,6 +684,10 @@ void bitmap_advance_hook();void list_measure_hook();void list_advance_hook();
 void split_format_hook();void list_format_hook();void alternate_format_hook();void alternate_advance_hook();
 void split_kern_hook();void list_kern_hook();void alternate_kern_hook();
 void button_wrap_hook();
+void popup_entry_hook();void popup_end_hook();void popup_copy_hook();void popup_color_copy_hook();void popup_icon_copy_hook();
+void popup_format_hook();void popup_measure_hook();void popup_wrap_hook();void popup_advance_hook();
+void popup_draw_format_hook();void popup_draw_hook();void popup_icon_end_hook();
+void popup_measure_kern_hook();void popup_draw_kern_hook();void popup_page_hook();
 void heap_zero_hook();
 void button_copy_hook(); void button_measure_hook(); void button_draw_hook(); void button_advance_hook();
 void alternate_measure_hook(); void main_wrap_hook();
@@ -726,6 +737,9 @@ void store_loaded_glyph(void** table,std::uint32_t scalar,void* glyph) noexcept 
 std::size_t bounded_text_length(const char* source,std::size_t length) noexcept {
     return eu4unicode::scalar_prefix({source,length},32000);
 }
+void mark_popup_font_glyph(const eu4unicode::NativeGlyph* glyph,eu4unicode::PopupFontVertex* vertices) noexcept { eu4unicode::mark_popup_font_glyph(glyph,vertices); }
+void begin_popup_font(void* font) { eu4unicode::begin_popup_font(font); }
+void end_popup_font() noexcept { eu4unicode::end_popup_font(); }
 std::size_t next_layout_scalar(const EngineString* source,std::size_t offset) noexcept {
     return eu4unicode::native_scalar_next({source->data(),static_cast<std::size_t>(source->size)},offset);
 }
@@ -818,6 +832,17 @@ char* construct_map_scalar(EngineString* target,const char* source) {
     std::memcpy(destination,source,size);
     return destination;
 }
+std::uint64_t copy_popup_scalar(EngineString* target,const char* source) {
+    *target={};target->capacity=15;
+    construct_map_scalar(target,source);
+    return decode_z(source);
+}
+void prepare_popup_wrap(const EngineString* source) noexcept {
+    popup_line_breaks.reset();
+    try { popup_line_breaks=formatted_boundaries({source->data(),static_cast<std::size_t>(source->size)}); }
+    catch(...) { log("Unicode popup line boundary preparation failed."); }
+}
+bool popup_wrap_after(std::uint32_t last_byte) noexcept { return popup_line_breaks&&popup_line_breaks->line_before(static_cast<std::size_t>(last_byte)+1); }
 std::uint64_t map_scalar_size(const EngineString* source,std::size_t offset) noexcept {
     if(offset>=source->size) return 1;
     const auto scalar=eu4unicode::decode({source->data()+offset,static_cast<std::size_t>(source->size)-offset});
@@ -938,6 +963,21 @@ bool initialize(HMODULE module) {
         {0x159b91a,"0fb6142b498d8f200100004c8b1cd14d85db"},
         {0x15997a9,"66837906000f85130100008d041b660f6ec8"}
         ,{0x15970df,"6641837b06000f85e0030000837db000"}
+        ,{0x159c677,"488bcae86190affe8038000f84ed0600"}
+        ,{0x159cd75,"4c8d9c2438040000410f2873e8410f28"}
+        ,{0x159c6d8,"0fb61c07488d4d50e85b4baffe90440f"}
+        ,{0x159c72b,"0fb61c07488d4d50e8084baffe90440f"}
+        ,{0x159c79a,"0fb61c07488d4d50e8994aaffe90440f"}
+        ,{0x159c713,"488bcee8c58faffe488bce803c07a775"}
+        ,{0x159c833,"0fb604074d8ba4c7200100004d85e40f"}
+        ,{0x159c8a6,"6641837c2406000f85ee000000448ba5"}
+        ,{0x159c9a1,"ffc73b7e100f8c24fdffff448ba59003"}
+        ,{0x159cbb3,"488d4424604983f810490f43c1803c30"}
+        ,{0x159cec5,"0fb604064d8bacc7200100004d85ed75"}
+        ,{0x159ce31,"c644159000498b074c8b90e0000000f3"}
+        ,{0x159c899,"e8327bfffff30f58f0f30f58f8664183"}
+        ,{0x159da11,"e8ba69fffff3440f58e8f3440f104424"}
+        ,{0x159d9a0,"8b8d8803000083c106898d8803000083"}
         ,{0x159a240,"4e8d0409410fb6003ca77573"}
         ,{0x15996b1,"c68415d001000000498b06"}
         ,{0x159a45f,"c6840dd001000000498b06"}
@@ -1079,6 +1119,25 @@ bool initialize(HMODULE module) {
     g_alternate_kern_return=address(0x159b963);
     g_button_wrap_return=address(0x15970eb);
     g_button_wrap_branch=address(0x15974cb);
+    g_popup_entry_return=address(0x159c67f);
+    g_popup_end_return=address(0x159cd7d);
+    g_popup_data=address(0x956e0);
+    g_popup_copy_return=address(0x159c6f8);
+    g_popup_color_copy_return=address(0x159c74b);
+    g_popup_icon_copy_return=address(0x159c7ba);
+    g_popup_format_return=address(0x159c722);
+    g_popup_plain_entry=address(0x159c82b);
+    g_popup_measure_return=address(0x159c842);
+    g_popup_wrap_return=address(0x159c8b3);
+    g_popup_advance_entry=address(0x159c9a1);
+    g_popup_advance_return=address(0x159c9a6);
+    g_popup_draw_format_return=address(0x159cbc9);
+    g_popup_draw_plain_entry=address(0x159ceaf);
+    g_popup_draw_return=address(0x159ced4);
+    g_popup_icon_end_return=address(0x159ce36);
+    g_popup_measure_kern_return=address(0x159c8a6);
+    g_popup_draw_kern_return=address(0x159da1b);
+    g_popup_page_return=address(0x159d9a9);
     g_copy_buffer=address(0x2433cd0);
     g_heap_pointer=address(0x233d850);
     g_heap_alloc=address(0x1b66570);
@@ -1161,6 +1220,21 @@ bool initialize(HMODULE module) {
         {0x159f9a9,reinterpret_cast<void*>(list_kern_hook)},
         {0x159b95a,reinterpret_cast<void*>(alternate_kern_hook)},
         {0x15970df,reinterpret_cast<void*>(button_wrap_hook)},
+        {0x159c677,reinterpret_cast<void*>(popup_entry_hook)},
+        {0x159cd75,reinterpret_cast<void*>(popup_end_hook)},
+        {0x159c6d8,reinterpret_cast<void*>(popup_copy_hook)},
+        {0x159c72b,reinterpret_cast<void*>(popup_color_copy_hook)},
+        {0x159c79a,reinterpret_cast<void*>(popup_icon_copy_hook)},
+        {0x159c713,reinterpret_cast<void*>(popup_format_hook)},
+        {0x159c833,reinterpret_cast<void*>(popup_measure_hook)},
+        {0x159c8a6,reinterpret_cast<void*>(popup_wrap_hook)},
+        {0x159c9a1,reinterpret_cast<void*>(popup_advance_hook)},
+        {0x159cbb3,reinterpret_cast<void*>(popup_draw_format_hook)},
+        {0x159cec5,reinterpret_cast<void*>(popup_draw_hook)},
+        {0x159ce31,reinterpret_cast<void*>(popup_icon_end_hook)},
+        {0x159c899,reinterpret_cast<void*>(popup_measure_kern_hook)},
+        {0x159da11,reinterpret_cast<void*>(popup_draw_kern_hook)},
+        {0x159d9a0,reinterpret_cast<void*>(popup_page_hook)},
         {0x1a683ae,reinterpret_cast<void*>(heap_zero_hook)},
         {0x1596858,reinterpret_cast<void*>(button_copy_hook)},
         {0x1597071,reinterpret_cast<void*>(button_measure_hook)},

@@ -62,10 +62,10 @@ target_link_libraries(native_ime PUBLIC imm32)
 target_compile_definitions(native_ime PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 add_library(font_assets STATIC src/font_assets.cpp)
 target_include_directories(font_assets PUBLIC include)
-add_library(eu4_unicode_probe SHARED src/plugin.cpp src/text_hooks.asm src/layout_hooks.asm src/map_hooks.asm src/font_hooks.asm src/path_hooks.asm)
-add_library(eu4_unicode_patch SHARED src/plugin.cpp src/text_hooks.asm src/layout_hooks.asm src/map_hooks.asm src/font_hooks.asm src/path_hooks.asm)
+add_library(eu4_unicode_probe SHARED src/plugin.cpp src/text_hooks.asm src/layout_hooks.asm src/popup_hooks.asm src/map_hooks.asm src/font_hooks.asm src/path_hooks.asm)
+add_library(eu4_unicode_patch SHARED src/plugin.cpp src/text_hooks.asm src/layout_hooks.asm src/popup_hooks.asm src/map_hooks.asm src/font_hooks.asm src/path_hooks.asm)
 target_compile_definitions(eu4_unicode_probe PRIVATE EU4_UNICODE_RESEARCH)
-set_source_files_properties(src/text_hooks.asm src/layout_hooks.asm src/map_hooks.asm src/font_hooks.asm
+set_source_files_properties(src/text_hooks.asm src/layout_hooks.asm src/popup_hooks.asm src/map_hooks.asm src/font_hooks.asm
     PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/hook_context.inc")
 foreach(target eu4_unicode_probe eu4_unicode_patch)
     target_include_directories(${target} PRIVATE src)
