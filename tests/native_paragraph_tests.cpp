@@ -1,6 +1,8 @@
 #include "native_paragraph.hpp"
 #include "native_font_atlas.hpp"
 #include "unicode_text.hpp"
+#include "formatted_text.hpp"
+#include "formatted_paragraph.hpp"
 #include <windows.h>
 #include <array>
 #include <algorithm>
@@ -10,18 +12,25 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 
 void check(bool value,const char* message) {
     if(!value) { std::cerr<<"FAIL: "<<message<<'\n';std::exit(1); }
 }
 namespace {
 using namespace eu4unicode;
+int icon_width(void*,const char* name) { return std::strcmp(name,"adm")==0?18:0; }
+bool color_lookup(void*,unsigned char code,std::uint32_t* value) {
+    *value=0xffffffff;return code=='Y'||code=='R'||code=='G'||code=='!';
+}
 struct Font {
     alignas(void*) std::array<std::byte,0x4000> object{};
     alignas(void*) std::array<std::byte,0x500> context{};
     NativeGlyph anchor{};
+    std::array<void*,32> methods{};
     template<class T> void put(std::size_t offset,T value) { std::memcpy(object.data()+offset,&value,sizeof(value)); }
     Font(void* manager) {
+        methods[0xe8/8]=reinterpret_cast<void*>(icon_width);put(0,methods.data());
         put(0x48,context.data());put(0x120+0x41*8,&anchor);put(0x960,18);put(0x968,1.f);
         put(0x970,7);put(0x978,2048);put(0x97c,4096);
         std::memcpy(context.data()+0x480,&manager,sizeof(manager));
@@ -38,6 +47,22 @@ int native_width(void* font,const char*,int,bool) {
     return find_paragraph_glyph(table,probe_token)?1000:-42;
 }
 int native_height(void*,const EngineString*,int,int,const int*,bool) { return -43; }
+int transport_width(void* font,const char* source,int length,bool formatted) {
+    const auto text=std::string_view(source,length<0?std::strlen(source):static_cast<std::size_t>(length));
+    const auto table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(font)+0x120);
+    const auto scale=*reinterpret_cast<const float*>(static_cast<const std::byte*>(font)+0x968);
+    float width=0,maximum=0;
+    for(std::size_t offset=0;offset<text.size();) {
+        const auto unit=native_text_unit(text,offset,formatted);offset=unit.end;
+        if(unit.kind==TextUnitKind::color) continue;
+        if(unit.kind==TextUnitKind::icon) { width+=18;continue; }
+        if(unit.scalar=='\n') { maximum=(std::max)(maximum,width);width=0;continue; }
+        const auto glyph=find_paragraph_glyph(table,unit.scalar);
+        check(glyph!=nullptr,"formatted transport measurement uses the active paragraph glyphs");
+        width+=glyph->advance*scale;
+    }
+    return static_cast<int>((std::max)(maximum,width));
+}
 }
 int main() {
     using namespace eu4unicode;
@@ -47,6 +72,7 @@ int main() {
     std::ofstream metrics(directory/"gfx/fonts/zh-hans-18.fnt");
     metrics<<"common lineHeight=18 scaleW=2048 scaleH=4096\nchar id=65 x=1 y=4080 width=7 height=10\n";metrics.close();
     configure_font_atlases(directory,directory/"no-optional-fonts",nullptr,"gfx/fonts/",true);
+    native_paragraph_color=color_lookup;
     int manager=0;
     Font font(&manager),alias(&manager),other(nullptr);
     register_font_atlas(font.data(),"gfx/fonts/zh-hans-18");
@@ -109,9 +135,49 @@ int main() {
         static_cast<int>(geometry->layout->metrics().lines)*18,"public native height shares wrapped line metrics");
     check(measure_paragraph_text(font.data(),latin.c_str(),-1,true)==-42,"ordinary native width keeps its existing contract");
     const std::string formatted=u8"§Yالعربية§!";auto colored=borrow(formatted);
-    check(measure_paragraph_text(font.data(),formatted.c_str(),-1,true)==-42,"formatted text retains the native width implementation");
-    check(begin_native_paragraph(font.data(),&colored,box,0)==&colored,"formatted draw is excluded from the plain paragraph path");
+    const auto colored_layout=font_paragraph_layout(font.data(),formatted,32767,false);
+    check(measure_paragraph_text(font.data(),formatted.c_str(),-1,true)==
+        static_cast<int>(plan_paragraph_line(*colored_layout,0,1).pixels),"formatted width uses the contextual paragraph");
+    check(begin_native_paragraph(font.data(),&colored,box,0)!=&colored,"formatted draws receive the scoped paragraph transport");
     end_native_paragraph();
+    std::string nested;
+    for(int depth=0;depth<41;++depth) nested+=u8"§Y";
+    nested+=u8"العربية";
+    bool capacity_rejected=false;
+    try { font_paragraph_geometry(font.data(),nested,400,false); }
+    catch(const std::length_error&) { capacity_rejected=true; }
+    check(capacity_rejected,"final color resets count toward the native line buffer limit");
+    const std::string mixed=u8"§Yالعربية §R123 £adm£§! हिन्दी§! £adm£";
+    auto rich_source=borrow(mixed);
+    for(const auto scale:{1.f,1.1f,1.5f}) {
+        font.put(0x968,scale);
+        const auto layout=font_paragraph_layout(font.data(),mixed,200.f/scale,true);
+        const auto rich_geometry=font_paragraph_geometry(font.data(),mixed,200.f/scale,true);
+        check(layout==rich_geometry->layout&&layout->objects().size()==2,"measurement and geometry share native inline object layout");
+        original_text_width=transport_width;
+        float expected=0;
+        for(std::size_t line=0;line<layout->lines().size();++line)
+            expected=(std::max)(expected,plan_paragraph_line(*layout,line,scale).pixels);
+        const auto rich_draw=begin_native_paragraph(font.data(),&rich_source,box,0);
+        check(rich_draw!=&rich_source&&measure_paragraph_text(font.data(),rich_draw->data(),static_cast<int>(rich_draw->size),true)==
+            static_cast<int>(expected),"decorated transport keeps the shaped line advances at fractional UI scales");
+        check(std::string_view(rich_source.data(),rich_source.size)==mixed,"decorated source strings remain unchanged");
+        end_native_paragraph();
+        const auto button=begin_native_button_paragraph(font.data(),&rich_source,200,margin,true);
+        check(button!=&rich_source,"button draw scope uses the formatted paragraph");end_native_paragraph();
+        const auto popup=begin_native_popup_paragraph(font.data(),&rich_source,200);
+        check(popup!=&rich_source,"popup draw scope uses the formatted paragraph");end_native_paragraph();
+        const auto unbounded=begin_native_popup_paragraph(font.data(),&rich_source,-1);
+        check(unbounded!=&rich_source&&std::string_view(unbounded->data(),unbounded->size).find('\n')==std::string_view::npos,
+            "negative popup widths retain the native no-wrap contract");end_native_paragraph();
+        const auto full=font_paragraph_layout(font.data(),mixed,32767,false);
+        float full_width=0;
+        for(std::size_t line=0;line<full->lines().size();++line)
+            full_width=(std::max)(full_width,plan_paragraph_line(*full,line,scale).pixels);
+        check(measure_paragraph_text(font.data(),mixed.c_str(),-1,true)==static_cast<int>(full_width),
+            "public width includes original native icon advances");
+    }
+    original_text_width=native_width;
     font.put(0x968,1.5f);
     check(measure_paragraph_text(font.data(),text.c_str(),-1,true)==
         static_cast<int>(std::ceil(unwrapped->metrics().width)*1.5f),"native scaling follows the shaped integer advance");

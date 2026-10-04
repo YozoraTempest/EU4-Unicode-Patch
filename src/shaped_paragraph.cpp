@@ -1,5 +1,6 @@
 #include "shaped_paragraph.hpp"
 #include "unicode_text.hpp"
+#include "formatted_paragraph.hpp"
 #include <icu.h>
 #include <algorithm>
 #include <cmath>
@@ -43,10 +44,12 @@ bool plain_native_paragraph(std::string_view text) noexcept {
     return true;
 }
 ShapedParagraph::ShapedParagraph(std::string_view text,int size,float width,bool wrap,
-                               std::shared_ptr<const TextFonts> fonts):text_(text) {
+                               std::shared_ptr<const TextFonts> fonts,std::shared_ptr<const ParagraphText> content):text_(text),content_(std::move(content)) {
     if(text.size()>32000||size<=0||size>512||!std::isfinite(width)||width<=0||width>32767)
         throw std::invalid_argument("Native paragraph exceeds layout bounds");
-    if(!valid_utf8(text)) throw std::invalid_argument("Paragraph must be valid UTF-8");
+    if(!content_) content_=std::make_shared<ParagraphText>(text,false);
+    if(content_->source()!=text_) throw std::invalid_argument("Paragraph source mapping belongs to different text");
+    text=content_->visible();
     std::size_t start=0;
     for(;;) {
         auto content_end=start;std::size_t newline=0;
@@ -59,21 +62,56 @@ ShapedParagraph::ShapedParagraph(std::string_view text,int size,float width,bool
             }
             content_end+=scalar.bytes;
         }
+        TextLayoutOptions options{TextDirection::Automatic,wrap,static_cast<float>(size)};
+        for(const auto& style:content_->styles()) {
+            const auto first=(std::max)(style.text_start,start),last=(std::min)(style.text_start+style.text_length,content_end);
+            if(first<last) options.styles.push_back({first-start,last-first,style.style});
+        }
+        for(std::size_t index=0;index<content_->icons().size();++index) {
+            const auto& icon=content_->icons()[index];
+            if(icon.text_start>=start&&icon.text_start<content_end)
+                options.objects.push_back({icon.text_start-start,icon.text_length,icon.advance,static_cast<float>(size),size*.8f,static_cast<std::uint32_t>(index)});
+        }
         auto layout=std::make_unique<TextLayout>(text.substr(start,content_end-start),static_cast<float>(size),width,
             static_cast<float>(size)*501,L"Microsoft YaHei UI",fonts,
-            TextLayoutOptions{TextDirection::Automatic,wrap,static_cast<float>(size)});
+            std::move(options));
         const auto metrics=layout->metrics();
         auto lines=layout->lines();
         if(lines_.size()+lines.size()>500) throw std::length_error("Native paragraph exceeds line capacity");
         if(metrics.width>32767) throw std::length_error("Native paragraph exceeds advance capacity");
-        auto runs=layout->glyph_runs();
-        for(auto& run:runs) {
-            run.text_start+=start;run.baseline_y+=metrics_.height;
-            for(auto& cluster:run.clusters) cluster.text_start+=start;
+        auto drawing=layout->drawing();
+        auto source_range=[&](std::size_t& position,std::size_t& length) {
+            const auto first=content_->source_byte(start+position),last=content_->source_byte(start+position+length);
+            position=first;length=last-first;
+        };
+        for(auto& run:drawing.runs) {
+            for(auto& cluster:run.clusters) {
+                bool absent=false;
+                for(auto index=cluster.first_glyph;index<cluster.first_glyph+cluster.glyph_count;++index)
+                    absent=absent||run.glyphs[index]==0;
+                if(absent) {
+                    auto source=text.substr(start+cluster.text_start,cluster.text_length);
+                    while(!source.empty()) {
+                        const auto scalar=decode(source);
+                        missing_=missing_||!u_hasBinaryProperty(static_cast<UChar32>(scalar.value),UCHAR_DEFAULT_IGNORABLE_CODE_POINT);
+                        source.remove_prefix(scalar.bytes);
+                    }
+                }
+                source_range(cluster.text_start,cluster.text_length);
+            }
+            source_range(run.text_start,run.text_length);run.baseline_y+=metrics_.height;
             runs_.push_back(std::move(run));
         }
-        for(auto& line:lines) { line.text_start+=start;line.top+=metrics_.height; }
         if(!lines.empty()) { lines.back().text_length+=newline;lines.back().newline_length+=newline; }
+        for(auto& line:lines) {
+            const auto end=line.text_start+line.text_length;
+            line.newline_length=content_->source_byte(start+end)-content_->source_byte(start+end-line.newline_length);
+            source_range(line.text_start,line.text_length);line.top+=metrics_.height;
+        }
+        for(auto& object:drawing.objects) {
+            source_range(object.text_start,object.text_length);object.y+=metrics_.height;
+            objects_.push_back(object);
+        }
         lines_.insert(lines_.end(),lines.begin(),lines.end());
         blocks_.push_back({start,metrics_.height,metrics.height,std::move(layout)});
         metrics_.width=(std::max)(metrics_.width,metrics.width);
@@ -88,24 +126,12 @@ HitPosition ShapedParagraph::hit_test(float x,float y) const {
     const auto found=std::upper_bound(blocks_.begin(),blocks_.end(),y,
         [](float value,const Block& block){return value<block.top;});
     const auto& block=found==blocks_.begin()?blocks_.front():*std::prev(found);
-    auto hit=block.layout->hit_test(x,y-block.top);hit.byte_offset+=block.start;
+    auto hit=block.layout->hit_test(x,y-block.top);hit.byte_offset=content_->source_byte(hit.byte_offset+block.start);
     hit.inside=hit.inside&&y>=block.top&&y<block.top+block.height;
     return hit;
 }
 bool ShapedParagraph::missing_glyphs() const noexcept {
-    for(const auto& run:runs_) for(const auto& cluster:run.clusters) {
-        bool missing=false;
-        for(auto index=cluster.first_glyph;index<cluster.first_glyph+cluster.glyph_count;++index)
-            missing=missing||run.glyphs[index]==0;
-        if(!missing) continue;
-        auto source=std::string_view(text_).substr(cluster.text_start,cluster.text_length);
-        while(!source.empty()) {
-            const auto scalar=decode(source);
-            if(!u_hasBinaryProperty(static_cast<UChar32>(scalar.value),UCHAR_DEFAULT_IGNORABLE_CODE_POINT)) return true;
-            source.remove_prefix(scalar.bytes);
-        }
-    }
-    return false;
+    return missing_;
 }
 std::vector<ParagraphTile> rasterize_paragraph(const ShapedParagraph& paragraph,std::uint32_t width,std::uint32_t height) {
     if(!width||!height||width>16384||height>16384) throw std::invalid_argument("Invalid paragraph tile dimensions");
@@ -126,7 +152,7 @@ std::vector<ParagraphTile> rasterize_paragraph(const ShapedParagraph& paragraph,
                 std::copy_n(raster.alpha.data()+static_cast<std::size_t>(y+row)*raster.width+x,w,
                     tile.alpha.data()+static_cast<std::size_t>(row)*w);
             result.push_back({std::move(tile),std::floor(run.baseline_x)+raster.left+x,
-                std::floor(run.baseline_y)+raster.top+y,line,run.text_start,run.text_length});
+                std::floor(run.baseline_y)+raster.top+y,line,run.text_start,run.text_length,run.style});
         }
     }
     return result;

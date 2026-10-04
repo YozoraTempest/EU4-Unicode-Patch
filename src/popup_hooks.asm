@@ -6,6 +6,8 @@ EXTERN format_scalar:PROC
 EXTERN next_layout_scalar:PROC
 EXTERN begin_popup_font:PROC
 EXTERN end_popup_font:PROC
+EXTERN begin_popup_paragraph:PROC
+EXTERN end_main_paragraph:PROC
 EXTERN mark_popup_font_glyph:PROC
 EXTERN g_popup_entry_return:QWORD
 EXTERN g_popup_end_return:QWORD
@@ -35,6 +37,14 @@ popup_entry_hook PROC
     mov rcx, r15
     call begin_popup_font
     RESTORE_CONTEXT
+    SAVE_CONTEXT
+    mov rcx, r15
+    mov rdx, rsi
+    mov r8d, [rbp+398h]
+    call begin_popup_paragraph
+    mov [rsp+90h], rax
+    RESTORE_CONTEXT
+    mov rsi, rdx
     mov rcx, rdx
     call qword ptr [g_popup_data]
     jmp qword ptr [g_popup_entry_return]
@@ -42,6 +52,7 @@ popup_entry_hook ENDP
 
 popup_end_hook PROC
     SAVE_CONTEXT
+    call end_main_paragraph
     call end_popup_font
     RESTORE_CONTEXT
     lea r11, [rsp+438h]

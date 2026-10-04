@@ -1,7 +1,7 @@
 """Run EU4 1.37.5 layout routines with the built player hooks in this process.
 
-Requires 64-bit Windows, a local supported eu4.exe, and the DLL/linker map from
-tools/build.ps1. The executable is mapped without running its entry point.
+Requires 64-bit Windows, a local supported eu4.exe, and a CI-built player DLL
+with its linker map. The executable is mapped without running its entry point.
 Engine allocation and graphics dependencies are replaced inside this process;
 no running game is accessed. Native copy/measure/wrap/substring routines remain
 in use. The independent native_font_pages_tests covers GPU submission.
@@ -312,7 +312,7 @@ for slot, target in [(0x1fd1190, 0x16d6640), (0x1fd11a8, 0x16d5f20), (0x1fd1188,
 ui_vertices=C.create_string_buffer(30*28)
 ui_frame=C.create_string_buffer(0x2400)
 ui_frame_base=C.addressof(ui_frame)+0x20
-ui_output=C.create_string_buffer(32)
+ui_output=C.create_string_buffer(128)
 ui_glyph=C.addressof(glyphs[65])
 marker_calls=[]
 @C.CFUNCTYPE(None,C.c_void_p,C.c_void_p)
@@ -358,29 +358,82 @@ for routine,hook_name,return_name,glyph_offset in [
             assert C.string_at(C.addressof(ui_vertices)+vertex*28+16,12)==struct.pack('<f2I',.5,0x12345678,0x87654321)
         ui_page_results.append({'routine':routine,'first_vertex':first_vertex,'tagged_vertices':6})
 ui_scope_results=[]
-for routine,frame_size in [('main',0x2408),('button',0x2260)]:
+scope_input=engine_string(b'Native scope input')
+scope_output=engine_string(b'Native scope replacement')
+scope_calls=[]
+@C.CFUNCTYPE(C.c_void_p,C.c_void_p,C.c_void_p,C.c_void_p,C.c_int,C.c_bool)
+def capture_main_scope(font,source,box,inset,formatted):
+    scope_calls.append(('main',font,source,box,inset,formatted))
+    return C.addressof(scope_output)
+@C.CFUNCTYPE(C.c_void_p,C.c_void_p,C.c_void_p,C.c_int,C.c_void_p,C.c_bool)
+def capture_button_scope(font,source,width,margin,formatted):
+    scope_calls.append(('button',font,source,width,margin,formatted))
+    return C.addressof(scope_output)
+@C.CFUNCTYPE(C.c_void_p,C.c_void_p,C.c_void_p,C.c_int)
+def capture_popup_scope(font,source,width):
+    scope_calls.append(('popup',font,source,width))
+    return C.addressof(scope_output)
+for name,callback in [('begin_native_paragraph',capture_main_scope),
+                      ('begin_native_button_paragraph',capture_button_scope),
+                      ('begin_native_popup_paragraph',capture_popup_scope)]:
+    scope_trampoline=C.c_void_p()
+    assert create(symbol(name),C.cast(callback,C.c_void_p).value,C.byref(scope_trampoline))==0
+    assert enable(symbol(name))==0
+pointer('g_popup_data',executable_code(b'\x48\x89\xc8\xc3'))
+scope_box=(C.c_int*4)(0,0,220,55)
+C.c_void_p.from_address(ui_frame_base+0x2380).value=C.addressof(scope_box)
+C.c_int.from_address(ui_frame_base+0x2388).value=7
+C.c_ubyte.from_address(ui_frame_base+0x23a0).value=1
+C.c_void_p.from_address(ui_frame_base+0x21c8).value=C.addressof(scope_input)
+C.c_int.from_address(ui_frame_base+0x21d8).value=220
+C.c_int.from_address(ui_frame_base+0x21e0).value=55
+C.c_void_p.from_address(ui_frame_base+0x21e8).value=C.addressof(margin)
+C.c_ubyte.from_address(ui_frame_base+0x21f8).value=0
+C.c_int.from_address(ui_frame_base+0x398).value=-1
+xmm_values=C.create_string_buffer(bytes(range(96)))
+load_xmm=b'\x48\xb8'+struct.pack('<Q',C.addressof(xmm_values))+b''.join(
+    b'\xf3\x0f\x6f'+bytes([0x80+index*8])+struct.pack('<I',index*16) for index in range(6))
+def store_xmm(base_register):
+    return b''.join(b'\xf3\x0f\x7f'+bytes([0x80+index*8+base_register])+
+                    struct.pack('<I',32+index*16) for index in range(6))
+for routine,frame_size in [('main',0x2408),('button',0x2260),('popup',0x438)]:
     for phase in ('entry','end'):
         if phase=='entry':
-            save_registers=(b'\x4c\x89\x20\x4c\x89\x70\x08' if routine=='main' else b'\x48\x89\x18\x48\x89\x78\x08')
-            capture=b'\x48\xb8'+struct.pack('<Q',C.addressof(ui_output))+save_registers+b'\x4c\x89\x40\x10\x4c\x89\x50\x18'
+            save_registers={'main':b'\x4c\x89\x20\x4c\x89\x70\x08',
+                            'button':b'\x48\x89\x18\x48\x89\x78\x08',
+                            'popup':b'\x48\x89\x30\x4c\x89\x78\x08'}[routine]
+            capture=(b'\x48\xb8'+struct.pack('<Q',C.addressof(ui_output))+save_registers+
+                     b'\x4c\x89\x40\x10\x4c\x89\x50\x18'+store_xmm(0))
         else:
             capture=(b'\x48\xb9'+struct.pack('<Q',C.addressof(ui_output))+b'\x48\x89\x01'
-                     b'\x4c\x89\xd8\x48\x29\xe0\x48\x89\x41\x08\x4c\x89\x41\x10\x4c\x89\x51\x18')
-        continuation=executable_code(capture+b'\x48\x81\xc4\x00\x01\x00\x00\x5f\x41\x5e\x41\x5c\x5b\x5d\xc3')
-        pointer(f'g_{routine}_geometry_{phase}_return',continuation)
-        code=(b'\x55\x53\x41\x54\x41\x56\x57\x48\x81\xec\x00\x01\x00\x00'
+                     b'\x4c\x89\xd8\x48\x29\xe0\x48\x89\x41\x08\x4c\x89\x41\x10\x4c\x89\x51\x18'+store_xmm(1))
+        continuation=executable_code(capture+b'\x48\x81\xc4\x00\x01\x00\x00\x41\x5f\x5e\x5f\x41\x5e\x41\x5c\x5b\x5d\xc3')
+        return_name=f'g_{routine}_{phase}_return' if routine=='popup' else f'g_{routine}_geometry_{phase}_return'
+        hook_name=f'popup_{phase}_hook' if routine=='popup' else f'{routine}_geometry_{phase}_hook'
+        pointer(return_name,continuation)
+        code=(b'\x55\x53\x41\x54\x41\x56\x57\x56\x41\x57\x48\x81\xec\x00\x01\x00\x00'
               b'\x48\xbd'+struct.pack('<Q',ui_frame_base)+
-              b'\x48\xb9'+struct.pack('<Q',font_base)+b'\x48\xba'+struct.pack('<Q',0x7654321)+
+              b'\x48\xb9'+struct.pack('<Q',font_base)+b'\x48\xba'+struct.pack('<Q',C.addressof(scope_input))+
+              b'\x48\xbe'+struct.pack('<Q',C.addressof(scope_input))+b'\x49\xbf'+struct.pack('<Q',font_base)+
               b'\x49\xb8'+struct.pack('<Q',sentinel8)+b'\x49\xba'+struct.pack('<Q',sentinel10)+
+              load_xmm+
               b'\x48\xb8'+struct.pack('<Q',0xabcdef)+
-              b'\xff\x25\x00\x00\x00\x00'+struct.pack('<Q',symbol(f'{routine}_geometry_{phase}_hook')))
+              b'\xff\x25\x00\x00\x00\x00'+struct.pack('<Q',symbol(hook_name)))
         C.CFUNCTYPE(None)(executable_code(code))()
-        expected=(0x7654321,font_base) if routine=='main' else (sentinel8,font_base)
+        expected=(sentinel8,font_base) if routine=='button' else (C.addressof(scope_output),font_base)
         if phase=='end': expected=(0xabcdef,frame_size)
         assert tuple(C.c_uint64.from_buffer(ui_output,offset).value for offset in (0,8))==expected,(routine,phase)
         assert C.c_uint64.from_buffer(ui_output,16).value==sentinel8
         assert C.c_uint64.from_buffer(ui_output,24).value==sentinel10
-        ui_scope_results.append({'routine':routine,'phase':phase,'native_registers_preserved':True})
+        assert ui_output.raw[32:128]==xmm_values.raw[:96],(routine,phase,'volatile SIMD registers')
+        if routine=='button' and phase=='entry':
+            assert C.c_void_p.from_address(ui_frame_base+0x21c8).value==C.addressof(scope_output)
+        ui_scope_results.append({'routine':routine,'phase':phase,'native_registers_preserved':True,
+                                 'volatile_simd_preserved':True})
+assert scope_calls==[
+    ('main',font_base,C.addressof(scope_input),C.addressof(scope_box),7,True),
+    ('button',font_base,C.addressof(scope_input),220,C.addressof(margin),True),
+    ('popup',font_base,C.addressof(scope_input),-1)],scope_calls
 report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_hash,
           'game_exe_sha256': game_hash, 'site_guards': len(guards),
           'native_width': results, 'native_layout': layout_results,

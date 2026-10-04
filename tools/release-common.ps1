@@ -46,7 +46,7 @@ function Get-Sha256([string]$Path) {
 }
 
 function Get-AutomatedTestNames {
-    return @('unicode_text','unicode_services','formatted_text','unicode_layout','shaped_paragraph','native_paragraph','glyph_registry','unicode_editor',
+    return @('unicode_text','unicode_services','formatted_text','unicode_layout','shaped_paragraph','formatted_paragraph','native_paragraph','glyph_registry','unicode_editor',
         'unicode_search','native_search','pinyin_fuzzy','native_steam_presence','native_script_bom','native_ime',
         'font_assets','font_draw_batches','font_cache','version_proxy')
 }

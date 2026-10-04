@@ -747,8 +747,20 @@ std::size_t bounded_text_length(const char* source,std::size_t length) noexcept 
 void mark_popup_font_glyph(const eu4unicode::NativeGlyph* glyph,eu4unicode::PopupFontVertex* vertices) noexcept { eu4unicode::mark_popup_font_glyph(glyph,vertices); }
 void begin_popup_font(void* font) { eu4unicode::begin_popup_font(font); }
 void end_popup_font() noexcept { eu4unicode::end_popup_font(); }
-const EngineString* begin_main_paragraph(void* font,const EngineString* source,const int* box,int inset) noexcept {
-    return eu4unicode::begin_native_paragraph(font,source,box,inset);
+const EngineString* begin_main_paragraph(void* font,const EngineString* source,const int* box,const std::byte* arguments) noexcept {
+    const auto inset=*reinterpret_cast<const int*>(arguments);
+    const auto formatted=arguments[0x18]!=std::byte{0};
+    return eu4unicode::begin_native_paragraph(font,source,box,inset,formatted);
+}
+const EngineString* begin_button_paragraph(void* font,const EngineString* source,const std::byte* arguments) noexcept {
+    const auto width=*reinterpret_cast<const int*>(arguments);
+    const auto height=*reinterpret_cast<const int*>(arguments+8);
+    const auto margin=*reinterpret_cast<const int* const*>(arguments+0x10);
+    const auto formatted=arguments[0x20]!=std::byte{0}||(width&&height);
+    return eu4unicode::begin_native_button_paragraph(font,source,width,margin,formatted);
+}
+const EngineString* begin_popup_paragraph(void* font,const EngineString* source,int width) noexcept {
+    return eu4unicode::begin_native_popup_paragraph(font,source,width);
 }
 void end_main_paragraph() noexcept { eu4unicode::end_native_paragraph(); }
 std::size_t next_layout_scalar(const EngineString* source,std::size_t offset) noexcept {
@@ -1116,9 +1128,11 @@ bool initialize(HMODULE module) {
         ,{0x11421ad,"e8ced65d00ffc0"}
         ,{0x1706010,"488bc4488958084889681048897018574883ec40"}
         ,{0xa901fe,"e80d5ec700"}
+        ,{0x15a0390,"40534883ec50"}
     };
     for(const auto& site:sites) if(!check(site)) return false;
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
+    eu4unicode::native_paragraph_color=reinterpret_cast<eu4unicode::NativeParagraphColor>(address(0x15a0390));
     g_main_draw_return=address(0x159a7ac);
     g_main_copy_return=address(0x15995ce);
     g_main_measure_return=address(0x159973b);

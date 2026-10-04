@@ -41,6 +41,7 @@ struct GlyphRun {
     // Retains the exact fallback face; a family name cannot identify glyph IDs.
     std::shared_ptr<const GlyphFace> face;
     GlyphMeasure measuring=GlyphMeasure::Natural;
+    std::uint32_t style=0;
 };
 struct GlyphBitmap {
     std::uint32_t width,height;
@@ -52,11 +53,32 @@ struct GlyphBitmap {
 GlyphBitmap rasterize_glyph_run(const GlyphRun& run);
 struct LayoutMetrics { float width,height; std::uint32_t lines; };
 enum class TextDirection { LeftToRight,RightToLeft,Automatic };
+struct TextStyleRange {
+    std::size_t text_start,text_length;
+    std::uint32_t style;
+};
+struct TextInlineObject {
+    std::size_t text_start,text_length;
+    float width,height,baseline;
+    std::uint32_t id;
+};
+struct InlinePlacement {
+    std::size_t text_start,text_length;
+    float x,y,width,height;
+    std::uint32_t id,style;
+    bool rtl;
+};
+struct LayoutDrawing {
+    std::vector<GlyphRun> runs;
+    std::vector<InlinePlacement> objects;
+};
 struct TextLayoutOptions {
     TextDirection direction=TextDirection::LeftToRight;
     bool wrap=true;
     // Zero uses the font's natural spacing. Native UI fonts have a fixed grid.
     float line_height=0;
+    std::vector<TextStyleRange> styles;
+    std::vector<TextInlineObject> objects;
 };
 struct LayoutLine {
     std::size_t text_start,text_length,newline_length;
@@ -84,7 +106,10 @@ public:
     LayoutMetrics metrics() const;
     std::vector<LayoutLine> lines() const;
     std::vector<GlyphRun> glyph_runs() const;
+    LayoutDrawing drawing() const;
     HitPosition hit_test(float x,float y) const;
+    // Application effects and inline objects are emitted by drawing(); the
+    // standalone PNG renderer handles ordinary text layouts.
     RasterImage rasterize() const;
     void render_png(const std::filesystem::path& path) const;
 private:
