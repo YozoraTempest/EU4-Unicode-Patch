@@ -1,4 +1,6 @@
 EXTERN decode_z:PROC
+EXTERN decode_layout_range:PROC
+EXTERN g_alternate_end:QWORD
 EXTERN copy_scalar:PROC
 EXTERN prepare_wrap_context:PROC
 EXTERN unicode_wrap_before:PROC
@@ -396,7 +398,11 @@ button_draw_hook ENDP
 alternate_measure_hook PROC
     SAVE_CONTEXT
     lea rcx, [rbx+rbp]
-    call decode_z
+    mov rdx, r12
+    sub rdx, rbx
+    call decode_layout_range
+    cmp rax, -1
+    je alternate_measure_end
     mov r10, rax
     shr r10, 32
     add rbx, r10
@@ -408,6 +414,9 @@ alternate_measure_hook PROC
     LOOKUP_GLYPH r11, rcx, rdx, 0
     test r11, r11
     jmp qword ptr [g_alternate_measure_return]
+alternate_measure_end:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_alternate_end]
 alternate_measure_hook ENDP
 
 main_wrap_hook PROC

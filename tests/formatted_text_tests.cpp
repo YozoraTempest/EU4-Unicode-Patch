@@ -34,11 +34,16 @@ int main() {
         const FormattedText color(u8"§Y中文§!");
         check(color.visible_text()==u8"中文","color code entered visible text");
         check(color.prefix(1)==0&&color.prefix(2)==0&&color.prefix(3)==3,"color directive split");
+        check(FormattedText(u8"§中文").visible_text()==u8"§中文","non-ASCII character consumed as a color code");
+        check(FormattedText("\xa3" "yes ").visible_text()==u8"\ufffc","compiled icon with whitespace delimiter was lost");
         for(const auto text:{u8"é",u8"中",u8"𠮷"}) {
             const std::string_view source(text);
             for(std::size_t index=0;index<source.size();++index)
                 check(native_scalar_start(source,index)==0,"queue position is not the character start");
             check(native_scalar_next(source,0)==source.size(),"iterator did not advance a complete scalar");
+            for(std::size_t size=0;size<source.size();++size)
+                check(native_measure_scalar(source.substr(0,size)).bytes==0,"range measured an incomplete character");
+            check(native_measure_scalar(source).bytes==source.size(),"complete measured character was skipped");
         }
         const std::string native_color="\xa7Y"+std::string(u8"中文")+"\xa7!";
         check(FormattedText(native_color).visible_text()==u8"中文","compiled native color literal lost its meaning");

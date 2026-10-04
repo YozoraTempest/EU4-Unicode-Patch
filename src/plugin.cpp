@@ -646,6 +646,9 @@ extern "C" {
 std::uintptr_t g_main_draw_return,g_main_copy_return,g_main_measure_return;
 std::uintptr_t g_bitmap_measure_return,g_bitmap_split_return,g_copy_buffer;
 std::uintptr_t g_bitmap_advance_return,g_list_measure_return,g_list_advance_return;
+std::uintptr_t g_split_format_return,g_split_plain_entry,g_list_format_return,g_list_plain_entry;
+std::uintptr_t g_alternate_format_return,g_alternate_plain_entry,g_alternate_end,g_alternate_advance_return;
+std::uintptr_t g_split_kern_return,g_list_kern_return,g_alternate_kern_return;
 std::uintptr_t g_heap_pointer,g_heap_alloc,g_heap_return;
 std::uintptr_t g_button_copy_return,g_button_measure_return,g_button_draw_return,g_button_loop,g_button_end;
 std::uintptr_t g_alternate_measure_return,g_wrap_return,g_wrap_branch;
@@ -672,6 +675,8 @@ std::uintptr_t g_wide_compare_left_return,g_wide_compare_right_return;
 void main_draw_hook(); void main_copy_hook(); void main_measure_hook();
 void bitmap_measure_hook(); void bitmap_split_hook();
 void bitmap_advance_hook();void list_measure_hook();void list_advance_hook();
+void split_format_hook();void list_format_hook();void alternate_format_hook();void alternate_advance_hook();
+void split_kern_hook();void list_kern_hook();void alternate_kern_hook();
 void heap_zero_hook();
 void button_copy_hook(); void button_measure_hook(); void button_draw_hook(); void button_advance_hook();
 void alternate_measure_hook(); void main_wrap_hook();
@@ -723,6 +728,25 @@ std::size_t bounded_text_length(const char* source,std::size_t length) noexcept 
 }
 std::size_t next_layout_scalar(const EngineString* source,std::size_t offset) noexcept {
     return eu4unicode::native_scalar_next({source->data(),static_cast<std::size_t>(source->size)},offset);
+}
+std::size_t next_layout_offset(const char* source,std::size_t length,std::size_t offset) noexcept {
+    return eu4unicode::native_scalar_next({source,length},offset);
+}
+std::uint64_t decode_layout_range(const char* source,std::size_t length) noexcept {
+    const auto scalar=eu4unicode::native_measure_scalar({source,length});
+    if(!scalar.bytes) return UINT64_MAX;
+    return scalar.value|(static_cast<std::uint64_t>(scalar.bytes-1)<<32);
+}
+std::uint64_t format_layout_range(const char* source,std::size_t length) noexcept {
+    const auto scalar=eu4unicode::native_measure_scalar({source,length});
+    if(!scalar.bytes) return UINT64_MAX;
+    if(scalar.value==0xa7&&length<=scalar.bytes) return UINT64_MAX;
+    if(scalar.value==0xa3&&eu4unicode::native_text_unit({source,length},0).kind!=eu4unicode::TextUnitKind::icon)
+        return UINT64_MAX;
+    // These fixed-size ASCII tokens are specific to this native width routine.
+    if((scalar.value=='@'&&length<4)||(scalar.value=='{'&&length<3)) return UINT64_MAX;
+    return scalar.value|((scalar.value==0xa7||scalar.value==0xa3||scalar.value==0xa4)?
+        static_cast<std::uint64_t>(scalar.bytes-1)<<32:0);
 }
 std::uint64_t decode_z(const char* text) noexcept {
     std::size_t length=0;
@@ -898,6 +922,13 @@ bool initialize(HMODULE module) {
         {0x159f87d,"4c8b45b8f3410f10b0480800000fb604104d8b24c04d85e4"},
         {0x159fde5,"ffc38bf38b4f10440fb68d480100004533d23bd9"},
         {0x1704af0,"48895c2408574883ec40488bda443b4910"},
+        {0x159eddd,"488bcb4c8b4b184983f9107203488b0b803c0aa7"},
+        {0x159f6ef,"488bcf4c8b47184983f8107203488b0f8bc6803c01a7"},
+        {0x159b85c,"0fb6042b3ca7750affc748ffc3e92b010000"},
+        {0x159b999,"ffc748ffc349b8ffffff43ffffff0b"},
+        {0x159f06d,"e85e53fffff30f58f8f3440f58c0"},
+        {0x159f9a9,"e8224afffff30f58f8f3440f58c0"},
+        {0x159b95a,"e8718afffff30f58f0"},
         {0x1595c86,"81ffff000000"}, {0x10b2a66,"b9883d0000"},
         {0x1b24a59,"ba883d0000"}, {0x10999f9,"ba883d0000"},
         {0x16c2cb7,"4181fe00000001"}, {0x1a683ae,"488b0d9b548d004c8bc333d2ff15b0e10f004885c0"},
@@ -1035,6 +1066,17 @@ bool initialize(HMODULE module) {
     g_bitmap_advance_return=address(0x159f1e6);
     g_list_measure_return=address(0x159f895);
     g_list_advance_return=address(0x159fdf4);
+    g_split_format_return=address(0x159eded);
+    g_split_plain_entry=address(0x159ef38);
+    g_list_format_return=address(0x159f6ff);
+    g_list_plain_entry=address(0x159f849);
+    g_alternate_format_return=address(0x159b862);
+    g_alternate_plain_entry=address(0x159b91a);
+    g_alternate_end=address(0x159b9b1);
+    g_alternate_advance_return=address(0x159b99e);
+    g_split_kern_return=address(0x159f07b);
+    g_list_kern_return=address(0x159f9b7);
+    g_alternate_kern_return=address(0x159b963);
     g_copy_buffer=address(0x2433cd0);
     g_heap_pointer=address(0x233d850);
     g_heap_alloc=address(0x1b66570);
@@ -1109,6 +1151,13 @@ bool initialize(HMODULE module) {
         {0x159f1db,reinterpret_cast<void*>(bitmap_advance_hook)},
         {0x159f87d,reinterpret_cast<void*>(list_measure_hook)},
         {0x159fde5,reinterpret_cast<void*>(list_advance_hook)},
+        {0x159eddd,reinterpret_cast<void*>(split_format_hook)},
+        {0x159f6ef,reinterpret_cast<void*>(list_format_hook)},
+        {0x159b85c,reinterpret_cast<void*>(alternate_format_hook)},
+        {0x159b999,reinterpret_cast<void*>(alternate_advance_hook)},
+        {0x159f06d,reinterpret_cast<void*>(split_kern_hook)},
+        {0x159f9a9,reinterpret_cast<void*>(list_kern_hook)},
+        {0x159b95a,reinterpret_cast<void*>(alternate_kern_hook)},
         {0x1a683ae,reinterpret_cast<void*>(heap_zero_hook)},
         {0x1596858,reinterpret_cast<void*>(button_copy_hook)},
         {0x1597071,reinterpret_cast<void*>(button_measure_hook)},

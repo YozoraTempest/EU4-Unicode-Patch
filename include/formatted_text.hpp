@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "unicode_text.hpp"
 
 namespace eu4unicode {
 enum class TextUnitKind { glyph, color, icon };
@@ -17,6 +18,7 @@ struct TextUnit {
 TextUnit native_text_unit(std::string_view text,std::size_t offset,bool formatted=true);
 std::size_t native_scalar_start(std::string_view text,std::size_t offset) noexcept;
 std::size_t native_scalar_next(std::string_view text,std::size_t offset) noexcept;
+Scalar native_measure_scalar(std::string_view text) noexcept;
 
 class FormattedText {
 public:

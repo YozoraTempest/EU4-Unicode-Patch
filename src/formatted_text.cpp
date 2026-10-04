@@ -30,6 +30,8 @@ TextUnit native_text_unit(std::string_view text,std::size_t offset,bool formatte
             const auto closing=native_scalar(text.substr(cursor));
             if(closing.value==0xa3)
                 return {TextUnitKind::icon,0xfffc,offset,cursor+closing.bytes};
+            if(closing.value==' '||closing.value=='\t'||closing.value==0xa0)
+                return {TextUnitKind::icon,0xfffc,offset,cursor+closing.bytes};
         }
     }
     return {TextUnitKind::glyph,scalar.value,offset,end};
@@ -45,6 +47,16 @@ std::size_t native_scalar_next(std::string_view text,std::size_t offset) noexcep
     if(offset>=text.size()) return text.size();
     const auto scalar=native_scalar(text.substr(offset));
     return offset+scalar.bytes;
+}
+Scalar native_measure_scalar(std::string_view text) noexcept {
+    if(text.empty()) return {0,0,false};
+    const auto lead=static_cast<unsigned char>(text.front());
+    const std::size_t expected=lead>=0xc2&&lead<=0xdf?2:
+        lead>=0xe0&&lead<=0xef?3:lead>=0xf0&&lead<=0xf4?4:1;
+    if(text.size()<expected&&std::all_of(text.begin()+1,text.end(),[](char value) {
+        return (static_cast<unsigned char>(value)&0xc0)==0x80;
+    })) return {0,0,false};
+    return native_scalar(text);
 }
 FormattedText::FormattedText(std::string_view text,bool formatted) {
     struct Position { std::size_t visible,raw; };
