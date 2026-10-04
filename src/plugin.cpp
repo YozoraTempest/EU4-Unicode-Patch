@@ -3,6 +3,7 @@
 #include <MinHook.h>
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
+#include "formatted_text.hpp"
 #include "unicode_editor.hpp"
 #include "native_text_event.hpp"
 #include "unicode_search.hpp"
@@ -43,6 +44,25 @@ using BreakPositions=std::vector<std::size_t>;
 thread_local std::shared_ptr<const BreakPositions> active_line_breaks;
 thread_local std::unordered_map<std::string,std::shared_ptr<const BreakPositions>> line_break_cache;
 thread_local std::size_t line_cache_bytes=0;
+struct CachedFormattedText { std::shared_ptr<const eu4unicode::FormattedText> value; std::size_t bytes; };
+thread_local std::unordered_map<std::string,CachedFormattedText> formatted_cache;
+thread_local std::size_t formatted_cache_bytes=0;
+std::shared_ptr<const eu4unicode::FormattedText> formatted_boundaries(std::string_view text) {
+    std::string key(text);
+    const auto found=formatted_cache.find(key);
+    if(found!=formatted_cache.end()) return found->second.value;
+    auto value=std::make_shared<const eu4unicode::FormattedText>(text);
+    const auto bytes=key.size()+value->memory_size()+sizeof(CachedFormattedText);
+    constexpr std::size_t budget=1024*1024;
+    if(bytes<=budget) {
+        if(formatted_cache.size()>=256||formatted_cache_bytes>budget-bytes) {
+            formatted_cache.clear();formatted_cache_bytes=0;
+        }
+        formatted_cache.emplace(std::move(key),CachedFormattedText{value,bytes});
+        formatted_cache_bytes+=bytes;
+    }
+    return value;
+}
 void log(const char* message) {
     if(log_file==INVALID_HANDLE_VALUE) return;
     DWORD written=0;
@@ -51,6 +71,21 @@ void log(const char* message) {
     FlushFileBuffers(log_file);
 }
 using eu4unicode::EngineString;
+using SubstringText=EngineString*(*)(const EngineString*,EngineString*,int,int);
+SubstringText original_layout_substring=nullptr;
+EngineString* layout_substring(const EngineString* source,EngineString* target,int begin,int end) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    if(eu4unicode::layout_substring_caller(caller)) {
+        try {
+            const auto boundaries=formatted_boundaries({source->data(),static_cast<std::size_t>(source->size)});
+            // The native API takes [begin,end), not a start and length.
+            begin=static_cast<int>(boundaries->prefix(static_cast<std::size_t>(std::max(0,begin))));
+            end=static_cast<int>(boundaries->prefix(static_cast<std::size_t>(std::max(begin,end))));
+        } catch(...) { log("Unicode layout substring failed; fragment excluded.");begin=0;end=0; }
+    }
+    return original_layout_substring(source,target,begin,end);
+}
 eu4unicode::NativePresenceConversion original_presence_conversion=nullptr;
 EngineString* convert_steam_presence(EngineString* target,const EngineString* source) {
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
@@ -610,6 +645,7 @@ bool write(std::size_t rva,const void* data,std::size_t size) {
 extern "C" {
 std::uintptr_t g_main_draw_return,g_main_copy_return,g_main_measure_return;
 std::uintptr_t g_bitmap_measure_return,g_bitmap_split_return,g_copy_buffer;
+std::uintptr_t g_bitmap_advance_return,g_list_measure_return,g_list_advance_return;
 std::uintptr_t g_heap_pointer,g_heap_alloc,g_heap_return;
 std::uintptr_t g_button_copy_return,g_button_measure_return,g_button_draw_return,g_button_loop,g_button_end;
 std::uintptr_t g_alternate_measure_return,g_wrap_return,g_wrap_branch;
@@ -635,6 +671,7 @@ std::uintptr_t g_path_pair_return;
 std::uintptr_t g_wide_compare_left_return,g_wide_compare_right_return;
 void main_draw_hook(); void main_copy_hook(); void main_measure_hook();
 void bitmap_measure_hook(); void bitmap_split_hook();
+void bitmap_advance_hook();void list_measure_hook();void list_advance_hook();
 void heap_zero_hook();
 void button_copy_hook(); void button_measure_hook(); void button_draw_hook(); void button_advance_hook();
 void alternate_measure_hook(); void main_wrap_hook();
@@ -683,6 +720,9 @@ void store_loaded_glyph(void** table,std::uint32_t scalar,void* glyph) noexcept 
 }
 std::size_t bounded_text_length(const char* source,std::size_t length) noexcept {
     return eu4unicode::scalar_prefix({source,length},32000);
+}
+std::size_t next_layout_scalar(const EngineString* source,std::size_t offset) noexcept {
+    return eu4unicode::native_scalar_next({source->data(),static_cast<std::size_t>(source->size)},offset);
 }
 std::uint64_t decode_z(const char* text) noexcept {
     std::size_t length=0;
@@ -854,6 +894,10 @@ bool initialize(HMODULE module) {
         {0x159a796,"460fb60409f3410f109e680900004b8b94c620010000"},
         {0x159b687,"0fb60407498b8cc6200100004885c9"},
         {0x159ef48,"f3410f10b6480800000fb604024d8b3cc64d85ff"},
+        {0x159f1db,"ffc78bd7448b5310413bfa0f8d17020000"},
+        {0x159f87d,"4c8b45b8f3410f10b0480800000fb604104d8b24c04d85e4"},
+        {0x159fde5,"ffc38bf38b4f10440fb68d480100004533d23bd9"},
+        {0x1704af0,"48895c2408574883ec40488bda443b4910"},
         {0x1595c86,"81ffff000000"}, {0x10b2a66,"b9883d0000"},
         {0x1b24a59,"ba883d0000"}, {0x10999f9,"ba883d0000"},
         {0x16c2cb7,"4181fe00000001"}, {0x1a683ae,"488b0d9b548d004c8bc333d2ff15b0e10f004885c0"},
@@ -988,6 +1032,9 @@ bool initialize(HMODULE module) {
     g_main_measure_return=address(0x159973b);
     g_bitmap_measure_return=address(0x159b696);
     g_bitmap_split_return=address(0x159ef5c);
+    g_bitmap_advance_return=address(0x159f1e6);
+    g_list_measure_return=address(0x159f895);
+    g_list_advance_return=address(0x159fdf4);
     g_copy_buffer=address(0x2433cd0);
     g_heap_pointer=address(0x233d850);
     g_heap_alloc=address(0x1b66570);
@@ -1059,6 +1106,9 @@ bool initialize(HMODULE module) {
         {0x15995b0,reinterpret_cast<void*>(main_copy_hook)}, {0x1599728,reinterpret_cast<void*>(main_measure_hook)},
         {0x159a796,reinterpret_cast<void*>(main_draw_hook)}, {0x159b687,reinterpret_cast<void*>(bitmap_measure_hook)},
         {0x159ef48,reinterpret_cast<void*>(bitmap_split_hook)},
+        {0x159f1db,reinterpret_cast<void*>(bitmap_advance_hook)},
+        {0x159f87d,reinterpret_cast<void*>(list_measure_hook)},
+        {0x159fde5,reinterpret_cast<void*>(list_advance_hook)},
         {0x1a683ae,reinterpret_cast<void*>(heap_zero_hook)},
         {0x1596858,reinterpret_cast<void*>(button_copy_hook)},
         {0x1597071,reinterpret_cast<void*>(button_measure_hook)},
@@ -1111,6 +1161,10 @@ bool initialize(HMODULE module) {
     if(MH_CreateHook(image+0x1705180,reinterpret_cast<void*>(transliterate_save_path),
         reinterpret_cast<void**>(&original_transliterate))!=MH_OK) {
         log("Save path hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
+    if(MH_CreateHook(image+0x1704af0,reinterpret_cast<void*>(layout_substring),
+        reinterpret_cast<void**>(&original_layout_substring))!=MH_OK) {
+        log("Layout substring hook creation failed; no hooks enabled.");MH_Uninitialize();return false;
     }
     if(MH_CreateHook(image+0x170cd10,reinterpret_cast<void*>(eu4unicode::construct_script_file),
         reinterpret_cast<void**>(&eu4unicode::original_script_file))!=MH_OK||

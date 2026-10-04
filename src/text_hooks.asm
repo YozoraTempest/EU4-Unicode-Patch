@@ -327,9 +327,6 @@ bitmap_split_hook PROC
     SAVE_CONTEXT
     lea rcx, [rdx+rax]
     call decode_z
-    mov r10, rax
-    shr r10, 32
-    add edi, r10d
     mov eax, eax
     mov [rsp+80h], rax
     RESTORE_CONTEXT
