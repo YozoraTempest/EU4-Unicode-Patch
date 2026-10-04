@@ -6,6 +6,7 @@
 #include <wrl/client.h>
 #include <MinHook.h>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -50,7 +51,7 @@ std::vector<std::uint8_t> read_glyph(IDirect3DDevice9* device,IDirect3DTexture9*
 }
 void draw_glyphs(IDirect3DDevice9* device,void* font,IDirect3DTexture9* first,
                  const eu4unicode::NativeGlyph& a,const eu4unicode::NativeGlyph& b,
-                 const std::vector<std::uint8_t>& alpha_a,const std::vector<std::uint8_t>& alpha_b) {
+                 const std::vector<std::uint8_t>& alpha_a,const std::vector<std::uint8_t>& alpha_b,bool popup=false) {
     constexpr UINT width=384,height=128;
     ComPtr<IDirect3DSurface9> saved,target;
     checked(device->GetRenderTarget(0,&saved));
@@ -96,16 +97,41 @@ void draw_glyphs(IDirect3DDevice9* device,void* font,IDirect3DTexture9* first,
     checked(device->CreateIndexBuffer(sizeof(indices),D3DUSAGE_WRITEONLY,D3DFMT_INDEX16,D3DPOOL_DEFAULT,&index,nullptr));
     void* output=nullptr;checked(index->Lock(0,sizeof(indices),&output,0));
     std::memcpy(output,indices.data(),sizeof(indices));checked(index->Unlock());
-    checked(device->SetIndices(index.Get()));checked(device->SetStreamSource(0,buffer.Get(),0,sizeof(MapFontVertex)));
+    ComPtr<IDirect3DVertexDeclaration9> declaration;
+    if(popup) {
+        std::vector<eu4unicode::PopupFontVertex> triangles;
+        for(const auto vertex:indices) {
+            const auto& v=vertices[vertex];
+            triangles.push_back({v.x,v.y,v.z,v.u-std::floor(v.u/2)*2,v.v,0xffffffff,0xffffffff});
+        }
+        for(std::size_t i=0;i<glyphs.size();++i)
+            eu4unicode::mark_popup_font_glyph(glyphs[i],triangles.data()+i*6);
+        buffer.Reset();
+        checked(device->CreateVertexBuffer(static_cast<UINT>(triangles.size()*sizeof(eu4unicode::PopupFontVertex)),D3DUSAGE_WRITEONLY,0,D3DPOOL_DEFAULT,&buffer,nullptr));
+        VertexWrapper popup_wrapper{buffer.Get(),sizeof(eu4unicode::PopupFontVertex),static_cast<int>(triangles.size())};
+        eu4unicode::begin_popup_font(font);
+        eu4unicode::upload_map_font_vertices(nullptr,&popup_wrapper,triangles.data(),static_cast<int>(triangles.size()),0,0);
+        eu4unicode::end_popup_font();
+        const D3DVERTEXELEMENT9 elements[]={{0,0,D3DDECLTYPE_FLOAT3,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_POSITION,0},
+            {0,12,D3DDECLTYPE_FLOAT2,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_TEXCOORD,0},
+            {0,20,D3DDECLTYPE_D3DCOLOR,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_COLOR,0},
+            {0,24,D3DDECLTYPE_D3DCOLOR,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_COLOR,1},D3DDECL_END()};
+        checked(device->CreateVertexDeclaration(elements,&declaration));checked(device->SetVertexDeclaration(declaration.Get()));
+    }
+    const auto vertex_stride=popup?sizeof(eu4unicode::PopupFontVertex):sizeof(MapFontVertex);
+    checked(device->SetIndices(index.Get()));checked(device->SetStreamSource(0,buffer.Get(),0,static_cast<UINT>(vertex_stride)));
     checked(device->SetTexture(0,first));
-    checked(device->BeginScene());checked(device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST,0,0,12,0,6));checked(device->EndScene());
+    checked(device->BeginScene());
+    if(popup) checked(device->DrawPrimitive(D3DPT_TRIANGLELIST,0,6));
+    else checked(device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST,0,0,12,0,6));
+    checked(device->EndScene());
     ComPtr<IDirect3DVertexBuffer9> restored_buffer;ComPtr<IDirect3DBaseTexture9> restored_texture;ComPtr<IDirect3DIndexBuffer9> restored_index;
     UINT offset=0,stride=0;checked(device->GetStreamSource(0,&restored_buffer,&offset,&stride));
     checked(device->GetTexture(0,&restored_texture));checked(device->GetIndices(&restored_index));
-    require(restored_buffer.Get()==buffer.Get()&&offset==0&&stride==20&&restored_texture.Get()==first&&restored_index.Get()==index.Get(),
+    require(restored_buffer.Get()==buffer.Get()&&offset==0&&stride==vertex_stride&&restored_texture.Get()==first&&restored_index.Get()==index.Get(),
             "Paged draw changed the engine stream, texture or indices");
     for(std::size_t i=0;i<regions.size();++i)
-        require(read_surface(device,target.Get(),regions[i])==(i==1?alpha_b:alpha_a),"Paged indexed drawing differs from the glyph raster");
+        require(read_surface(device,target.Get(),regions[i])==(i==1?alpha_b:alpha_a),"Paged font drawing differs from the glyph raster");
     checked(device->SetTexture(0,nullptr));checked(device->SetStreamSource(0,nullptr,0,0));checked(device->SetIndices(nullptr));
     checked(device->SetRenderTarget(0,saved.Get()));
 }
@@ -156,6 +182,7 @@ int wmain(int argc,wchar_t** argv) {
         require(read_glyph(device.Get(),pages[0].Get(),*first)==reference,"Growing the atlas changed the first page");
         require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).Get(),*second)==second_reference,"Additional page upload differs from its raster");
         draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference);
+        draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference,true);
         pages.clear();wrapper.texture=nullptr;texture.Reset();
         checked(device->Reset(&parameters));
         checked(device->CreateTexture(2048,4096,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));wrapper.texture=texture.Get();
@@ -164,12 +191,13 @@ int wmain(int argc,wchar_t** argv) {
         require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).Get(),*second)==second_reference,"Reset lost the additional page");
         require(eu4unicode::find_dynamic_glyph(table,0x4e2d)==first&&eu4unicode::find_dynamic_glyph(table,second_scalar)==second,"Reset changed native glyph pointers");
         draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference);
+        draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference,true);
         const auto count=pages.size();eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
         require(eu4unicode::font_glyph_page(second)==0&&eu4unicode::map_font_texture_pages(texture.Get()).empty(),"Released atlas still exposes pages");
         require(eu4unicode::unicode_glyph_usage().glyphs==0,"Released paged atlas leaked glyph records");
         eu4unicode::reset_font_draw_device(device.Get());
         require(MH_Uninitialize()==MH_OK,"MinHook cleanup failed");
-        std::cout<<"2000 CJK glyphs across "<<count<<" pages: stable first-page pixels, real mixed-page indexed drawing, restored engine state, reset and font release passed.\n";
+        std::cout<<"2000 CJK glyphs across "<<count<<" pages: stable first-page pixels, mixed-page indexed and popup drawing, restored engine state, reset and font release passed.\n";
         DestroyWindow(window);return 0;
     } catch(const std::exception& error) {
         std::cerr<<error.what()<<'\n';MH_Uninitialize();if(window) DestroyWindow(window);return 1;

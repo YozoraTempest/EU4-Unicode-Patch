@@ -3,10 +3,14 @@
 #include <MinHook.h>
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
+#include "formatted_text.hpp"
 #include "unicode_editor.hpp"
 #include "native_text_event.hpp"
 #include "unicode_search.hpp"
+#include "unicode_pinyin.hpp"
+#include "native_search.hpp"
 #include "native_steam_presence.hpp"
+#include "native_script_bom.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
 #include "native_font_atlas.hpp"
@@ -24,6 +28,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -34,11 +39,29 @@ std::byte* image=nullptr;
 std::atomic<bool> patch_enabled{false};
 thread_local std::uint32_t last_slot=0;
 thread_local std::uint32_t button_extra=0;
+thread_local std::uint32_t button_slot=0;
 thread_local std::uint32_t last_scalar_bytes=1;
-using BreakPositions=std::vector<std::size_t>;
-thread_local std::shared_ptr<const BreakPositions> active_line_breaks;
-thread_local std::unordered_map<std::string,std::shared_ptr<const BreakPositions>> line_break_cache;
-thread_local std::size_t line_cache_bytes=0;
+thread_local std::shared_ptr<const eu4unicode::FormattedText> active_line_breaks,button_line_breaks;
+thread_local std::shared_ptr<const eu4unicode::FormattedText> popup_line_breaks;
+struct CachedFormattedText { std::shared_ptr<const eu4unicode::FormattedText> value; std::size_t bytes; };
+thread_local std::unordered_map<std::string,CachedFormattedText> formatted_cache;
+thread_local std::size_t formatted_cache_bytes=0;
+std::shared_ptr<const eu4unicode::FormattedText> formatted_boundaries(std::string_view text) {
+    std::string key(text);
+    const auto found=formatted_cache.find(key);
+    if(found!=formatted_cache.end()) return found->second.value;
+    auto value=std::make_shared<const eu4unicode::FormattedText>(text);
+    const auto bytes=key.size()+value->memory_size()+sizeof(CachedFormattedText);
+    constexpr std::size_t budget=1024*1024;
+    if(bytes<=budget) {
+        if(formatted_cache.size()>=256||formatted_cache_bytes>budget-bytes) {
+            formatted_cache.clear();formatted_cache_bytes=0;
+        }
+        formatted_cache.emplace(std::move(key),CachedFormattedText{value,bytes});
+        formatted_cache_bytes+=bytes;
+    }
+    return value;
+}
 void log(const char* message) {
     if(log_file==INVALID_HANDLE_VALUE) return;
     DWORD written=0;
@@ -47,6 +70,21 @@ void log(const char* message) {
     FlushFileBuffers(log_file);
 }
 using eu4unicode::EngineString;
+using SubstringText=EngineString*(*)(const EngineString*,EngineString*,int,int);
+SubstringText original_layout_substring=nullptr;
+EngineString* layout_substring(const EngineString* source,EngineString* target,int begin,int end) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    if(eu4unicode::layout_substring_caller(caller)) {
+        try {
+            const auto boundaries=formatted_boundaries({source->data(),static_cast<std::size_t>(source->size)});
+            // The native API takes [begin,end), not a start and length.
+            begin=static_cast<int>(boundaries->prefix(static_cast<std::size_t>(std::max(0,begin))));
+            end=static_cast<int>(boundaries->prefix(static_cast<std::size_t>(std::max(begin,end))));
+        } catch(...) { log("Unicode layout substring failed; fragment excluded.");begin=0;end=0; }
+    }
+    return original_layout_substring(source,target,begin,end);
+}
 eu4unicode::NativePresenceConversion original_presence_conversion=nullptr;
 EngineString* convert_steam_presence(EngineString* target,const EngineString* source) {
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
@@ -66,20 +104,45 @@ void transliterate_save_path(EngineString* text) {
     if(caller==0x5ca24b && value.substr(0,11)=="save games/" && eu4unicode::valid_utf8(value)) return;
     original_transliterate(text);
 }
-using FindText=std::uint64_t(*)(const char*,std::uint64_t,std::uint64_t,const char*,std::uint64_t);
-FindText original_find_text=nullptr;
+eu4unicode::NativeFindText original_find_text=nullptr;
+eu4unicode::NativeSearchDistance original_search_distance=nullptr;
+std::filesystem::path search_dictionary_path;
+void load_search_resources() {
+    static std::once_flag loaded;
+    std::call_once(loaded,[] {
+        const auto config=search_dictionary_path.parent_path()/L"config.ini";
+        eu4unicode::set_search_options({
+            GetPrivateProfileIntW(L"search",L"typo_tolerance",1,config.c_str())!=0,
+            GetPrivateProfileIntW(L"search",L"fuzzy_pinyin",0,config.c_str())!=0});
+        try {
+            if(!std::filesystem::exists(search_dictionary_path)) return;
+            std::ifstream file(search_dictionary_path,std::ios::binary);
+            if(!file) throw std::runtime_error("Cannot read pinyin dictionary");
+            const std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
+            if(file.bad()) throw std::runtime_error("Cannot read pinyin dictionary");
+            eu4unicode::set_pinyin_dictionary(content);
+            log("Custom pinyin dictionary loaded.");
+        } catch(...) { log("Custom pinyin dictionary rejected; builtin pronunciations retained."); }
+    });
+}
 std::uint64_t find_country_name(const char* name,std::uint64_t length,std::uint64_t start,
                               const char* query,std::uint64_t query_length) {
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
         reinterpret_cast<std::uintptr_t>(image);
-    // This country-list caller tests only found/not-found, never the offset.
-    // Other string-search callers retain the native byte-offset contract.
-    if(caller!=0xefc394) return original_find_text(name,length,start,query,query_length);
+    if(!eu4unicode::display_find_caller(caller)) return original_find_text(name,length,start,query,query_length);
     try {
-        return start<=length&&eu4unicode::country_search_contains(
-            std::string_view(name,static_cast<std::size_t>(length)).substr(static_cast<std::size_t>(start)),
-            std::string_view(query,static_cast<std::size_t>(query_length)))?0:UINT64_MAX;
-    } catch(...) { log("Unicode country-name search failed; candidate excluded."); return UINT64_MAX; }
+        load_search_resources();
+        return eu4unicode::find_display_name(caller,name,length,start,query,query_length,original_find_text);
+    } catch(...) { log("Unicode display-name search failed; candidate excluded."); return UINT64_MAX; }
+}
+std::int64_t find_province_distance(const EngineString* name,const EngineString* query) {
+    const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
+        reinterpret_cast<std::uintptr_t>(image);
+    if(!eu4unicode::province_distance_caller(caller)) return original_search_distance(name,query);
+    try {
+        load_search_resources();
+        return eu4unicode::province_search_distance(caller,name,query,original_search_distance);
+    } catch(...) { log("Unicode province distance failed; candidate ranked last."); return INT32_MAX/2; }
 }
 struct LoadContext { int line; bool replace; char padding[11]; void* collection; };
 static_assert(offsetof(LoadContext,collection)==16);
@@ -581,6 +644,17 @@ bool write(std::size_t rva,const void* data,std::size_t size) {
 extern "C" {
 std::uintptr_t g_main_draw_return,g_main_copy_return,g_main_measure_return;
 std::uintptr_t g_bitmap_measure_return,g_bitmap_split_return,g_copy_buffer;
+std::uintptr_t g_bitmap_advance_return,g_list_measure_return,g_list_advance_return;
+std::uintptr_t g_split_format_return,g_split_plain_entry,g_list_format_return,g_list_plain_entry;
+std::uintptr_t g_alternate_format_return,g_alternate_plain_entry,g_alternate_end,g_alternate_advance_return;
+std::uintptr_t g_split_kern_return,g_list_kern_return,g_alternate_kern_return;
+std::uintptr_t g_button_wrap_return,g_button_wrap_branch;
+std::uintptr_t g_popup_entry_return,g_popup_end_return,g_popup_data;
+std::uintptr_t g_popup_copy_return,g_popup_color_copy_return,g_popup_icon_copy_return;
+std::uintptr_t g_popup_format_return,g_popup_plain_entry,g_popup_measure_return;
+std::uintptr_t g_popup_wrap_return,g_popup_advance_entry,g_popup_advance_return;
+std::uintptr_t g_popup_draw_format_return,g_popup_draw_plain_entry,g_popup_draw_return;
+std::uintptr_t g_popup_icon_end_return,g_popup_measure_kern_return,g_popup_draw_kern_return,g_popup_page_return;
 std::uintptr_t g_heap_pointer,g_heap_alloc,g_heap_return;
 std::uintptr_t g_button_copy_return,g_button_measure_return,g_button_draw_return,g_button_loop,g_button_end;
 std::uintptr_t g_alternate_measure_return,g_wrap_return,g_wrap_branch;
@@ -606,6 +680,14 @@ std::uintptr_t g_path_pair_return;
 std::uintptr_t g_wide_compare_left_return,g_wide_compare_right_return;
 void main_draw_hook(); void main_copy_hook(); void main_measure_hook();
 void bitmap_measure_hook(); void bitmap_split_hook();
+void bitmap_advance_hook();void list_measure_hook();void list_advance_hook();
+void split_format_hook();void list_format_hook();void alternate_format_hook();void alternate_advance_hook();
+void split_kern_hook();void list_kern_hook();void alternate_kern_hook();
+void button_wrap_hook();
+void popup_entry_hook();void popup_end_hook();void popup_copy_hook();void popup_color_copy_hook();void popup_icon_copy_hook();
+void popup_format_hook();void popup_measure_hook();void popup_wrap_hook();void popup_advance_hook();
+void popup_draw_format_hook();void popup_draw_hook();void popup_icon_end_hook();
+void popup_measure_kern_hook();void popup_draw_kern_hook();void popup_page_hook();
 void heap_zero_hook();
 void button_copy_hook(); void button_measure_hook(); void button_draw_hook(); void button_advance_hook();
 void alternate_measure_hook(); void main_wrap_hook();
@@ -655,6 +737,31 @@ void store_loaded_glyph(void** table,std::uint32_t scalar,void* glyph) noexcept 
 std::size_t bounded_text_length(const char* source,std::size_t length) noexcept {
     return eu4unicode::scalar_prefix({source,length},32000);
 }
+void mark_popup_font_glyph(const eu4unicode::NativeGlyph* glyph,eu4unicode::PopupFontVertex* vertices) noexcept { eu4unicode::mark_popup_font_glyph(glyph,vertices); }
+void begin_popup_font(void* font) { eu4unicode::begin_popup_font(font); }
+void end_popup_font() noexcept { eu4unicode::end_popup_font(); }
+std::size_t next_layout_scalar(const EngineString* source,std::size_t offset) noexcept {
+    return eu4unicode::native_scalar_next({source->data(),static_cast<std::size_t>(source->size)},offset);
+}
+std::size_t next_layout_offset(const char* source,std::size_t length,std::size_t offset) noexcept {
+    return eu4unicode::native_scalar_next({source,length},offset);
+}
+std::uint64_t decode_layout_range(const char* source,std::size_t length) noexcept {
+    const auto scalar=eu4unicode::native_measure_scalar({source,length});
+    if(!scalar.bytes) return UINT64_MAX;
+    return scalar.value|(static_cast<std::uint64_t>(scalar.bytes-1)<<32);
+}
+std::uint64_t format_layout_range(const char* source,std::size_t length) noexcept {
+    const auto scalar=eu4unicode::native_measure_scalar({source,length});
+    if(!scalar.bytes) return UINT64_MAX;
+    if(scalar.value==0xa7&&length<=scalar.bytes) return UINT64_MAX;
+    if(scalar.value==0xa3&&eu4unicode::native_text_unit({source,length},0).kind!=eu4unicode::TextUnitKind::icon)
+        return UINT64_MAX;
+    // These fixed-size ASCII tokens are specific to this native width routine.
+    if((scalar.value=='@'&&length<4)||(scalar.value=='{'&&length<3)) return UINT64_MAX;
+    return scalar.value|((scalar.value==0xa7||scalar.value==0xa3||scalar.value==0xa4)?
+        static_cast<std::uint64_t>(scalar.bytes-1)<<32:0);
+}
 std::uint64_t decode_z(const char* text) noexcept {
     std::size_t length=0;
     while(length<4 && text[length]) ++length;
@@ -676,31 +783,30 @@ std::uint64_t copy_scalar(const char* source,std::size_t remaining,char* destina
 void prepare_wrap_context(const char* source,std::size_t length) noexcept {
     active_line_breaks.reset();
     const auto value=std::string_view(source,bounded_text_length(source,length));
-    if(!eu4unicode::valid_utf8(value)) return;
     try {
-        std::string key(value);
-        auto found=line_break_cache.find(key);
-        if(found!=line_break_cache.end()) { active_line_breaks=found->second; return; }
-        auto positions=std::make_shared<const BreakPositions>(eu4unicode::line_boundaries(value));
-        const auto cost=value.size()+positions->size()*sizeof(std::size_t);
-        if(line_break_cache.size()>=256 || line_cache_bytes+cost>1024*1024) {
-            line_break_cache.clear(); line_cache_bytes=0;
-        }
-        line_cache_bytes+=cost;
-        line_break_cache.emplace(std::move(key),positions);
-        active_line_breaks=std::move(positions);
+        active_line_breaks=formatted_boundaries(value);
     } catch(...) { log("Unicode line boundary preparation failed."); }
 }
 bool unicode_wrap_before(std::uint32_t last_byte) noexcept {
     if(!active_line_breaks || last_byte+1<last_scalar_bytes) return false;
     const auto offset=last_byte+1-last_scalar_bytes;
-    return std::binary_search(active_line_breaks->begin(),active_line_breaks->end(),offset);
+    return active_line_breaks->line_before(offset);
 }
+void prepare_button_wrap(const EngineString* source) noexcept {
+    button_line_breaks.reset();
+    try { button_line_breaks=formatted_boundaries({source->data(),static_cast<std::size_t>(source->size)}); }
+    catch(...) { log("Unicode button line boundary preparation failed."); }
+}
+bool button_wrap_after(std::uint32_t offset) noexcept {
+    return button_line_breaks&&button_line_breaks->line_before(static_cast<std::size_t>(offset)+button_extra+1);
+}
+std::uint64_t previous_button_slot() noexcept { return button_slot; }
 std::uint64_t previous_slot() noexcept { return last_slot; }
 std::uint64_t previous_extra() noexcept { return button_extra; }
 char* construct_scalar(EngineString* target,const char* source) {
     const auto packed=decode_z(source);
     button_extra=static_cast<std::uint32_t>(packed>>32);
+    button_slot=static_cast<std::uint32_t>(packed);
     const auto size=button_extra+1;
     auto destination=repeat_text(target,size,static_cast<unsigned char>(*source));
     std::memcpy(destination,source,size);
@@ -726,6 +832,17 @@ char* construct_map_scalar(EngineString* target,const char* source) {
     std::memcpy(destination,source,size);
     return destination;
 }
+std::uint64_t copy_popup_scalar(EngineString* target,const char* source) {
+    *target={};target->capacity=15;
+    construct_map_scalar(target,source);
+    return decode_z(source);
+}
+void prepare_popup_wrap(const EngineString* source) noexcept {
+    popup_line_breaks.reset();
+    try { popup_line_breaks=formatted_boundaries({source->data(),static_cast<std::size_t>(source->size)}); }
+    catch(...) { log("Unicode popup line boundary preparation failed."); }
+}
+bool popup_wrap_after(std::uint32_t last_byte) noexcept { return popup_line_breaks&&popup_line_breaks->line_before(static_cast<std::size_t>(last_byte)+1); }
 std::uint64_t map_scalar_size(const EngineString* source,std::size_t offset) noexcept {
     if(offset>=source->size) return 1;
     const auto scalar=eu4unicode::decode({source->data()+offset,static_cast<std::size_t>(source->size)-offset});
@@ -800,6 +917,7 @@ bool initialize(HMODULE module) {
     const auto fonts=std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_patch"/L"fonts";
 #endif
     image=reinterpret_cast<std::byte*>(GetModuleHandleW(nullptr));
+    search_dictionary_path=std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_patch"/L"pinyin.txt";
 #ifdef EU4_UNICODE_RESEARCH
     const bool experimental_input=GetPrivateProfileIntW(L"experimental",L"unicode_input",0,
         (std::filesystem::path(dll_path).parent_path()/L"eu4_unicode_probe.ini").c_str())!=0;
@@ -813,11 +931,28 @@ bool initialize(HMODULE module) {
         {0x1595cad,"b910000000e81dd64900"},
         {0x1595ceb,"4c8bbd30110000498984ff20010000"},
         {0x16fd650,"48895c240848896c2410488974241848"},
+        {0x170ca20,"48895c241848896c242048895424105657415441564157"},
+        {0x170cd10,"48895c2420488954241055565741564157488d6c2480"},
+        {0x170d1d0,"48895c2408574883ec2048895108488d05bb276b00488901"},
+        {0x171eed0,"48896c2418565741564883ec208b69484c8bf24963f0"},
+        {0x171efb0,"488b41384c8bc94885c07409448b4008442b00eb034533c0"},
+        {0x153d4a0,"4863414cc3"},
         {0x15995b0,"4c63cf488b55f84c03ca4863ce410fb6014c8d1d08a7e90042880419ffc6"},
         {0x1599728,"410fb601498b8cc62001000048894d004885c9"},
         {0x159a796,"460fb60409f3410f109e680900004b8b94c620010000"},
         {0x159b687,"0fb60407498b8cc6200100004885c9"},
         {0x159ef48,"f3410f10b6480800000fb604024d8b3cc64d85ff"},
+        {0x159f1db,"ffc78bd7448b5310413bfa0f8d17020000"},
+        {0x159f87d,"4c8b45b8f3410f10b0480800000fb604104d8b24c04d85e4"},
+        {0x159fde5,"ffc38bf38b4f10440fb68d480100004533d23bd9"},
+        {0x1704af0,"48895c2408574883ec40488bda443b4910"},
+        {0x159eddd,"488bcb4c8b4b184983f9107203488b0b803c0aa7"},
+        {0x159f6ef,"488bcf4c8b47184983f8107203488b0f8bc6803c01a7"},
+        {0x159b85c,"0fb6042b3ca7750affc748ffc3e92b010000"},
+        {0x159b999,"ffc748ffc349b8ffffff43ffffff0b"},
+        {0x159f06d,"e85e53fffff30f58f8f3440f58c0"},
+        {0x159f9a9,"e8224afffff30f58f8f3440f58c0"},
+        {0x159b95a,"e8718afffff30f58f0"},
         {0x1595c86,"81ffff000000"}, {0x10b2a66,"b9883d0000"},
         {0x1b24a59,"ba883d0000"}, {0x10999f9,"ba883d0000"},
         {0x16c2cb7,"4181fe00000001"}, {0x1a683ae,"488b0d9b548d004c8bc333d2ff15b0e10f004885c0"},
@@ -827,6 +962,22 @@ bool initialize(HMODULE module) {
         {0x15974cb,"41ffc6443b75d80f8c59f3ffff448bbdc8210000"},
         {0x159b91a,"0fb6142b498d8f200100004c8b1cd14d85db"},
         {0x15997a9,"66837906000f85130100008d041b660f6ec8"}
+        ,{0x15970df,"6641837b06000f85e0030000837db000"}
+        ,{0x159c677,"488bcae86190affe8038000f84ed0600"}
+        ,{0x159cd75,"4c8d9c2438040000410f2873e8410f28"}
+        ,{0x159c6d8,"0fb61c07488d4d50e85b4baffe90440f"}
+        ,{0x159c72b,"0fb61c07488d4d50e8084baffe90440f"}
+        ,{0x159c79a,"0fb61c07488d4d50e8994aaffe90440f"}
+        ,{0x159c713,"488bcee8c58faffe488bce803c07a775"}
+        ,{0x159c833,"0fb604074d8ba4c7200100004d85e40f"}
+        ,{0x159c8a6,"6641837c2406000f85ee000000448ba5"}
+        ,{0x159c9a1,"ffc73b7e100f8c24fdffff448ba59003"}
+        ,{0x159cbb3,"488d4424604983f810490f43c1803c30"}
+        ,{0x159cec5,"0fb604064d8bacc7200100004d85ed75"}
+        ,{0x159ce31,"c644159000498b074c8b90e0000000f3"}
+        ,{0x159c899,"e8327bfffff30f58f0f30f58f8664183"}
+        ,{0x159da11,"e8ba69fffff3440f58e8f3440f104424"}
+        ,{0x159d9a0,"8b8d8803000083c106898d8803000083"}
         ,{0x159a240,"4e8d0409410fb6003ca77573"}
         ,{0x15996b1,"c68415d001000000498b06"}
         ,{0x159a45f,"c6840dd001000000498b06"}
@@ -922,6 +1073,26 @@ bool initialize(HMODULE module) {
         ,{0xf1615e,"e80dec7e00"}
         ,{0x17061a0,"48895c240848896c24104889742418"}
         ,{0xefc38f,"e80c9e800083f8ff"}
+        ,{0x1141475,"e876ef4000"}
+        ,{0x114147e,"e8ed385c00"}
+        ,{0x11414be,"e82def4000"}
+        ,{0x11414c7,"e8a4385c00"}
+        ,{0x114187b,"e870eb4000"}
+        ,{0x1141884,"e8e7345c00"}
+        ,{0x1141b98,"e853e84000"}
+        ,{0x1141ba1,"e8ca315c00"}
+        ,{0x1141e9c,"e84fe54000"}
+        ,{0x1141ea6,"e8c52e5c00"}
+        ,{0x11434c8,"e823cf4000"}
+        ,{0x1143a7c,"e86fc94000"}
+        ,{0x1143a86,"e8e5125c00"}
+        ,{0x1144338,"e8b3c04000"}
+        ,{0x1144341,"e82a0a5c00"}
+        ,{0x1141fe6,"e8b5415c0083f8ff"}
+        ,{0x11420dd,"e8be405c0083f8ff"}
+        ,{0x171f880,"4055565741544155415641574883ec20"}
+        ,{0x114218d,"e8eed65d0042890437"}
+        ,{0x11421ad,"e8ced65d00ffc0"}
         ,{0x1706010,"488bc4488958084889681048897018574883ec40"}
         ,{0xa901fe,"e80d5ec700"}
     };
@@ -932,6 +1103,41 @@ bool initialize(HMODULE module) {
     g_main_measure_return=address(0x159973b);
     g_bitmap_measure_return=address(0x159b696);
     g_bitmap_split_return=address(0x159ef5c);
+    g_bitmap_advance_return=address(0x159f1e6);
+    g_list_measure_return=address(0x159f895);
+    g_list_advance_return=address(0x159fdf4);
+    g_split_format_return=address(0x159eded);
+    g_split_plain_entry=address(0x159ef38);
+    g_list_format_return=address(0x159f6ff);
+    g_list_plain_entry=address(0x159f849);
+    g_alternate_format_return=address(0x159b862);
+    g_alternate_plain_entry=address(0x159b91a);
+    g_alternate_end=address(0x159b9b1);
+    g_alternate_advance_return=address(0x159b99e);
+    g_split_kern_return=address(0x159f07b);
+    g_list_kern_return=address(0x159f9b7);
+    g_alternate_kern_return=address(0x159b963);
+    g_button_wrap_return=address(0x15970eb);
+    g_button_wrap_branch=address(0x15974cb);
+    g_popup_entry_return=address(0x159c67f);
+    g_popup_end_return=address(0x159cd7d);
+    g_popup_data=address(0x956e0);
+    g_popup_copy_return=address(0x159c6f8);
+    g_popup_color_copy_return=address(0x159c74b);
+    g_popup_icon_copy_return=address(0x159c7ba);
+    g_popup_format_return=address(0x159c722);
+    g_popup_plain_entry=address(0x159c82b);
+    g_popup_measure_return=address(0x159c842);
+    g_popup_wrap_return=address(0x159c8b3);
+    g_popup_advance_entry=address(0x159c9a1);
+    g_popup_advance_return=address(0x159c9a6);
+    g_popup_draw_format_return=address(0x159cbc9);
+    g_popup_draw_plain_entry=address(0x159ceaf);
+    g_popup_draw_return=address(0x159ced4);
+    g_popup_icon_end_return=address(0x159ce36);
+    g_popup_measure_kern_return=address(0x159c8a6);
+    g_popup_draw_kern_return=address(0x159da1b);
+    g_popup_page_return=address(0x159d9a9);
     g_copy_buffer=address(0x2433cd0);
     g_heap_pointer=address(0x233d850);
     g_heap_alloc=address(0x1b66570);
@@ -1003,6 +1209,32 @@ bool initialize(HMODULE module) {
         {0x15995b0,reinterpret_cast<void*>(main_copy_hook)}, {0x1599728,reinterpret_cast<void*>(main_measure_hook)},
         {0x159a796,reinterpret_cast<void*>(main_draw_hook)}, {0x159b687,reinterpret_cast<void*>(bitmap_measure_hook)},
         {0x159ef48,reinterpret_cast<void*>(bitmap_split_hook)},
+        {0x159f1db,reinterpret_cast<void*>(bitmap_advance_hook)},
+        {0x159f87d,reinterpret_cast<void*>(list_measure_hook)},
+        {0x159fde5,reinterpret_cast<void*>(list_advance_hook)},
+        {0x159eddd,reinterpret_cast<void*>(split_format_hook)},
+        {0x159f6ef,reinterpret_cast<void*>(list_format_hook)},
+        {0x159b85c,reinterpret_cast<void*>(alternate_format_hook)},
+        {0x159b999,reinterpret_cast<void*>(alternate_advance_hook)},
+        {0x159f06d,reinterpret_cast<void*>(split_kern_hook)},
+        {0x159f9a9,reinterpret_cast<void*>(list_kern_hook)},
+        {0x159b95a,reinterpret_cast<void*>(alternate_kern_hook)},
+        {0x15970df,reinterpret_cast<void*>(button_wrap_hook)},
+        {0x159c677,reinterpret_cast<void*>(popup_entry_hook)},
+        {0x159cd75,reinterpret_cast<void*>(popup_end_hook)},
+        {0x159c6d8,reinterpret_cast<void*>(popup_copy_hook)},
+        {0x159c72b,reinterpret_cast<void*>(popup_color_copy_hook)},
+        {0x159c79a,reinterpret_cast<void*>(popup_icon_copy_hook)},
+        {0x159c713,reinterpret_cast<void*>(popup_format_hook)},
+        {0x159c833,reinterpret_cast<void*>(popup_measure_hook)},
+        {0x159c8a6,reinterpret_cast<void*>(popup_wrap_hook)},
+        {0x159c9a1,reinterpret_cast<void*>(popup_advance_hook)},
+        {0x159cbb3,reinterpret_cast<void*>(popup_draw_format_hook)},
+        {0x159cec5,reinterpret_cast<void*>(popup_draw_hook)},
+        {0x159ce31,reinterpret_cast<void*>(popup_icon_end_hook)},
+        {0x159c899,reinterpret_cast<void*>(popup_measure_kern_hook)},
+        {0x159da11,reinterpret_cast<void*>(popup_draw_kern_hook)},
+        {0x159d9a0,reinterpret_cast<void*>(popup_page_hook)},
         {0x1a683ae,reinterpret_cast<void*>(heap_zero_hook)},
         {0x1596858,reinterpret_cast<void*>(button_copy_hook)},
         {0x1597071,reinterpret_cast<void*>(button_measure_hook)},
@@ -1056,6 +1288,18 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&original_transliterate))!=MH_OK) {
         log("Save path hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
+    if(MH_CreateHook(image+0x1704af0,reinterpret_cast<void*>(layout_substring),
+        reinterpret_cast<void**>(&original_layout_substring))!=MH_OK) {
+        log("Layout substring hook creation failed; no hooks enabled.");MH_Uninitialize();return false;
+    }
+    if(MH_CreateHook(image+0x170cd10,reinterpret_cast<void*>(eu4unicode::construct_script_file),
+        reinterpret_cast<void**>(&eu4unicode::original_script_file))!=MH_OK||
+       MH_CreateHook(image+0x170ca20,reinterpret_cast<void*>(eu4unicode::construct_script_file_mode),
+        reinterpret_cast<void**>(&eu4unicode::original_script_file_mode))!=MH_OK||
+       MH_CreateHook(image+0x170d1d0,reinterpret_cast<void*>(eu4unicode::construct_script_stream),
+        reinterpret_cast<void**>(&eu4unicode::original_script_stream))!=MH_OK) {
+        log("Script lexer hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
     if(MH_CreateHook(image+0x1706010,reinterpret_cast<void*>(convert_steam_presence),
         reinterpret_cast<void**>(&original_presence_conversion))!=MH_OK) {
         log("Steam Rich Presence hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
@@ -1063,6 +1307,10 @@ bool initialize(HMODULE module) {
     if(MH_CreateHook(image+0x17061a0,reinterpret_cast<void*>(find_country_name),
         reinterpret_cast<void**>(&original_find_text))!=MH_OK) {
         log("Country search hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+    }
+    if(MH_CreateHook(image+0x171f880,reinterpret_cast<void*>(find_province_distance),
+        reinterpret_cast<void**>(&original_search_distance))!=MH_OK) {
+        log("Province search hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
     if(MH_CreateHook(image+0x1594360,reinterpret_cast<void*>(destroy_font_table),
         reinterpret_cast<void**>(&original_font_table_destroy))!=MH_OK) {
@@ -1139,7 +1387,23 @@ bool initialize(HMODULE module) {
         {0xefc33b,bytes("e8b0406500"),bytes("9090909090")},
         {0xefc344,bytes("e8278a8000"),bytes("9090909090")},
         {0xf16156,bytes("e895a26300"),bytes("9090909090")},
-        {0xf1615e,bytes("e80dec7e00"),bytes("9090909090")} };
+        {0xf1615e,bytes("e80dec7e00"),bytes("9090909090")},
+        // Province-finder names, alternative names and queries retain UTF-8.
+        {0x1141475,bytes("e876ef4000"),bytes("9090909090")},
+        {0x114147e,bytes("e8ed385c00"),bytes("9090909090")},
+        {0x11414be,bytes("e82def4000"),bytes("9090909090")},
+        {0x11414c7,bytes("e8a4385c00"),bytes("9090909090")},
+        {0x114187b,bytes("e870eb4000"),bytes("9090909090")},
+        {0x1141884,bytes("e8e7345c00"),bytes("9090909090")},
+        {0x1141b98,bytes("e853e84000"),bytes("9090909090")},
+        {0x1141ba1,bytes("e8ca315c00"),bytes("9090909090")},
+        {0x1141e9c,bytes("e84fe54000"),bytes("9090909090")},
+        {0x1141ea6,bytes("e8c52e5c00"),bytes("9090909090")},
+        {0x11434c8,bytes("e823cf4000"),bytes("9090909090")},
+        {0x1143a7c,bytes("e86fc94000"),bytes("9090909090")},
+        {0x1143a86,bytes("e8e5125c00"),bytes("9090909090")},
+        {0x1144338,bytes("e8b3c04000"),bytes("9090909090")},
+        {0x1144341,bytes("e82a0a5c00"),bytes("9090909090")} };
     std::size_t applied=0;
     bool constants_ok=true;
     for(const auto& patch:constants) {
@@ -1159,7 +1423,9 @@ bool initialize(HMODULE module) {
     }
     patch_enabled.store(true,std::memory_order_release);
     log("UTF-8 import, UI, format, map and bitmap iterators enabled.");
+    log("Script lexer UTF-8 BOM handling enabled.");
     log("Steam Rich Presence UTF-8 passthrough enabled.");
+    log("Chinese and pinyin country/province search enabled.");
     return true;
 }
 }

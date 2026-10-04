@@ -41,6 +41,19 @@ int main() {
         auto invalid=quads({0});invalid[0].u=std::nanf("");rejected=false;
         try { eu4unicode::split_font_quads(invalid,1); } catch(const std::invalid_argument&) { rejected=true; }
         require(rejected,"Non-finite page coordinate was accepted");
+        std::vector<eu4unicode::PopupFontVertex> popup;
+        for(const auto page:{0u,1u,1u,0u,2u}) {
+            const auto first=popup.size();
+            for(unsigned i=0;i<6;++i) popup.push_back({static_cast<float>(first+i),2,3,0.25f,0.5f,0x12345678,0x87654321});
+            eu4unicode::tag_font_vertices(popup.data()+first,6,page);
+        }
+        const auto popup_before=popup;
+        const auto popup_batches=eu4unicode::split_popup_glyphs(popup,3);
+        require(popup_batches.size()==4&&popup_batches[1].first_quad==1&&popup_batches[1].quad_count==2,
+                "Popup page runs changed glyph order");
+        for(std::size_t i=0;i<popup.size();++i)
+            require(popup[i].x==popup_before[i].x&&popup[i].u==0.25f&&popup[i].color==0x12345678&&popup[i].secondary_color==0x87654321,
+                    "Popup page decoding changed positions or colors");
         std::cout<<"PASS: adjacent page runs, preserved order and geometry, UV decoding and invalid-input atomicity.\n";
         return 0;
     } catch(const std::exception& error) { std::cerr<<error.what()<<'\n';return 1; }

@@ -2,12 +2,16 @@
 
 补丁针对已校验的 EU4 1.37.5.0 x64。文本存储为标准 UTF-8，引擎字符串与光标位置使用字节偏移。
 
+脚本支持 UTF-8 with BOM：解析器初始化时跳过输入开头的 BOM，保留文件原始字节和正文中的 `U+FEFF`。ParaTranz 导出的脚本无需移除 BOM。
+
 ## 模块
 
 | 模块 | 职责 |
 | --- | --- |
 | `unicode_text` / `unicode_services` | UTFCPP 编解码，ICU 字素、行边界与搜索键 |
-| `unicode_editor` / `unicode_search` | 单行编辑、选区、字节预算与外交国家名过滤 |
+| `unicode_editor` | 单行编辑、选区与字节预算 |
+| `unicode_search` / `unicode_pinyin` / `native_search` | 中文与拼音匹配、词组读音及国家／省份搜索适配 |
+| `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
 | `glyph_registry` / `scalar_glyph` / `native_font_atlas` | 稀疏字形记录、按需图集和设备恢复 |
 | `font_assets` / `font_atlas_assets` | 原版字体路径映射与运行时基础图集生成 |
@@ -39,11 +43,31 @@ ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径
 
 每页约占 32 MiB GPU 内存，动态上传另占约 32 MiB CPU staging。五页全部使用时分别约占 160 MiB，另计字体和缓存。图集满或字体缺字时仍可能显示占位符。
 
-字库 cmap 覆盖审计使用 `tools/audit-open-fonts.py`，依赖见 `tools/requirements-font-audit.txt`。覆盖报告不代表所有字符和复杂文字都已通过游戏验收。
+字库 cmap 覆盖审计使用 `tools/audit-open-fonts.py`，依赖见 `tools/requirements-font-audit.txt`。
 
 ## 输入与保存
 
-编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。外交搜索只修改已观察的国家名过滤调用者。
+编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。
+
+搜索接入外交国家列表与省份查找，支持中文、全拼、首字母、部分拼音、混合输入及简繁匹配。名称按当前显示内容建立索引，词组读音来自固定版本的 `phrase-pinyin-data`，其余汉字由系统 ICU 转写。
+
+至少 5 个字母的完整拼音默认容忍一次插入、删除、替换或相邻字母颠倒；首字母和中文查询不放宽。需要模糊音时，可创建 `plugins/eu4_unicode_patch/config.ini`，重启游戏后生效：
+
+```ini
+[search]
+typo_tolerance=1
+fuzzy_pinyin=1
+```
+
+`typo_tolerance` 默认 `1`，`fuzzy_pinyin` 默认 `0`。模糊音支持 `zh/z`、`ch/c`、`sh/s`、`n/l`、`en/eng` 和 `in/ing`；设为 `0` 可分别关闭。
+
+特殊读音可写入游戏目录的 `plugins/eu4_unicode_patch/pinyin.txt`，支持 UTF-8 和 UTF-8 BOM，重启游戏后生效。每个汉字对应一个拼音音节，重复词组可添加不同读音，`#` 开头为注释：
+
+```text
+奥地利: ao di li
+长安: chang an
+西藏: xi zang
+```
 
 保存路径修正代理对转换与比较，并保留已观察保存入口的 UTF-8 名称。完整复杂排版已有独立 DirectWrite 实现，尚未接入游戏的测宽、绘制和选区。
 
@@ -57,7 +81,7 @@ python tools\migrate-localisation.py '旧模组的localisation目录' private\mi
 
 工具保留 BOM、换行和文件结构，拒绝截断转义与孤立代理项，输出逐文件哈希报告。将转换结果用于单独的 UTF-8 模组副本；原目录保留。玩家安装不需要运行此工具。
 
-## 游戏测试副本
+## 开发副本
 
 准备开发探针：
 
@@ -84,7 +108,7 @@ python tools\migrate-localisation.py '旧模组的localisation目录' private\mi
 
 Frida 探针需要独立 Python 环境、Frida 和 psutil；剪贴板探针另需 pefile。MAP 必须与当前 DLL 一致。结束调试前先关闭专用游戏实例。
 
-`tools/trace-*.py` 记录原生调用，`tools/verify-*.py` 检查结果。受控 SDL 注入、GPU 读回与人工输入分别记录，结果见[测试范围](validation.md)，原始记录位于 `tests/evidence/`。
+`tools/trace-*.py` 跟踪原生调用，`tools/verify-*.py` 检查编辑、绘制和设备行为。
 
 动态 GPU 探针在外交搜索框聚焦后使用 `private/dynamic-font-arm.txt` 开始、`private/dynamic-font-finish.txt` 结束。`--player` 改为验证普通目录中的正式 DLL。
 
@@ -94,4 +118,4 @@ Frida 探针需要独立 Python 环境、Frida 和 psutil；剪贴板探针另�
 - 排版：将 DirectWrite 整段排版接入游戏测宽、绘制、光标和选区。
 - 输入：更多输入法、控件、缩放、预编辑、多行、撤销及系统剪贴板。
 - 保存：其他入口、输入产生的名称、自动保存周期及云存档。
-- 游戏回归：更多模组、长期战役、铁人及双端联机、聊天与同步。
+- 联机：中文聊天与名称同步。
