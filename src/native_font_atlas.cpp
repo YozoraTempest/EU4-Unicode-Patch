@@ -2,6 +2,7 @@
 #include "scalar_glyph.hpp"
 #include "native_font_draw.hpp"
 #include "unicode_text.hpp"
+#include "engine_string.hpp"
 #include <windows.h>
 #include <d3d9.h>
 #include <wrl/client.h>
@@ -23,11 +24,6 @@ namespace eu4unicode {
 NativeTextureLookup original_texture_lookup=nullptr;
 namespace {
 using Microsoft::WRL::ComPtr;
-struct EngineString {
-    union { char inline_bytes[16]; const char* pointer; } storage;
-    std::uint64_t size,capacity;
-    std::string_view view() const { return {capacity<16?storage.inline_bytes:storage.pointer,static_cast<std::size_t>(size)}; }
-};
 struct Page {
     int x=1,y=1,row=0;
     ComPtr<IDirect3DTexture9> staging;
@@ -258,7 +254,8 @@ void register_font_atlas(void* object,std::string_view selected_path) noexcept {
     try {
         std::lock_guard<std::recursive_mutex> lock(mutex);
         const auto f=static_cast<std::byte*>(object);
-        const auto path=selected_path.empty()?reinterpret_cast<const EngineString*>(f+0xe0)->view():selected_path;
+        const auto& stored_path=*reinterpret_cast<const EngineString*>(f+0xe0);
+        const auto path=selected_path.empty()?std::string_view(stored_path.data(),static_cast<std::size_t>(stored_path.size)):selected_path;
         const std::array<std::pair<const char*,int>,5> names{{{"zh-hans-14",14},{"zh-hans-16",16},{"zh-hans-18",18},{"zh-hans-24",24},{"zh-hans-map",88}}};
         int size=0;for(const auto& name:names) if(path==atlas_prefix+name.first) size=name.second;
         if(!size) return;
