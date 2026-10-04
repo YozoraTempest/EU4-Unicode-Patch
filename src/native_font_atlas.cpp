@@ -47,7 +47,7 @@ struct Atlas {
 };
 struct GlyphPage { const void* anchor;std::uint32_t page; };
 std::unordered_map<const NativeGlyph*,GlyphPage> glyph_pages;
-constexpr std::uint64_t map_texture_budget=256ull*1024*1024;
+constexpr std::uint64_t atlas_texture_budget=256ull*1024*1024;
 std::filesystem::path fixture_path,font_path;
 std::string atlas_prefix;
 FontLog logger=nullptr;
@@ -253,7 +253,7 @@ NativeGlyph* find_dynamic_glyph(void* const* table,std::uint32_t scalar) noexcep
             }
             if(page_index==a.pages.size()) {
                 const auto page_bytes=static_cast<std::uint64_t>(a.width)*a.height*4;
-                if(a.size!=88||(a.pages.size()+1)*page_bytes>map_texture_budget)
+                if((a.pages.size()+1)*page_bytes>atlas_texture_budget)
                     throw std::length_error("Native font texture memory budget exhausted");
                 a.pages.push_back(std::make_unique<Page>());x=1;y=1;row=0;
                 if(logger) { char message[100];std::snprintf(message,sizeof(message),"Dynamic font page allocated: size=%d page=%u bytes=%llu",a.size,page_index,static_cast<unsigned long long>(page_bytes));logger(message); }
@@ -289,7 +289,7 @@ void release_font_atlas(void* const* table) noexcept {
             if(i->second.anchor==anchor) i=glyph_pages.erase(i);else ++i;
         }
         bindings.erase(anchor);
-        if(std::none_of(bindings.begin(),bindings.end(),[](const auto& binding){return binding.second->size==88;}))
+        if(bindings.empty())
             release_font_draw_cache();
     } catch(...) {}
 }
@@ -302,18 +302,26 @@ bool dynamic_map_font(void* object) noexcept {
         return found!=bindings.end()&&found->second->size==88;
     } catch(...) { return false; }
 }
+bool dynamic_font(void* object) noexcept {
+    if(!object) return false;
+    try {
+        std::lock_guard<std::recursive_mutex> lock(mutex);
+        const auto table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(object)+0x120);
+        return bindings.count(identity(table))!=0;
+    } catch(...) { return false; }
+}
 std::uint32_t font_glyph_page(const NativeGlyph* glyph) noexcept {
     try {
         std::lock_guard<std::recursive_mutex> lock(mutex);
         const auto found=glyph_pages.find(glyph);return found==glyph_pages.end()?0:found->second.page;
     } catch(...) { return 0; }
 }
-FontTexturePages map_font_texture_pages(IDirect3DBaseTexture9* first) {
+FontTexturePages font_texture_pages(IDirect3DBaseTexture9* first) {
     if(!first) return {};
     std::lock_guard<std::recursive_mutex> lock(mutex);
     for(const auto& binding:bindings) {
         const auto& atlas=*binding.second;
-        if(atlas.size!=88||atlas.pages.front()->uploaded!=first) continue;
+        if(atlas.pages.front()->uploaded!=first) continue;
         FontTexturePages result;result.emplace_back(atlas.pages.front()->uploaded);
         for(std::size_t index=1;index<atlas.pages.size();++index) {
             const auto texture=atlas.pages[index]->texture.Get();

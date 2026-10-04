@@ -20,7 +20,8 @@ NativeGlyph* find_dynamic_glyph(void* const* table,std::uint32_t scalar) noexcep
 void release_font_atlas(void* const* table) noexcept;
 void* synchronize_font_texture(void* manager,int id);
 bool dynamic_map_font(void* font) noexcept;
+bool dynamic_font(void* font) noexcept;
 std::uint32_t font_glyph_page(const NativeGlyph* glyph) noexcept;
 using FontTexturePages=std::vector<Microsoft::WRL::ComPtr<IDirect3DTexture9>>;
-FontTexturePages map_font_texture_pages(IDirect3DBaseTexture9* first);
+FontTexturePages font_texture_pages(IDirect3DBaseTexture9* first);
 }

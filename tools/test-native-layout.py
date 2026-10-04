@@ -178,7 +178,8 @@ for rva, name in [(0x159ef48, 'bitmap_split_hook'), (0x159f1db, 'bitmap_advance_
                   (0x159f6ef, 'list_format_hook'), (0x159f9a9, 'list_kern_hook'),
                   (0x1596858, 'button_copy_hook'), (0x1597071, 'button_measure_hook'),
                   (0x15974cb, 'button_advance_hook'), (0x15970df, 'button_wrap_hook'),
-                  (0x15968e1, 'button_format_hook'), (0x1596e83, 'button_icon_copy_hook')]:
+                  (0x15968e1, 'button_format_hook'), (0x1596e83, 'button_icon_copy_hook'),
+                  (0x15966ec, 'button_geometry_entry_hook'), (0x1598841, 'button_geometry_end_hook')]:
     hook(rva, name)
 substring_callers=set()
 @C.CFUNCTYPE(None,C.c_void_p)
@@ -298,11 +299,93 @@ for text in ['万帕诺亚格','é中𠮷A','§Y中文§!','A£adm£中文','中
 expected_callers = {0x159f148, 0x159f230, 0x159f373, 0x159fa18, 0x159faec,
                     0x159fc46, 0x159fd48, 0x159fe60, 0x159feba, 0x159ff80, 0x15a00a0}
 assert expected_callers <= substring_callers, expected_callers - substring_callers
+# The UI uses two backend entry points: cached uploads and buffers created
+# with initial data. Verify the supported executable routes them to our hooks.
+for slot, target in [(0x1fd1190, 0x16d6640), (0x1fd11a8, 0x16d5f20), (0x1fd1188, 0x16d65d0)]:
+    assert C.c_void_p.from_address(base+slot).value == base+target, hex(slot)
+
+# Execute the production geometry-emission hooks with the native frame layout.
+# Replace only their marking callback: GPU tests exercise actual glyph-to-page
+# lookup and drawing, while this checks the MASM frame/index and register ABI.
+ui_vertices=C.create_string_buffer(30*28)
+ui_frame=C.create_string_buffer(0x2300)
+ui_frame_base=C.addressof(ui_frame)+0x20
+ui_output=C.create_string_buffer(32)
+ui_glyph=C.addressof(glyphs[65])
+marker_calls=[]
+@C.CFUNCTYPE(None,C.c_void_p,C.c_void_p)
+def mark_ui_vertices(glyph,vertices):
+    marker_calls.append((glyph,vertices))
+    for vertex in range(6):
+        C.c_float.from_address(vertices+vertex*28+12).value += 2
+trampoline=C.c_void_p()
+assert create(symbol('mark_popup_font_glyph'),C.cast(mark_ui_vertices,C.c_void_p).value,C.byref(trampoline))==0
+assert enable(symbol('mark_popup_font_glyph'))==0
+pointer('g_ui_vertices',C.addressof(ui_vertices))
+ui_page_results=[]
+for routine,hook_name,return_name,glyph_offset in [
+        ('main','main_page_hook','g_main_page_return',0x38),
+        ('button','button_page_hook','g_button_page_return',0x58)]:
+    result_register=b'\x89\x18' if routine=='main' else b'\x89\x10'
+    continuation=executable_code(b'\x48\xb8'+struct.pack('<Q',C.addressof(ui_output))+result_register+
+        b'\x4c\x89\x40\x08\x4c\x89\x50\x10\x48\x81\xc4\x00\x01\x00\x00\x41\x5e\x5b\x5d\xc3')
+    pointer(return_name,continuation)
+    for first_vertex in (0,6,18):
+        for vertex in range(30):
+            C.memmove(C.addressof(ui_vertices)+vertex*28,struct.pack('<5f2I',1,2,3,.25,.5,0x12345678,0x87654321),28)
+        C.c_void_p.from_address(ui_frame_base+glyph_offset).value=ui_glyph
+        C.c_void_p.from_address(ui_frame_base-0x18).value=C.addressof(ui_vertices)
+        C.c_uint.from_address(ui_frame_base+0x21c8).value=37
+        marker_calls.clear()
+        sentinel8=0x123456789abcdef0;sentinel10=0x1020304050607080
+        code=(b'\x55\x53\x41\x56\x48\x81\xec\x00\x01\x00\x00'
+              b'\x48\xbd'+struct.pack('<Q',ui_frame_base)+
+              b'\x41\xbe'+struct.pack('<I',first_vertex)+
+              b'\xc7\x44\x24\x48'+struct.pack('<I',first_vertex)+
+              b'\x49\xb8'+struct.pack('<Q',sentinel8)+b'\x49\xba'+struct.pack('<Q',sentinel10)+
+              b'\xff\x25\x00\x00\x00\x00'+struct.pack('<Q',symbol(hook_name)))
+        C.CFUNCTYPE(None)(executable_code(code))()
+        assert marker_calls==[(ui_glyph,C.addressof(ui_vertices)+first_vertex*28)],(routine,marker_calls)
+        assert C.c_uint.from_buffer(ui_output).value==(first_vertex+6 if routine=='main' else 37)
+        assert C.c_uint64.from_buffer(ui_output,8).value==sentinel8
+        assert C.c_uint64.from_buffer(ui_output,16).value==sentinel10
+        for vertex in range(30):
+            expected=2.25 if first_vertex<=vertex<first_vertex+6 else .25
+            assert C.c_float.from_buffer(ui_vertices,vertex*28+12).value==expected,(routine,first_vertex,vertex)
+            assert C.string_at(C.addressof(ui_vertices)+vertex*28,12)==struct.pack('<3f',1,2,3)
+            assert C.string_at(C.addressof(ui_vertices)+vertex*28+16,12)==struct.pack('<f2I',.5,0x12345678,0x87654321)
+        ui_page_results.append({'routine':routine,'first_vertex':first_vertex,'tagged_vertices':6})
+ui_scope_results=[]
+for routine,frame_size in [('main',0x2408),('button',0x2260)]:
+    for phase in ('entry','end'):
+        if phase=='entry':
+            save_registers=(b'\x4c\x89\x20\x4c\x89\x70\x08' if routine=='main' else b'\x48\x89\x18\x48\x89\x78\x08')
+            capture=b'\x48\xb8'+struct.pack('<Q',C.addressof(ui_output))+save_registers+b'\x4c\x89\x40\x10\x4c\x89\x50\x18'
+        else:
+            capture=(b'\x48\xb9'+struct.pack('<Q',C.addressof(ui_output))+b'\x48\x89\x01'
+                     b'\x4c\x89\xd8\x48\x29\xe0\x48\x89\x41\x08\x4c\x89\x41\x10\x4c\x89\x51\x18')
+        continuation=executable_code(capture+b'\x48\x81\xc4\x00\x01\x00\x00\x5f\x41\x5e\x41\x5c\x5b\x5d\xc3')
+        pointer(f'g_{routine}_geometry_{phase}_return',continuation)
+        code=(b'\x55\x53\x41\x54\x41\x56\x57\x48\x81\xec\x00\x01\x00\x00'
+              b'\x48\xb9'+struct.pack('<Q',font_base)+b'\x48\xba'+struct.pack('<Q',0x7654321)+
+              b'\x49\xb8'+struct.pack('<Q',sentinel8)+b'\x49\xba'+struct.pack('<Q',sentinel10)+
+              b'\x48\xb8'+struct.pack('<Q',0xabcdef)+
+              b'\xff\x25\x00\x00\x00\x00'+struct.pack('<Q',symbol(f'{routine}_geometry_{phase}_hook')))
+        C.CFUNCTYPE(None)(executable_code(code))()
+        expected=(0x7654321,font_base) if routine=='main' else (sentinel8,font_base)
+        if phase=='end': expected=(0xabcdef,frame_size)
+        assert tuple(C.c_uint64.from_buffer(ui_output,offset).value for offset in (0,8))==expected,(routine,phase)
+        assert C.c_uint64.from_buffer(ui_output,16).value==sentinel8
+        assert C.c_uint64.from_buffer(ui_output,24).value==sentinel10
+        ui_scope_results.append({'routine':routine,'phase':phase,'native_registers_preserved':True})
 report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_hash,
           'game_exe_sha256': game_hash, 'site_guards': len(guards),
           'native_width': results, 'native_layout': layout_results,
-          'substring_callers': [hex(x) for x in sorted(substring_callers)]}
+          'substring_callers': [hex(x) for x in sorted(substring_callers)],
+          'ui_page_emission':ui_page_results,'ui_geometry_scopes':ui_scope_results}
 if args.report:
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f"PASS: {len(results)} native width cases, {len(layout_results)} native layouts, "
       f"all {len(expected_callers)} truncation exits; player DLL {dll_hash}.", flush=True)
+print(f"PASS: {len(ui_page_results)} native UI page-emission cases preserve positions, colors and registers.",flush=True)
+print(f"PASS: {len(ui_scope_results)} native UI geometry scope cases preserve entry and exit registers.",flush=True)

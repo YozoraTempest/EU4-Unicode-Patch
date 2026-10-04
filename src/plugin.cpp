@@ -643,6 +643,9 @@ bool write(std::size_t rva,const void* data,std::size_t size) {
 
 extern "C" {
 std::uintptr_t g_main_draw_return,g_main_copy_return,g_main_measure_return;
+std::uintptr_t g_ui_vertices,g_main_page_return,g_button_page_return;
+std::uintptr_t g_main_geometry_entry_return,g_main_geometry_end_return;
+std::uintptr_t g_button_geometry_entry_return,g_button_geometry_end_return;
 std::uintptr_t g_bitmap_measure_return,g_bitmap_split_return,g_copy_buffer;
 std::uintptr_t g_bitmap_advance_return,g_list_measure_return,g_list_advance_return;
 std::uintptr_t g_split_format_return,g_split_plain_entry,g_list_format_return,g_list_plain_entry;
@@ -679,6 +682,9 @@ std::uintptr_t g_font_allocate,g_font_duplicate,g_font_store_return,g_font_initi
 std::uintptr_t g_path_pair_return;
 std::uintptr_t g_wide_compare_left_return,g_wide_compare_right_return;
 void main_draw_hook(); void main_copy_hook(); void main_measure_hook();
+void main_page_hook();void button_page_hook();
+void main_geometry_entry_hook();void main_geometry_end_hook();
+void button_geometry_entry_hook();void button_geometry_end_hook();
 void bitmap_measure_hook(); void bitmap_split_hook();
 void bitmap_advance_hook();void list_measure_hook();void list_advance_hook();
 void split_format_hook();void list_format_hook();void alternate_format_hook();void alternate_advance_hook();
@@ -940,6 +946,14 @@ bool initialize(HMODULE module) {
         {0x15995b0,"4c63cf488b55f84c03ca4863ce410fb6014c8d1d08a7e90042880419ffc6"},
         {0x1599728,"410fb601498b8cc62001000048894d004885c9"},
         {0x159a796,"460fb60409f3410f109e680900004b8b94c620010000"},
+        {0x1598963,"4c8be24c8bf1488b0d380bdb00"},
+        {0x159b3b0,"4c8d9c2408240000410f2873e8"},
+        {0x15966ec,"498bd8488bf9488b95c8210000"},
+        {0x1598841,"4c8d9c2460220000498b5b48"},
+        {0x159af87,"8b5c244883c306895c2448"},
+        {0x15986f6,"8b95c8210000ffc28995c8210000"},
+        {0x16d5f20,"48895c241044894c24204489442418"},
+        {0x16d65d0,"4885c9745b534883ec20488bd9488b09"},
         {0x159b687,"0fb60407498b8cc6200100004885c9"},
         {0x159ef48,"f3410f10b6480800000fb604024d8b3cc64d85ff"},
         {0x159f1db,"ffc78bd7448b5310413bfa0f8d17020000"},
@@ -1138,6 +1152,13 @@ bool initialize(HMODULE module) {
     g_popup_measure_kern_return=address(0x159c8a6);
     g_popup_draw_kern_return=address(0x159da1b);
     g_popup_page_return=address(0x159d9a9);
+    g_ui_vertices=address(0x235ba60);
+    g_main_page_return=address(0x159af8e);
+    g_button_page_return=address(0x15986fc);
+    g_main_geometry_entry_return=address(0x1598969);
+    g_main_geometry_end_return=address(0x159b3b8);
+    g_button_geometry_entry_return=address(0x15966f2);
+    g_button_geometry_end_return=address(0x1598849);
     g_copy_buffer=address(0x2433cd0);
     g_heap_pointer=address(0x233d850);
     g_heap_alloc=address(0x1b66570);
@@ -1208,6 +1229,12 @@ bool initialize(HMODULE module) {
     const Hook hooks[]={ {0x16fd650,reinterpret_cast<void*>(import_text)},
         {0x15995b0,reinterpret_cast<void*>(main_copy_hook)}, {0x1599728,reinterpret_cast<void*>(main_measure_hook)},
         {0x159a796,reinterpret_cast<void*>(main_draw_hook)}, {0x159b687,reinterpret_cast<void*>(bitmap_measure_hook)},
+        {0x159af87,reinterpret_cast<void*>(main_page_hook)},
+        {0x15986f6,reinterpret_cast<void*>(button_page_hook)},
+        {0x1598963,reinterpret_cast<void*>(main_geometry_entry_hook)},
+        {0x159b3b0,reinterpret_cast<void*>(main_geometry_end_hook)},
+        {0x15966ec,reinterpret_cast<void*>(button_geometry_entry_hook)},
+        {0x1598841,reinterpret_cast<void*>(button_geometry_end_hook)},
         {0x159ef48,reinterpret_cast<void*>(bitmap_split_hook)},
         {0x159f1db,reinterpret_cast<void*>(bitmap_advance_hook)},
         {0x159f87d,reinterpret_cast<void*>(list_measure_hook)},
@@ -1329,7 +1356,11 @@ bool initialize(HMODULE module) {
        MH_CreateHook(image+0xfd7200,reinterpret_cast<void*>(eu4unicode::build_map_font_geometry),
         reinterpret_cast<void**>(&eu4unicode::original_map_geometry))!=MH_OK||
        MH_CreateHook(image+0x16d6640,reinterpret_cast<void*>(eu4unicode::upload_map_font_vertices),
-        reinterpret_cast<void**>(&eu4unicode::original_vertex_upload))!=MH_OK) {
+        reinterpret_cast<void**>(&eu4unicode::original_vertex_upload))!=MH_OK||
+       MH_CreateHook(image+0x16d5f20,reinterpret_cast<void*>(eu4unicode::create_font_vertices),
+        reinterpret_cast<void**>(&eu4unicode::original_vertex_create))!=MH_OK||
+       MH_CreateHook(image+0x16d65d0,reinterpret_cast<void*>(eu4unicode::release_font_vertices),
+        reinterpret_cast<void**>(&eu4unicode::original_vertex_release))!=MH_OK) {
         log("Dynamic font atlas hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
     if(experimental_input) {

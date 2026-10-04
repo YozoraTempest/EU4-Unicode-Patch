@@ -48,10 +48,79 @@ EXTERN trim_editor_grapheme:PROC
 EXTERN g_editor_fit_return:QWORD
 EXTERN bounded_text_length:PROC
 EXTERN g_text_limit_return:QWORD
+EXTERN mark_popup_font_glyph:PROC
+EXTERN g_ui_vertices:QWORD
+EXTERN g_main_page_return:QWORD
+EXTERN g_button_page_return:QWORD
+EXTERN begin_popup_font:PROC
+EXTERN end_popup_font:PROC
+EXTERN g_main_geometry_entry_return:QWORD
+EXTERN g_main_geometry_end_return:QWORD
+EXTERN g_button_geometry_entry_return:QWORD
+EXTERN g_button_geometry_end_return:QWORD
 
 include hook_context.inc
 
 .CODE
+main_geometry_entry_hook PROC
+    SAVE_CONTEXT
+    call begin_popup_font
+    RESTORE_CONTEXT
+    mov r12, rdx
+    mov r14, rcx
+    jmp qword ptr [g_main_geometry_entry_return]
+main_geometry_entry_hook ENDP
+
+main_geometry_end_hook PROC
+    SAVE_CONTEXT
+    call end_popup_font
+    RESTORE_CONTEXT
+    lea r11, [rsp+2408h]
+    jmp qword ptr [g_main_geometry_end_return]
+main_geometry_end_hook ENDP
+
+button_geometry_entry_hook PROC
+    SAVE_CONTEXT
+    call begin_popup_font
+    RESTORE_CONTEXT
+    mov rbx, r8
+    mov rdi, rcx
+    jmp qword ptr [g_button_geometry_entry_return]
+button_geometry_entry_hook ENDP
+
+button_geometry_end_hook PROC
+    SAVE_CONTEXT
+    call end_popup_font
+    RESTORE_CONTEXT
+    lea r11, [rsp+2260h]
+    jmp qword ptr [g_button_geometry_end_return]
+button_geometry_end_hook ENDP
+
+main_page_hook PROC
+    SAVE_CONTEXT
+    mov rcx, [rbp+38h]
+    movsxd rdx, dword ptr [rsp+138h]
+    imul rdx, rdx, 1ch
+    add rdx, qword ptr [g_ui_vertices]
+    call mark_popup_font_glyph
+    RESTORE_CONTEXT
+    mov ebx, [rsp+48h]
+    add ebx, 6
+    jmp qword ptr [g_main_page_return]
+main_page_hook ENDP
+
+button_page_hook PROC
+    SAVE_CONTEXT
+    mov rcx, [rbp+58h]
+    movsxd rdx, r14d
+    imul rdx, rdx, 1ch
+    add rdx, [rbp-18h]
+    call mark_popup_font_glyph
+    RESTORE_CONTEXT
+    mov edx, [rbp+21c8h]
+    jmp qword ptr [g_button_page_return]
+button_page_hook ENDP
+
 text_limit_hook PROC
     SAVE_CONTEXT
     mov rcx, rdi

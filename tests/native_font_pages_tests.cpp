@@ -5,9 +5,11 @@
 #include <d3d9.h>
 #include <wrl/client.h>
 #include <MinHook.h>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 
@@ -15,20 +17,55 @@ namespace {
 using Microsoft::WRL::ComPtr;
 using eu4unicode::MapFontVertex;
 struct TextureWrapper { IDirect3DTexture9* texture=nullptr; };
-struct VertexWrapper { IDirect3DVertexBuffer9* buffer;int stride,capacity; };
+struct VertexWrapper { IDirect3DVertexBuffer9* buffer;int stride,capacity;unsigned flags=0; };
+enum class DrawPath { indexed,popup,ui_upload,ui_create,ui_partial,ui_dynamic,ui_managed };
+struct CreateContext {
+    IDirect3DDevice9* device;
+    ComPtr<IDirect3DVertexBuffer9> buffer;
+    VertexWrapper wrapper{};
+};
 void require(bool value,const char* message) { if(!value) throw std::runtime_error(message); }
-void checked(HRESULT value) { require(SUCCEEDED(value),"Paged font GPU operation failed"); }
+void checked_status(HRESULT value,const char* operation) {
+    if(FAILED(value)) throw std::runtime_error(std::string(operation)+" failed: "+std::to_string(static_cast<unsigned long>(value)));
+}
+#define checked(operation) checked_status((operation),#operation)
 void log(const char* value) {
-    if(std::strstr(value,"page")||std::strstr(value,"failed")||std::strstr(value,"exhausted")) std::cout<<value<<'\n';
+    if(std::strstr(value,"page")||std::strstr(value,"failed")||std::strstr(value,"exhausted")||std::strstr(value,"matching")||std::strstr(value,"rejected")) std::cout<<value<<'\n';
 }
 void* texture_lookup(void* manager,int) { return manager; }
-void vertex_upload(void*,void* object,const void* data,int count,int offset,int) {
+void vertex_upload(void*,void* object,const void* data,int count,int offset,int mode) {
     const auto wrapper=static_cast<VertexWrapper*>(object);
-    void* target=nullptr;checked(wrapper->buffer->Lock(offset,count*wrapper->stride,&target,0));
+    count=count<0?wrapper->capacity:(std::min)(count,wrapper->capacity);
+    const DWORD flags=(wrapper->flags&0x200)?(mode==1?D3DLOCK_NOOVERWRITE:D3DLOCK_DISCARD):0;
+    void* target=nullptr;checked(wrapper->buffer->Lock(offset,count*wrapper->stride,&target,flags));
     std::memcpy(target,data,count*wrapper->stride);checked(wrapper->buffer->Unlock());
+}
+void* vertex_create(void* object,const void* data,int count,int stride,bool,const void*) {
+    const auto context=static_cast<CreateContext*>(object);
+    checked(context->device->CreateVertexBuffer(count*stride,D3DUSAGE_WRITEONLY,0,D3DPOOL_DEFAULT,&context->buffer,nullptr));
+    context->wrapper={context->buffer.Get(),stride,count};
+    if(data) vertex_upload(nullptr,&context->wrapper,data,count,0,0);
+    return &context->wrapper;
+}
+void vertex_release(void* object) {
+    if(object&&static_cast<VertexWrapper*>(object)->buffer) static_cast<VertexWrapper*>(object)->buffer->Release();
 }
 void geometry(void* owner,void*,void* labels,int count,void*) {
     eu4unicode::upload_map_font_vertices(nullptr,owner,labels,count,0,0);
+}
+std::filesystem::path ui_fixture(const std::filesystem::path& assets,int size) {
+    const auto root=assets/"ui-page-tests";
+    const auto relative=std::filesystem::path("gfx/fonts/eu4-unicode/cache")/("zh-hans-"+std::to_string(size));
+    const auto stem=root/relative;
+    std::filesystem::create_directories(stem.parent_path());
+    std::filesystem::copy_file(assets/(relative.string()+".dds"),stem.string()+".dds",std::filesystem::copy_options::overwrite_existing);
+    // Reserve the first page up to its final 64 rows, so the test reaches a
+    // real page boundary at each UI size without rasterizing the entire BMP.
+    std::ofstream metrics(stem.string()+".fnt");
+    metrics<<"common lineHeight="<<size<<" scaleW=2048 scaleH=4096 pages=1\n"
+           <<"char id=65 x=1 y=4030 width=1 height=1\n";
+    require(static_cast<bool>(metrics),"Cannot create the UI page-boundary fixture");
+    return root;
 }
 std::vector<std::uint8_t> read_surface(IDirect3DDevice9* device,IDirect3DSurface9* source,const RECT& rect) {
     D3DSURFACE_DESC desc{};checked(source->GetDesc(&desc));
@@ -51,7 +88,9 @@ std::vector<std::uint8_t> read_glyph(IDirect3DDevice9* device,IDirect3DTexture9*
 }
 void draw_glyphs(IDirect3DDevice9* device,void* font,IDirect3DTexture9* first,
                  const eu4unicode::NativeGlyph& a,const eu4unicode::NativeGlyph& b,
-                 const std::vector<std::uint8_t>& alpha_a,const std::vector<std::uint8_t>& alpha_b,bool popup=false) {
+                 const std::vector<std::uint8_t>& alpha_a,const std::vector<std::uint8_t>& alpha_b,DrawPath path=DrawPath::indexed,
+                 ComPtr<IDirect3DVertexBuffer9>* retained_buffer=nullptr) {
+    const bool popup=path!=DrawPath::indexed,ui=path!=DrawPath::indexed&&path!=DrawPath::popup;
     constexpr UINT width=384,height=128;
     ComPtr<IDirect3DSurface9> saved,target;
     checked(device->GetRenderTarget(0,&saved));
@@ -98,20 +137,43 @@ void draw_glyphs(IDirect3DDevice9* device,void* font,IDirect3DTexture9* first,
     void* output=nullptr;checked(index->Lock(0,sizeof(indices),&output,0));
     std::memcpy(output,indices.data(),sizeof(indices));checked(index->Unlock());
     ComPtr<IDirect3DVertexDeclaration9> declaration;
+    CreateContext create_context{device};
+    UINT stream_offset=0,start_vertex=0;
+    std::vector<eu4unicode::PopupFontVertex> triangles;
     if(popup) {
-        std::vector<eu4unicode::PopupFontVertex> triangles;
         for(const auto vertex:indices) {
             const auto& v=vertices[vertex];
             triangles.push_back({v.x,v.y,v.z,v.u-std::floor(v.u/2)*2,v.v,0xffffffff,0xffffffff});
         }
         for(std::size_t i=0;i<glyphs.size();++i)
             eu4unicode::mark_popup_font_glyph(glyphs[i],triangles.data()+i*6);
+        if(ui) {
+            // Exercise a draw beginning inside a cached upload, with both a
+            // nonzero stream offset and nonzero StartVertex.
+            triangles.insert(triangles.begin(),6,{0,0,0,0,0,0,0});
+            start_vertex=6;
+        }
         buffer.Reset();
-        checked(device->CreateVertexBuffer(static_cast<UINT>(triangles.size()*sizeof(eu4unicode::PopupFontVertex)),D3DUSAGE_WRITEONLY,0,D3DPOOL_DEFAULT,&buffer,nullptr));
-        VertexWrapper popup_wrapper{buffer.Get(),sizeof(eu4unicode::PopupFontVertex),static_cast<int>(triangles.size())};
-        eu4unicode::begin_popup_font(font);
-        eu4unicode::upload_map_font_vertices(nullptr,&popup_wrapper,triangles.data(),static_cast<int>(triangles.size()),0,0);
-        eu4unicode::end_popup_font();
+        if(path==DrawPath::ui_create) {
+            eu4unicode::begin_popup_font(font);
+            auto created=static_cast<VertexWrapper*>(eu4unicode::create_font_vertices(&create_context,triangles.data(),static_cast<int>(triangles.size()),sizeof(eu4unicode::PopupFontVertex),false,nullptr));
+            eu4unicode::end_popup_font();
+            buffer=created->buffer;
+        } else {
+            stream_offset=ui?6*sizeof(eu4unicode::PopupFontVertex):0;
+            if(retained_buffer&&*retained_buffer) buffer=*retained_buffer;
+            else {
+                const bool dynamic=path==DrawPath::ui_dynamic;
+                checked(device->CreateVertexBuffer(stream_offset+static_cast<UINT>(triangles.size()*sizeof(eu4unicode::PopupFontVertex)),D3DUSAGE_WRITEONLY|(dynamic?D3DUSAGE_DYNAMIC:0),0,path==DrawPath::ui_managed?D3DPOOL_MANAGED:D3DPOOL_DEFAULT,&buffer,nullptr));
+                VertexWrapper popup_wrapper{buffer.Get(),sizeof(eu4unicode::PopupFontVertex),static_cast<int>(triangles.size()),dynamic?0x200u:0u};
+                eu4unicode::begin_popup_font(font);
+                eu4unicode::upload_map_font_vertices(nullptr,&popup_wrapper,triangles.data(),ui?-1:static_cast<int>(triangles.size()),static_cast<int>(stream_offset),0);
+                eu4unicode::end_popup_font();
+                if(path==DrawPath::ui_partial||path==DrawPath::ui_dynamic)
+                    eu4unicode::upload_map_font_vertices(nullptr,&popup_wrapper,triangles.data()+12,6,static_cast<int>(stream_offset+12*sizeof(eu4unicode::PopupFontVertex)),1);
+                if(retained_buffer) *retained_buffer=buffer;
+            }
+        }
         const D3DVERTEXELEMENT9 elements[]={{0,0,D3DDECLTYPE_FLOAT3,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_POSITION,0},
             {0,12,D3DDECLTYPE_FLOAT2,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_TEXCOORD,0},
             {0,20,D3DDECLTYPE_D3DCOLOR,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_COLOR,0},
@@ -119,19 +181,35 @@ void draw_glyphs(IDirect3DDevice9* device,void* font,IDirect3DTexture9* first,
         checked(device->CreateVertexDeclaration(elements,&declaration));checked(device->SetVertexDeclaration(declaration.Get()));
     }
     const auto vertex_stride=popup?sizeof(eu4unicode::PopupFontVertex):sizeof(MapFontVertex);
-    checked(device->SetIndices(index.Get()));checked(device->SetStreamSource(0,buffer.Get(),0,static_cast<UINT>(vertex_stride)));
+    checked(device->SetIndices(index.Get()));checked(device->SetStreamSource(0,buffer.Get(),stream_offset,static_cast<UINT>(vertex_stride)));
     checked(device->SetTexture(0,first));
     checked(device->BeginScene());
-    if(popup) checked(device->DrawPrimitive(D3DPT_TRIANGLELIST,0,6));
+    if(popup) checked(device->DrawPrimitive(D3DPT_TRIANGLELIST,start_vertex,6));
     else checked(device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST,0,0,12,0,6));
     checked(device->EndScene());
     ComPtr<IDirect3DVertexBuffer9> restored_buffer;ComPtr<IDirect3DBaseTexture9> restored_texture;ComPtr<IDirect3DIndexBuffer9> restored_index;
     UINT offset=0,stride=0;checked(device->GetStreamSource(0,&restored_buffer,&offset,&stride));
     checked(device->GetTexture(0,&restored_texture));checked(device->GetIndices(&restored_index));
-    require(restored_buffer.Get()==buffer.Get()&&offset==0&&stride==vertex_stride&&restored_texture.Get()==first&&restored_index.Get()==index.Get(),
+    require(restored_buffer.Get()==buffer.Get()&&offset==stream_offset&&stride==vertex_stride&&restored_texture.Get()==first&&restored_index.Get()==index.Get(),
             "Paged draw changed the engine stream, texture or indices");
     for(std::size_t i=0;i<regions.size();++i)
         require(read_surface(device,target.Get(),regions[i])==(i==1?alpha_b:alpha_a),"Paged font drawing differs from the glyph raster");
+    if(path==DrawPath::ui_partial||path==DrawPath::ui_dynamic||path==DrawPath::ui_create) {
+        // A later unpaged upload must replace the shadow too. Otherwise an old
+        // page tag would silently select the previous page for this buffer.
+        for(auto& vertex:triangles) vertex.u-=std::floor(vertex.u/2)*2;
+        VertexWrapper overwrite_wrapper{buffer.Get(),sizeof(eu4unicode::PopupFontVertex),static_cast<int>(triangles.size()),path==DrawPath::ui_dynamic?0x200u:0u};
+        if(path==DrawPath::ui_create) {
+            // The device still references this resource after its engine
+            // wrapper is released. Its old CPU page tags must be gone.
+            create_context.buffer.Detach();
+            eu4unicode::release_font_vertices(&create_context.wrapper);
+            vertex_upload(nullptr,&overwrite_wrapper,triangles.data(),-1,static_cast<int>(stream_offset),0);
+        } else eu4unicode::upload_map_font_vertices(nullptr,&overwrite_wrapper,triangles.data(),-1,static_cast<int>(stream_offset),0);
+        checked(device->Clear(0,nullptr,D3DCLEAR_TARGET,0,1,0));
+        checked(device->BeginScene());checked(device->DrawPrimitive(D3DPT_TRIANGLELIST,start_vertex,6));checked(device->EndScene());
+        require(read_surface(device,target.Get(),regions[1])==read_glyph(device,first,b),"UI buffer reused stale page tags after an unpaged upload");
+    }
     checked(device->SetTexture(0,nullptr));checked(device->SetStreamSource(0,nullptr,0,0));checked(device->SetIndices(nullptr));
     checked(device->SetRenderTarget(0,saved.Get()));
 }
@@ -139,7 +217,8 @@ void draw_glyphs(IDirect3DDevice9* device,void* font,IDirect3DTexture9* first,
 int wmain(int argc,wchar_t** argv) {
     HWND window=nullptr;
     try {
-        require(argc==2,"Usage: native_font_pages_tests ASSET_DIRECTORY");
+        require(argc==2||(argc==3&&std::wstring_view(argv[2])==L"--full-ui"),"Usage: native_font_pages_tests ASSET_DIRECTORY [--full-ui]");
+        const bool full_ui=argc==3;
         require(MH_Initialize()==MH_OK,"MinHook initialization failed");
         WNDCLASSW type{};type.lpfnWndProc=DefWindowProcW;type.hInstance=GetModuleHandleW(nullptr);type.lpszClassName=L"EU4UnicodeFontPagesTests";
         require(RegisterClassW(&type)!=0,"Cannot register GPU test window");
@@ -161,43 +240,68 @@ int wmain(int argc,wchar_t** argv) {
         *reinterpret_cast<int*>(font+0x970)=1;*reinterpret_cast<int*>(font+0x978)=2048;*reinterpret_cast<int*>(font+0x97c)=4096;
         eu4unicode::original_texture_lookup=texture_lookup;
         eu4unicode::original_map_geometry=geometry;eu4unicode::original_vertex_upload=vertex_upload;
-        eu4unicode::configure_font_atlases(argv[1],std::filesystem::path{},log,"gfx/fonts/eu4-unicode/cache/",true);
-        eu4unicode::register_font_atlas(font,"gfx/fonts/eu4-unicode/cache/zh-hans-map");
-        auto first=eu4unicode::find_dynamic_glyph(table,0x4e2d);
-        require(first&&eu4unicode::font_glyph_page(first)==0,"First glyph is not on the initial page");
-        eu4unicode::synchronize_font_texture(&wrapper,1);
-        const auto reference=eu4unicode::rasterize_scalar(0x4e2d,88).alpha;
-        require(read_glyph(device.Get(),texture.Get(),*first)==reference,"First page upload differs from the glyph raster");
-        eu4unicode::NativeGlyph* second=nullptr;std::uint32_t second_scalar=0;
-        for(std::uint32_t scalar=0x4e00;scalar<0x4e00+2000;++scalar) {
-            auto glyph=eu4unicode::find_dynamic_glyph(table,scalar);
-            require(glyph!=nullptr,"A supported CJK glyph was lost during multi-page allocation");
-            if(!second&&eu4unicode::font_glyph_page(glyph)>0) { second=glyph;second_scalar=scalar; }
+        eu4unicode::original_vertex_create=vertex_create;
+        eu4unicode::original_vertex_release=vertex_release;
+        const auto sizes=full_ui?std::vector<int>{24}:std::vector<int>{88,14,16,18,24};
+        for(const auto size:sizes) {
+            const auto assets=size==88||full_ui?std::filesystem::path(argv[1]):ui_fixture(argv[1],size);
+            const auto path=std::string("gfx/fonts/eu4-unicode/cache/")+(size==88?"zh-hans-map":"zh-hans-"+std::to_string(size));
+            eu4unicode::configure_font_atlases(assets,std::filesystem::path{},log,"gfx/fonts/eu4-unicode/cache/",true);
+            eu4unicode::register_font_atlas(font,path);
+            require(eu4unicode::dynamic_font(font)&&eu4unicode::dynamic_map_font(font)==(size==88),"Generated UI/map font classification failed");
+            auto first=eu4unicode::find_dynamic_glyph(table,0x4e2d);
+            require(first&&eu4unicode::font_glyph_page(first)==0,"First glyph is not on the initial page");
+            eu4unicode::synchronize_font_texture(&wrapper,1);
+            const auto reference=eu4unicode::rasterize_scalar(0x4e2d,size).alpha;
+            require(read_glyph(device.Get(),texture.Get(),*first)==reference,"First page upload differs from the glyph raster");
+            eu4unicode::NativeGlyph* second=nullptr;std::uint32_t second_scalar=0;
+            const auto glyph_count=full_ui?20000u:(size==88?2000u:600u);
+            for(std::uint32_t scalar=0x4e00;scalar<0x4e00+glyph_count;++scalar) {
+                auto glyph=eu4unicode::find_dynamic_glyph(table,scalar);
+                require(glyph!=nullptr,"A supported CJK glyph was lost during multi-page allocation");
+                if(!second&&eu4unicode::font_glyph_page(glyph)>0) { second=glyph;second_scalar=scalar; }
+            }
+            require(second!=nullptr,"Glyphs did not allocate an additional page");
+            eu4unicode::synchronize_font_texture(&wrapper,1);
+            auto pages=eu4unicode::font_texture_pages(texture.Get());
+            require(pages.size()>=2,"Additional GPU page missing");
+            const auto second_reference=eu4unicode::rasterize_scalar(second_scalar,size).alpha;
+            require(read_glyph(device.Get(),pages[0].Get(),*first)==reference,"Growing the atlas changed the first page");
+            require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).Get(),*second)==second_reference,"Additional page upload differs from its raster");
+            if(size==88) draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference);
+            for(const auto draw:{DrawPath::popup,DrawPath::ui_upload,DrawPath::ui_create,DrawPath::ui_partial,DrawPath::ui_dynamic})
+                draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference,draw);
+            ComPtr<IDirect3DVertexBuffer9> retained_buffer;
+            draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference,DrawPath::ui_managed,&retained_buffer);
+            pages.clear();wrapper.texture=nullptr;texture.Reset();
+            checked(device->Reset(&parameters));
+            checked(device->CreateTexture(2048,4096,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));wrapper.texture=texture.Get();
+            eu4unicode::synchronize_font_texture(&wrapper,1);pages=eu4unicode::font_texture_pages(texture.Get());
+            require(read_glyph(device.Get(),pages[0].Get(),*first)==reference,"Reset lost the first page");
+            require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).Get(),*second)==second_reference,"Reset lost the additional page");
+            require(eu4unicode::find_dynamic_glyph(table,0x4e2d)==first&&eu4unicode::find_dynamic_glyph(table,second_scalar)==second,"Reset changed native glyph pointers");
+            if(size==88) draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference);
+            for(const auto draw:{DrawPath::popup,DrawPath::ui_upload,DrawPath::ui_create,DrawPath::ui_partial,DrawPath::ui_dynamic})
+                draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference,draw);
+            draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference,DrawPath::ui_managed,&retained_buffer);
+            auto alias_object=object;auto alias_table=reinterpret_cast<void**>(alias_object.data()+0x120);
+            eu4unicode::NativeGlyph alias_anchor{};alias_table[0x41]=&alias_anchor;
+            eu4unicode::register_font_atlas(alias_object.data(),path);
+            auto alias_glyph=eu4unicode::find_dynamic_glyph(alias_table,second_scalar);
+            require(alias_glyph&&eu4unicode::font_glyph_page(alias_glyph)==eu4unicode::font_glyph_page(second),"Shared UI font lost the glyph page");
+            const auto count=pages.size();eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
+            require(eu4unicode::font_texture_pages(texture.Get()).size()==count,"Releasing one font alias destroyed shared pages");
+            draw_glyphs(device.Get(),alias_object.data(),texture.Get(),*eu4unicode::find_dynamic_glyph(alias_table,0x4e2d),*alias_glyph,reference,second_reference,DrawPath::ui_create);
+            eu4unicode::release_font_atlas(alias_table);eu4unicode::release_unicode_font(alias_table);
+            require(eu4unicode::font_texture_pages(texture.Get()).empty(),"Released atlas still exposes pages");
+            require(eu4unicode::unicode_glyph_usage().glyphs==0,"Released paged atlas leaked glyph records");
+            pages.clear();wrapper.texture=nullptr;texture.Reset();
+            checked(device->CreateTexture(2048,4096,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));wrapper.texture=texture.Get();
+            std::cout<<"PASS size="<<size<<" glyphs="<<glyph_count<<" pages="<<count<<": exact pixels, UI upload/create, static/dynamic overwrite, managed cache reset, buffer/alias release.\n";
         }
-        require(second!=nullptr,"2000 glyphs did not allocate an additional page");
-        eu4unicode::synchronize_font_texture(&wrapper,1);
-        auto pages=eu4unicode::map_font_texture_pages(texture.Get());
-        require(pages.size()>=2,"Additional GPU page missing");
-        const auto second_reference=eu4unicode::rasterize_scalar(second_scalar,88).alpha;
-        require(read_glyph(device.Get(),pages[0].Get(),*first)==reference,"Growing the atlas changed the first page");
-        require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).Get(),*second)==second_reference,"Additional page upload differs from its raster");
-        draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference);
-        draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference,true);
-        pages.clear();wrapper.texture=nullptr;texture.Reset();
-        checked(device->Reset(&parameters));
-        checked(device->CreateTexture(2048,4096,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));wrapper.texture=texture.Get();
-        eu4unicode::synchronize_font_texture(&wrapper,1);pages=eu4unicode::map_font_texture_pages(texture.Get());
-        require(read_glyph(device.Get(),pages[0].Get(),*first)==reference,"Reset lost the first page");
-        require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).Get(),*second)==second_reference,"Reset lost the additional page");
-        require(eu4unicode::find_dynamic_glyph(table,0x4e2d)==first&&eu4unicode::find_dynamic_glyph(table,second_scalar)==second,"Reset changed native glyph pointers");
-        draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference);
-        draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference,true);
-        const auto count=pages.size();eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
-        require(eu4unicode::font_glyph_page(second)==0&&eu4unicode::map_font_texture_pages(texture.Get()).empty(),"Released atlas still exposes pages");
-        require(eu4unicode::unicode_glyph_usage().glyphs==0,"Released paged atlas leaked glyph records");
         eu4unicode::reset_font_draw_device(device.Get());
         require(MH_Uninitialize()==MH_OK,"MinHook cleanup failed");
-        std::cout<<"2000 CJK glyphs across "<<count<<" pages: stable first-page pixels, mixed-page indexed and popup drawing, restored engine state, reset and font release passed.\n";
+        std::cout<<(full_ui?"PASS: 20000 CJK glyphs in the default 24px UI atlas.\n":"PASS: map and all four UI sizes render mixed pages and retain native glyph records through device reset.\n");
         DestroyWindow(window);return 0;
     } catch(const std::exception& error) {
         std::cerr<<error.what()<<'\n';MH_Uninitialize();if(window) DestroyWindow(window);return 1;
