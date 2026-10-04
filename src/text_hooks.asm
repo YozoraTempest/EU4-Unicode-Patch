@@ -3,6 +3,7 @@ EXTERN decode_layout_range:PROC
 EXTERN g_alternate_end:QWORD
 EXTERN copy_scalar:PROC
 EXTERN prepare_wrap_context:PROC
+EXTERN prepare_button_wrap:PROC
 EXTERN unicode_wrap_before:PROC
 EXTERN previous_slot:PROC
 EXTERN g_main_draw_return:QWORD
@@ -340,6 +341,12 @@ bitmap_split_hook ENDP
 
 button_copy_hook PROC
     SAVE_CONTEXT
+    test r14d, r14d
+    jnz button_copy_context_ready
+    lea rcx, [rbp-38h]
+    call prepare_button_wrap
+button_copy_context_ready:
+    mov rax, [rsp+80h]
     lea rdx, [rax+rbx]
     lea rcx, [rsp+138h]
     call construct_scalar

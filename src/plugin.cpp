@@ -39,11 +39,9 @@ std::byte* image=nullptr;
 std::atomic<bool> patch_enabled{false};
 thread_local std::uint32_t last_slot=0;
 thread_local std::uint32_t button_extra=0;
+thread_local std::uint32_t button_slot=0;
 thread_local std::uint32_t last_scalar_bytes=1;
-using BreakPositions=std::vector<std::size_t>;
-thread_local std::shared_ptr<const BreakPositions> active_line_breaks;
-thread_local std::unordered_map<std::string,std::shared_ptr<const BreakPositions>> line_break_cache;
-thread_local std::size_t line_cache_bytes=0;
+thread_local std::shared_ptr<const eu4unicode::FormattedText> active_line_breaks,button_line_breaks;
 struct CachedFormattedText { std::shared_ptr<const eu4unicode::FormattedText> value; std::size_t bytes; };
 thread_local std::unordered_map<std::string,CachedFormattedText> formatted_cache;
 thread_local std::size_t formatted_cache_bytes=0;
@@ -649,6 +647,7 @@ std::uintptr_t g_bitmap_advance_return,g_list_measure_return,g_list_advance_retu
 std::uintptr_t g_split_format_return,g_split_plain_entry,g_list_format_return,g_list_plain_entry;
 std::uintptr_t g_alternate_format_return,g_alternate_plain_entry,g_alternate_end,g_alternate_advance_return;
 std::uintptr_t g_split_kern_return,g_list_kern_return,g_alternate_kern_return;
+std::uintptr_t g_button_wrap_return,g_button_wrap_branch;
 std::uintptr_t g_heap_pointer,g_heap_alloc,g_heap_return;
 std::uintptr_t g_button_copy_return,g_button_measure_return,g_button_draw_return,g_button_loop,g_button_end;
 std::uintptr_t g_alternate_measure_return,g_wrap_return,g_wrap_branch;
@@ -677,6 +676,7 @@ void bitmap_measure_hook(); void bitmap_split_hook();
 void bitmap_advance_hook();void list_measure_hook();void list_advance_hook();
 void split_format_hook();void list_format_hook();void alternate_format_hook();void alternate_advance_hook();
 void split_kern_hook();void list_kern_hook();void alternate_kern_hook();
+void button_wrap_hook();
 void heap_zero_hook();
 void button_copy_hook(); void button_measure_hook(); void button_draw_hook(); void button_advance_hook();
 void alternate_measure_hook(); void main_wrap_hook();
@@ -769,31 +769,30 @@ std::uint64_t copy_scalar(const char* source,std::size_t remaining,char* destina
 void prepare_wrap_context(const char* source,std::size_t length) noexcept {
     active_line_breaks.reset();
     const auto value=std::string_view(source,bounded_text_length(source,length));
-    if(!eu4unicode::valid_utf8(value)) return;
     try {
-        std::string key(value);
-        auto found=line_break_cache.find(key);
-        if(found!=line_break_cache.end()) { active_line_breaks=found->second; return; }
-        auto positions=std::make_shared<const BreakPositions>(eu4unicode::line_boundaries(value));
-        const auto cost=value.size()+positions->size()*sizeof(std::size_t);
-        if(line_break_cache.size()>=256 || line_cache_bytes+cost>1024*1024) {
-            line_break_cache.clear(); line_cache_bytes=0;
-        }
-        line_cache_bytes+=cost;
-        line_break_cache.emplace(std::move(key),positions);
-        active_line_breaks=std::move(positions);
+        active_line_breaks=formatted_boundaries(value);
     } catch(...) { log("Unicode line boundary preparation failed."); }
 }
 bool unicode_wrap_before(std::uint32_t last_byte) noexcept {
     if(!active_line_breaks || last_byte+1<last_scalar_bytes) return false;
     const auto offset=last_byte+1-last_scalar_bytes;
-    return std::binary_search(active_line_breaks->begin(),active_line_breaks->end(),offset);
+    return active_line_breaks->line_before(offset);
 }
+void prepare_button_wrap(const EngineString* source) noexcept {
+    button_line_breaks.reset();
+    try { button_line_breaks=formatted_boundaries({source->data(),static_cast<std::size_t>(source->size)}); }
+    catch(...) { log("Unicode button line boundary preparation failed."); }
+}
+bool button_wrap_after(std::uint32_t offset) noexcept {
+    return button_line_breaks&&button_line_breaks->line_before(static_cast<std::size_t>(offset)+button_extra+1);
+}
+std::uint64_t previous_button_slot() noexcept { return button_slot; }
 std::uint64_t previous_slot() noexcept { return last_slot; }
 std::uint64_t previous_extra() noexcept { return button_extra; }
 char* construct_scalar(EngineString* target,const char* source) {
     const auto packed=decode_z(source);
     button_extra=static_cast<std::uint32_t>(packed>>32);
+    button_slot=static_cast<std::uint32_t>(packed);
     const auto size=button_extra+1;
     auto destination=repeat_text(target,size,static_cast<unsigned char>(*source));
     std::memcpy(destination,source,size);
@@ -938,6 +937,7 @@ bool initialize(HMODULE module) {
         {0x15974cb,"41ffc6443b75d80f8c59f3ffff448bbdc8210000"},
         {0x159b91a,"0fb6142b498d8f200100004c8b1cd14d85db"},
         {0x15997a9,"66837906000f85130100008d041b660f6ec8"}
+        ,{0x15970df,"6641837b06000f85e0030000837db000"}
         ,{0x159a240,"4e8d0409410fb6003ca77573"}
         ,{0x15996b1,"c68415d001000000498b06"}
         ,{0x159a45f,"c6840dd001000000498b06"}
@@ -1077,6 +1077,8 @@ bool initialize(HMODULE module) {
     g_split_kern_return=address(0x159f07b);
     g_list_kern_return=address(0x159f9b7);
     g_alternate_kern_return=address(0x159b963);
+    g_button_wrap_return=address(0x15970eb);
+    g_button_wrap_branch=address(0x15974cb);
     g_copy_buffer=address(0x2433cd0);
     g_heap_pointer=address(0x233d850);
     g_heap_alloc=address(0x1b66570);
@@ -1158,6 +1160,7 @@ bool initialize(HMODULE module) {
         {0x159f06d,reinterpret_cast<void*>(split_kern_hook)},
         {0x159f9a9,reinterpret_cast<void*>(list_kern_hook)},
         {0x159b95a,reinterpret_cast<void*>(alternate_kern_hook)},
+        {0x15970df,reinterpret_cast<void*>(button_wrap_hook)},
         {0x1a683ae,reinterpret_cast<void*>(heap_zero_hook)},
         {0x1596858,reinterpret_cast<void*>(button_copy_hook)},
         {0x1597071,reinterpret_cast<void*>(button_measure_hook)},

@@ -34,6 +34,13 @@ int main() {
         const FormattedText color(u8"§Y中文§!");
         check(color.visible_text()==u8"中文","color code entered visible text");
         check(color.prefix(1)==0&&color.prefix(2)==0&&color.prefix(3)==3,"color directive split");
+        const std::string punctuation=u8"中§Y文§!，中文";
+        const FormattedText wrapped(punctuation);
+        check(wrapped.line_before(3),"color directive blocked a Chinese line boundary");
+        check(!wrapped.line_before(9)&&!wrapped.line_before(12),"line break separated punctuation from preceding text");
+        check(wrapped.line_before(15),"Chinese line boundary after punctuation missing");
+        const FormattedText cluster(u8"中e§R\u0301§!文");
+        check(!cluster.line_before(4)&&!cluster.line_before(7),"line break split a colored combining sequence");
         check(FormattedText(u8"§中文").visible_text()==u8"§中文","non-ASCII character consumed as a color code");
         check(FormattedText("\xa3" "yes ").visible_text()==u8"\ufffc","compiled icon with whitespace delimiter was lost");
         for(const auto text:{u8"é",u8"中",u8"𠮷"}) {

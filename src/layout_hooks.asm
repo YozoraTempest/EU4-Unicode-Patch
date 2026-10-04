@@ -3,6 +3,10 @@ EXTERN format_scalar:PROC
 EXTERN format_layout_range:PROC
 EXTERN next_layout_scalar:PROC
 EXTERN next_layout_offset:PROC
+EXTERN previous_button_slot:PROC
+EXTERN button_wrap_after:PROC
+EXTERN g_button_wrap_return:QWORD
+EXTERN g_button_wrap_branch:QWORD
 EXTERN g_bitmap_advance_return:QWORD
 EXTERN g_list_measure_return:QWORD
 EXTERN g_list_advance_return:QWORD
@@ -21,6 +25,29 @@ EXTERN g_map_kern_call:QWORD
 include hook_context.inc
 
 .CODE
+button_wrap_hook PROC
+    SAVE_CONTEXT
+    call previous_button_slot
+    cmp eax, 0ffh
+    jbe button_wrap_native
+    mov ecx, r14d
+    call button_wrap_after
+    test al, al
+    jz button_wrap_blocked
+    RESTORE_CONTEXT
+    jmp qword ptr [g_button_wrap_return]
+button_wrap_native:
+    RESTORE_CONTEXT
+    cmp word ptr [r11+6], 0
+    je button_wrap_allowed
+    jmp qword ptr [g_button_wrap_branch]
+button_wrap_allowed:
+    jmp qword ptr [g_button_wrap_return]
+button_wrap_blocked:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_button_wrap_branch]
+button_wrap_hook ENDP
+
 bitmap_advance_hook PROC
     SAVE_CONTEXT
     mov rcx, rbx
