@@ -14,6 +14,7 @@ NativeTextHeight original_text_height=nullptr;
 namespace {
 void(*logger)(const char*)=nullptr;
 std::atomic<bool> reported_error{false};
+std::atomic<bool> reported_shaping{false};
 void paragraph_failure() noexcept {
     if(logger&&!reported_error.exchange(true)) logger("Native paragraph preparation failed; existing text path retained.");
 }
@@ -66,6 +67,7 @@ const EngineString* begin_native_paragraph(void* font,const EngineString* source
         scope.draw.storage.pointer=scope.paragraph->draw_text.c_str();
         scope.draw.size=scope.paragraph->draw_text.size();
         scope.draw.capacity=(std::max)(scope.draw.size,std::uint64_t{16});
+        if(logger&&!reported_shaping.exchange(true)) logger("Native paragraph shaping active for plain UI text.");
         return &scope.draw;
     } catch(...) { paragraph_failure();scope={};return source; }
 }
@@ -121,5 +123,5 @@ int measure_paragraph_height(void* font,const EngineString* source,int width,int
     } catch(...) { paragraph_failure(); }
     LookupMask mask;return original_text_height(font,source,width,height,margin,formatted);
 }
-void configure_paragraph_log(void(*log)(const char*)) noexcept { logger=log;reported_error=false; }
+void configure_paragraph_log(void(*log)(const char*)) noexcept { logger=log;reported_error=false;reported_shaping=false; }
 }

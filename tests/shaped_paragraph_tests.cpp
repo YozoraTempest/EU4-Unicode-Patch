@@ -17,7 +17,7 @@ int main() {
         check(!needs_paragraph_shaping(text),"ordinary native metrics remain selected");
     for(const auto text:{u8"العربية",u8"עברית",u8"हिन्दी",u8"ภาษาไทย",u8"a\u0323\u0301",u8"👩‍💻",u8"A\u2067123\u2069"})
         check(needs_paragraph_shaping(text),"contextual, combining and bidi text selects paragraph shaping");
-    check(!needs_paragraph_shaping(u8"العربية\xff"),"malformed suffix is not accepted as Unicode");
+    check(!needs_paragraph_shaping(std::string(u8"العربية")+char(0xff)),"malformed suffix is not accepted as Unicode");
     check(plain_native_paragraph(u8"العربية\r\nLatin"),"explicit native line separators are accepted");
     for(const auto text:{u8"§Yالعربية§!",u8"£adm£ العربية",u8"@ABC العربية",u8"{12 العربية",u8"العربية\tA"})
         check(!plain_native_paragraph(text),"native formatting stays with its existing renderer");
