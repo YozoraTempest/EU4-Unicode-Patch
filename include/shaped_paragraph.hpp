@@ -1,0 +1,40 @@
+#pragma once
+#include "unicode_layout.hpp"
+
+namespace eu4unicode {
+// Select contextual scripts, combining sequences and bidi controls. Ordinary
+// Chinese/Latin text keeps its existing native font metrics.
+bool needs_paragraph_shaping(std::string_view text) noexcept;
+bool plain_native_paragraph(std::string_view text) noexcept;
+struct ParagraphTile {
+    GlyphBitmap bitmap;
+    float x,y;
+    std::size_t line,text_start,text_length;
+};
+class ShapedParagraph {
+public:
+    ShapedParagraph(std::string_view text,int size,float width,bool wrap,
+                    std::shared_ptr<const TextFonts> fonts={});
+    const std::string& text() const noexcept { return text_; }
+    const LayoutMetrics& metrics() const noexcept { return metrics_; }
+    const std::vector<LayoutLine>& lines() const noexcept { return lines_; }
+    const std::vector<GlyphRun>& runs() const noexcept { return runs_; }
+    HitPosition hit_test(float x,float y) const;
+    bool missing_glyphs() const noexcept;
+private:
+    struct Block {
+        std::size_t start;
+        float top,height;
+        std::unique_ptr<TextLayout> layout;
+    };
+    std::string text_;
+    LayoutMetrics metrics_{};
+    std::vector<LayoutLine> lines_;
+    std::vector<GlyphRun> runs_;
+    std::vector<Block> blocks_;
+};
+// Tile after shaping, retaining the exact selected face, glyph positions and
+// fractional raster phase. Texture page boundaries never become text breaks.
+std::vector<ParagraphTile> rasterize_paragraph(const ShapedParagraph& paragraph,
+                                              std::uint32_t width,std::uint32_t height);
+}

@@ -11,7 +11,7 @@ namespace eu4unicode {
 // registry settings are changed. Runs retain the selected file-backed face.
 class TextFonts {
 public:
-    explicit TextFonts(const std::vector<std::filesystem::path>& files);
+    explicit TextFonts(const std::vector<std::filesystem::path>& files,bool system_first=false);
     ~TextFonts();
     TextFonts(const TextFonts&)=delete;
     TextFonts& operator=(const TextFonts&)=delete;
@@ -51,6 +51,17 @@ struct GlyphBitmap {
 };
 GlyphBitmap rasterize_glyph_run(const GlyphRun& run);
 struct LayoutMetrics { float width,height; std::uint32_t lines; };
+enum class TextDirection { LeftToRight,RightToLeft,Automatic };
+struct TextLayoutOptions {
+    TextDirection direction=TextDirection::LeftToRight;
+    bool wrap=true;
+    // Zero uses the font's natural spacing. Native UI fonts have a fixed grid.
+    float line_height=0;
+};
+struct LayoutLine {
+    std::size_t text_start,text_length,newline_length;
+    float width,top,height,baseline;
+};
 struct HitPosition { std::size_t byte_offset; bool inside; };
 struct RasterImage {
     std::uint32_t width,height;
@@ -64,13 +75,14 @@ class TextLayout {
 public:
     TextLayout(std::string_view text,float size,float width,float height,
                std::wstring_view family=L"Segoe UI",
-               std::shared_ptr<const TextFonts> fonts={});
+               std::shared_ptr<const TextFonts> fonts={},TextLayoutOptions options={});
     ~TextLayout();
     TextLayout(TextLayout&&) noexcept;
     TextLayout& operator=(TextLayout&&) noexcept;
     TextLayout(const TextLayout&)=delete;
     TextLayout& operator=(const TextLayout&)=delete;
     LayoutMetrics metrics() const;
+    std::vector<LayoutLine> lines() const;
     std::vector<GlyphRun> glyph_runs() const;
     HitPosition hit_test(float x,float y) const;
     RasterImage rasterize() const;

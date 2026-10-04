@@ -6,6 +6,7 @@
 #include <d2d1.h>
 #include <wincodec.h>
 #include <wrl/client.h>
+#include <icu.h>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -128,7 +129,8 @@ struct TextFonts::Impl {
     ComPtr<IDWriteFontCollection1> collection;
     ComPtr<IDWriteFontFallback> fallback;
     std::vector<std::wstring> names;
-    explicit Impl(const std::vector<std::filesystem::path>& files) {
+    bool system_first;
+    explicit Impl(const std::vector<std::filesystem::path>& files,bool prefer_system):system_first(prefer_system) {
         if(files.empty()) throw std::invalid_argument("Font collection requires files");
         ComPtr<IDWriteFactory3> factory;
         checked(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory3),
@@ -166,17 +168,18 @@ struct TextFonts::Impl {
         }
         ComPtr<IDWriteFontFallbackBuilder> fallback_builder;
         checked(factory->CreateFontFallbackBuilder(&fallback_builder));
+        ComPtr<IDWriteFontFallback> system;
+        checked(factory->GetSystemFontFallback(&system));
+        if(system_first) checked(fallback_builder->AddMappings(system.Get()));
         const DWRITE_UNICODE_RANGE range{0,0x10ffff};
         std::vector<const wchar_t*> targets;
         for(const auto& name:names) targets.push_back(name.c_str());
         checked(fallback_builder->AddMapping(&range,1,targets.data(),static_cast<UINT32>(targets.size()),collection.Get()));
-        ComPtr<IDWriteFontFallback> system;
-        checked(factory->GetSystemFontFallback(&system));
-        checked(fallback_builder->AddMappings(system.Get()));
+        if(!system_first) checked(fallback_builder->AddMappings(system.Get()));
         checked(fallback_builder->CreateFontFallback(&fallback));
     }
 };
-TextFonts::TextFonts(const std::vector<std::filesystem::path>& files):impl_(std::make_unique<Impl>(files)) {}
+TextFonts::TextFonts(const std::vector<std::filesystem::path>& files,bool system_first):impl_(std::make_unique<Impl>(files,system_first)) {}
 TextFonts::~TextFonts()=default;
 std::vector<std::string> TextFonts::families() const {
     std::vector<std::string> result;
@@ -191,9 +194,12 @@ struct TextLayout::Impl {
     ComPtr<IDWriteTextLayout2> layout;
     std::shared_ptr<const TextFonts> fonts;
     Impl(std::string_view value,float size,float width,float height,std::wstring_view family,
-         std::shared_ptr<const TextFonts> custom):text(value),wide(to_wide(value)),fonts(std::move(custom)) {
+         std::shared_ptr<const TextFonts> custom,TextLayoutOptions options):text(value),wide(to_wide(value)),fonts(std::move(custom)) {
         if(!std::isfinite(size)||!std::isfinite(width)||!std::isfinite(height)||size<=0||width<=0||height<=0)
             throw std::invalid_argument("Layout dimensions must be positive finite values");
+        if(!std::isfinite(options.line_height)||options.line_height<0)
+            throw std::invalid_argument("Line spacing must be finite and nonnegative");
+        if(wide.size()>INT32_MAX) throw std::length_error("Text exceeds paragraph analysis range");
         auto remaining=value;
         std::size_t offset=0;
         while(!remaining.empty()) {
@@ -206,9 +212,20 @@ struct TextLayout::Impl {
         byte_positions.push_back(offset);
         checked(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory2),reinterpret_cast<IUnknown**>(factory.GetAddressOf())));
         ComPtr<IDWriteTextFormat> format;
-        const std::wstring name=fonts?fonts->impl_->names.front():std::wstring(family);
-        checked(factory->CreateTextFormat(name.c_str(),fonts?fonts->impl_->collection.Get():nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,
+        const bool file_first=fonts&&!fonts->impl_->system_first;
+        const std::wstring name=file_first?fonts->impl_->names.front():std::wstring(family);
+        checked(factory->CreateTextFormat(name.c_str(),file_first?fonts->impl_->collection.Get():nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,size,L"zh-CN",&format));
+        const bool rtl=options.direction==TextDirection::RightToLeft||
+            (options.direction==TextDirection::Automatic&&ubidi_getBaseDirection(
+                reinterpret_cast<const UChar*>(wide.data()),static_cast<int32_t>(wide.size()))==UBIDI_RTL);
+        checked(format->SetReadingDirection(rtl?DWRITE_READING_DIRECTION_RIGHT_TO_LEFT:DWRITE_READING_DIRECTION_LEFT_TO_RIGHT));
+        // Keep a physical left origin. The native UI applies its own alignment
+        // to the measured paragraph box after DirectWrite orders its glyphs.
+        checked(format->SetTextAlignment(rtl?DWRITE_TEXT_ALIGNMENT_TRAILING:DWRITE_TEXT_ALIGNMENT_LEADING));
+        checked(format->SetWordWrapping(options.wrap?DWRITE_WORD_WRAPPING_WRAP:DWRITE_WORD_WRAPPING_NO_WRAP));
+        if(options.line_height>0)
+            checked(format->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM,options.line_height,size*.8f));
         ComPtr<IDWriteTextLayout> base;
         checked(factory->CreateTextLayout(wide.data(),static_cast<UINT32>(wide.size()),format.Get(),width,height,&base));
         checked(base.As(&layout));
@@ -218,7 +235,7 @@ struct TextLayout::Impl {
     }
 };
 TextLayout::TextLayout(std::string_view text,float size,float width,float height,std::wstring_view family,
-    std::shared_ptr<const TextFonts> fonts):impl_(std::make_unique<Impl>(text,size,width,height,family,std::move(fonts))) {}
+    std::shared_ptr<const TextFonts> fonts,TextLayoutOptions options):impl_(std::make_unique<Impl>(text,size,width,height,family,std::move(fonts),options)) {}
 TextLayout::~TextLayout()=default;
 TextLayout::TextLayout(TextLayout&&) noexcept=default;
 TextLayout& TextLayout::operator=(TextLayout&&) noexcept=default;
@@ -226,6 +243,33 @@ LayoutMetrics TextLayout::metrics() const {
     DWRITE_TEXT_METRICS value{};
     checked(impl_->layout->GetMetrics(&value));
     return {value.widthIncludingTrailingWhitespace,value.height,value.lineCount};
+}
+std::vector<LayoutLine> TextLayout::lines() const {
+    std::vector<DWRITE_LINE_METRICS> native(metrics().lines);
+    UINT32 count=0;
+    checked(impl_->layout->GetLineMetrics(native.data(),static_cast<UINT32>(native.size()),&count));
+    std::vector<LayoutLine> result;
+    UINT32 start=0;float top=0;
+    for(UINT32 index=0;index<count;++index) {
+        const auto& line=native[index];
+        const auto byte_start=impl_->byte_positions.at(start);
+        const auto byte_end=impl_->byte_positions.at(start+line.length);
+        const auto content_end=impl_->byte_positions.at(start+line.length-line.newlineLength);
+        float width=0;
+        if(line.length>line.newlineLength) {
+            UINT32 boxes=0;
+            const auto status=impl_->layout->HitTestTextRange(start,line.length-line.newlineLength,0,0,nullptr,0,&boxes);
+            if(status!=E_NOT_SUFFICIENT_BUFFER) checked(status);
+            std::vector<DWRITE_HIT_TEST_METRICS> hits(boxes);
+            if(boxes) checked(impl_->layout->HitTestTextRange(start,line.length-line.newlineLength,0,0,hits.data(),boxes,&boxes));
+            float left=(std::numeric_limits<float>::max)(),right=-(std::numeric_limits<float>::max)();
+            for(const auto& hit:hits) { left=(std::min)(left,hit.left);right=(std::max)(right,hit.left+hit.width); }
+            if(boxes) width=right-left;
+        }
+        result.push_back({byte_start,byte_end-byte_start,byte_end-content_end,width,top,line.height,line.baseline});
+        top+=line.height;start+=line.length;
+    }
+    return result;
 }
 std::vector<GlyphRun> TextLayout::glyph_runs() const {
     RunCollector collector(impl_->byte_positions);

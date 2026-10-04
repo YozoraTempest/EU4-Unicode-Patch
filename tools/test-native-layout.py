@@ -114,6 +114,8 @@ address_hook(0x17394f0, C.cast(free, C.c_void_p).value)
 for rva, name in [(0x159b91a, 'alternate_measure_hook'), (0x159b85c, 'alternate_format_hook'),
                   (0x159b999, 'alternate_advance_hook'), (0x159b95a, 'alternate_kern_hook')]:
     hook(rva, name)
+hook(0x159b7c0,'measure_paragraph_text','original_text_width')
+hook(0x159b470,'measure_paragraph_height','original_text_height')
 
 font = C.create_string_buffer(0x4000)
 font_base = C.addressof(font)
@@ -308,7 +310,7 @@ for slot, target in [(0x1fd1190, 0x16d6640), (0x1fd11a8, 0x16d5f20), (0x1fd1188,
 # Replace only their marking callback: GPU tests exercise actual glyph-to-page
 # lookup and drawing, while this checks the MASM frame/index and register ABI.
 ui_vertices=C.create_string_buffer(30*28)
-ui_frame=C.create_string_buffer(0x2300)
+ui_frame=C.create_string_buffer(0x2400)
 ui_frame_base=C.addressof(ui_frame)+0x20
 ui_output=C.create_string_buffer(32)
 ui_glyph=C.addressof(glyphs[65])
@@ -367,6 +369,7 @@ for routine,frame_size in [('main',0x2408),('button',0x2260)]:
         continuation=executable_code(capture+b'\x48\x81\xc4\x00\x01\x00\x00\x5f\x41\x5e\x41\x5c\x5b\x5d\xc3')
         pointer(f'g_{routine}_geometry_{phase}_return',continuation)
         code=(b'\x55\x53\x41\x54\x41\x56\x57\x48\x81\xec\x00\x01\x00\x00'
+              b'\x48\xbd'+struct.pack('<Q',ui_frame_base)+
               b'\x48\xb9'+struct.pack('<Q',font_base)+b'\x48\xba'+struct.pack('<Q',0x7654321)+
               b'\x49\xb8'+struct.pack('<Q',sentinel8)+b'\x49\xba'+struct.pack('<Q',sentinel10)+
               b'\x48\xb8'+struct.pack('<Q',0xabcdef)+

@@ -1,12 +1,14 @@
 #include "native_font_atlas.hpp"
 #include "scalar_glyph.hpp"
 #include "native_font_draw.hpp"
+#include "unicode_text.hpp"
 #include <windows.h>
 #include <d3d9.h>
 #include <wrl/client.h>
 #include <MinHook.h>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -15,6 +17,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include <tuple>
 
 namespace eu4unicode {
 NativeTextureLookup original_texture_lookup=nullptr;
@@ -44,6 +47,13 @@ struct Atlas {
     std::vector<std::unique_ptr<Page>> pages;
     std::unordered_map<std::uint32_t,Glyph> glyphs;
     std::unordered_set<std::uint32_t> rejected;
+    struct Paragraph {
+        std::shared_ptr<const ShapedParagraph> layout;
+        std::shared_ptr<const NativeParagraph> geometry;
+    };
+    std::map<std::tuple<bool,float,std::string>,Paragraph> paragraphs;
+    std::size_t paragraph_bytes=0;
+    std::uint32_t next_paragraph_token=0xf0000;
 };
 struct GlyphPage { const void* anchor;std::uint32_t page; };
 std::unordered_map<const NativeGlyph*,GlyphPage> glyph_pages;
@@ -52,6 +62,7 @@ std::filesystem::path fixture_path,font_path;
 std::string atlas_prefix;
 FontLog logger=nullptr;
 std::shared_ptr<const TextFonts> text_fonts;
+std::shared_ptr<const TextFonts> paragraph_fonts;
 bool prefer_system=false,font_files_checked=false;
 std::unordered_map<const void*,std::shared_ptr<Atlas>> bindings;
 std::recursive_mutex mutex;
@@ -85,11 +96,7 @@ int property(const std::string& line,const char* key) {
     return std::stoi(line.substr(pos+name.size()));
 }
 IDirect3DTexture9* texture_of(void* wrapper) { return wrapper?*static_cast<IDirect3DTexture9**>(wrapper):nullptr; }
-ScalarGlyph atlas_glyph(std::uint32_t scalar,int size) {
-    if(prefer_system) {
-        try { return rasterize_scalar(scalar,size); }
-        catch(const std::domain_error&) {}
-    }
+void load_font_files() {
     if(!font_files_checked) {
         font_files_checked=true;
         std::vector<std::filesystem::path> files;
@@ -97,13 +104,65 @@ ScalarGlyph atlas_glyph(std::uint32_t scalar,int size) {
             const auto file=font_path/name;
             if(!prefer_system||std::filesystem::is_regular_file(file)) files.push_back(file);
         }
-        if(!files.empty()) text_fonts=std::make_shared<TextFonts>(files);
+        if(!files.empty()) {
+            text_fonts=std::make_shared<TextFonts>(files);
+            paragraph_fonts=std::make_shared<TextFonts>(files,prefer_system);
+        }
         if(logger&&prefer_system) {
             char message[100];std::snprintf(message,sizeof(message),"Optional font files loaded: %zu",files.size());logger(message);
         }
     }
+}
+ScalarGlyph atlas_glyph(std::uint32_t scalar,int size) {
+    if(prefer_system) {
+        try { return rasterize_scalar(scalar,size); }
+        catch(const std::domain_error&) {}
+    }
+    load_font_files();
     if(!text_fonts) throw std::domain_error("System fonts have no glyph; the optional font pack may supply it.");
     return rasterize_scalar(scalar,size,text_fonts);
+}
+Atlas::Glyph queue_glyph(Atlas& a,ScalarGlyph glyph) {
+    if(glyph.metrics.width<=0||glyph.metrics.height<=0||glyph.metrics.width+2>a.width||
+       glyph.metrics.height+2>a.height||glyph.alpha.size()!=static_cast<std::size_t>(glyph.metrics.width)*glyph.metrics.height)
+        throw std::length_error("Native font glyph exceeds page dimensions");
+    std::uint32_t page_index=0;int x=0,y=0,row=0;
+    for(;page_index<a.pages.size();++page_index) {
+        const auto& page=*a.pages[page_index];x=page.x;y=page.y;row=page.row;
+        if(x+glyph.metrics.width+1>a.width) { x=1;y+=row+1;row=0; }
+        if(y+glyph.metrics.height+1<=a.height) break;
+    }
+    if(page_index==a.pages.size()) {
+        const auto page_bytes=static_cast<std::uint64_t>(a.width)*a.height*4;
+        if((a.pages.size()+1)*page_bytes>atlas_texture_budget)
+            throw std::length_error("Native font texture memory budget exhausted");
+        a.pages.push_back(std::make_unique<Page>());x=1;y=1;row=0;
+        if(logger) { char message[100];std::snprintf(message,sizeof(message),"Dynamic font page allocated: size=%d page=%u bytes=%llu",a.size,page_index,static_cast<unsigned long long>(page_bytes));logger(message); }
+    }
+    auto& page=*a.pages[page_index];
+    glyph.metrics.x=static_cast<std::int16_t>(x);glyph.metrics.y=static_cast<std::int16_t>(y);
+    page.pending.push_back({glyph.metrics,std::move(glyph.alpha)});
+    page.x=x+glyph.metrics.width+1;page.y=y;page.row=(std::max)(row,static_cast<int>(glyph.metrics.height));
+    return {glyph.metrics,page_index};
+}
+Atlas::Paragraph& paragraph_layout(Atlas& atlas,std::string_view text,float width,bool wrap) {
+    const auto key=std::make_tuple(wrap,width,std::string(text));
+    const auto found=atlas.paragraphs.find(key);
+    if(found!=atlas.paragraphs.end()) return found->second;
+    constexpr std::size_t budget=8ull*1024*1024;
+    // Include retained DirectWrite text/cluster storage, not only our key.
+    const auto estimate=sizeof(Atlas::Paragraph)+text.size()*32+4096;
+    if(estimate>budget-atlas.paragraph_bytes) throw std::length_error("Native paragraph cache budget exhausted");
+    std::shared_ptr<const ShapedParagraph> layout;
+    if(prefer_system) layout=std::make_shared<ShapedParagraph>(text,atlas.size,width,wrap);
+    if(!layout||layout->missing_glyphs()) {
+        load_font_files();
+        if(paragraph_fonts) layout=std::make_shared<ShapedParagraph>(text,atlas.size,width,wrap,paragraph_fonts);
+    }
+    if(!layout||layout->missing_glyphs()) throw std::domain_error("Font collection has no glyph for shaped paragraph");
+    auto& result=atlas.paragraphs.emplace(key,Atlas::Paragraph{std::move(layout),{}}).first->second;
+    atlas.paragraph_bytes+=estimate;
+    return result;
 }
 void prepare_staging(Atlas& a,Page& page,IDirect3DTexture9* texture,bool initial) {
     ComPtr<IDirect3DDevice9> device;
@@ -190,8 +249,9 @@ void sync(Atlas& a,void* wrapper) {
 void configure_font_atlases(const std::filesystem::path& fixture,const std::filesystem::path& fonts,FontLog log,std::string_view prefix,bool prefer_system_fonts) {
     std::lock_guard<std::recursive_mutex> lock(mutex);
     fixture_path=fixture;font_path=fonts;logger=log;atlas_prefix=prefix;
-    prefer_system=prefer_system_fonts;font_files_checked=false;text_fonts.reset();
+    prefer_system=prefer_system_fonts;font_files_checked=false;text_fonts.reset();paragraph_fonts.reset();
     configure_font_draw(log);
+    configure_paragraph_log(log);
     if(logger&&prefer_system) logger("Font source: system fonts first; optional font files supplement missing glyphs.");
 }
 void register_font_atlas(void* object,std::string_view selected_path) noexcept {
@@ -243,30 +303,11 @@ NativeGlyph* find_dynamic_glyph(void* const* table,std::uint32_t scalar) noexcep
         if(a.rejected.count(scalar)) return nullptr;
         auto found=a.glyphs.find(scalar);
         if(found==a.glyphs.end()) {
-            auto glyph=atlas_glyph(scalar,a.size);
-            if(glyph.metrics.width+2>a.width||glyph.metrics.height+2>a.height) throw std::length_error("Native font glyph exceeds page dimensions");
-            std::uint32_t page_index=0;int x=0,y=0,row=0;
-            for(;page_index<a.pages.size();++page_index) {
-                const auto& page=*a.pages[page_index];x=page.x;y=page.y;row=page.row;
-                if(x+glyph.metrics.width+1>a.width) { x=1;y+=row+1;row=0; }
-                if(y+glyph.metrics.height+1<=a.height) break;
-            }
-            if(page_index==a.pages.size()) {
-                const auto page_bytes=static_cast<std::uint64_t>(a.width)*a.height*4;
-                if((a.pages.size()+1)*page_bytes>atlas_texture_budget)
-                    throw std::length_error("Native font texture memory budget exhausted");
-                a.pages.push_back(std::make_unique<Page>());x=1;y=1;row=0;
-                if(logger) { char message[100];std::snprintf(message,sizeof(message),"Dynamic font page allocated: size=%d page=%u bytes=%llu",a.size,page_index,static_cast<unsigned long long>(page_bytes));logger(message); }
-            }
-            auto& page=*a.pages[page_index];
-            glyph.metrics.x=static_cast<std::int16_t>(x);glyph.metrics.y=static_cast<std::int16_t>(y);
             // Measurement may run independently of rendering. Only CPU data
             // is produced here; the engine's texture lookup flushes it before
             // binding, on its existing graphics/resource execution path.
-            page.pending.push_back({glyph.metrics,std::move(glyph.alpha)});
-            found=a.glyphs.emplace(scalar,Atlas::Glyph{glyph.metrics,page_index}).first;
-            page.x=x+glyph.metrics.width+1;page.y=y;page.row=(std::max)(row,static_cast<int>(glyph.metrics.height));
-            if(logger) { char message[128];std::snprintf(message,sizeof(message),"Dynamic glyph U+%X queued: size=%d rect=%d,%d,%d,%d advance=%d",scalar,a.size,x,y,glyph.metrics.width,glyph.metrics.height,glyph.metrics.advance);logger(message); }
+            found=a.glyphs.emplace(scalar,queue_glyph(a,atlas_glyph(scalar,a.size))).first;
+            if(logger) { const auto& glyph=found->second.metrics;char message[128];std::snprintf(message,sizeof(message),"Dynamic glyph U+%X queued: size=%d rect=%d,%d,%d,%d advance=%d",scalar,a.size,glyph.x,glyph.y,glyph.width,glyph.height,glyph.advance);logger(message); }
         }
         auto record=allocate_unicode_glyph(table,scalar);
         if(!record) record=static_cast<NativeGlyph*>(find_unicode_glyph(table,scalar));
@@ -281,12 +322,83 @@ NativeGlyph* find_dynamic_glyph(void* const* table,std::uint32_t scalar) noexcep
         return nullptr;
     }
 }
+std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void* font,std::string_view text,float width,bool wrap) {
+    if(!font||!plain_native_paragraph(text)||!needs_paragraph_shaping(text)) return {};
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    const auto table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(font)+0x120);
+    const auto found=bindings.find(identity(table));
+    if(found==bindings.end()||found->second->size==88) return {};
+    return paragraph_layout(*found->second,text,width,wrap).layout;
+}
+std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::string_view text,float width,bool wrap) {
+    if(!font||!plain_native_paragraph(text)||!needs_paragraph_shaping(text)) return {};
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    const auto table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(font)+0x120);
+    const auto found=bindings.find(identity(table));
+    if(found==bindings.end()||found->second->size==88) return {};
+    auto& atlas=*found->second;
+    auto& entry=paragraph_layout(atlas,text,width,wrap);
+    if(entry.geometry) return entry.geometry;
+    auto tiles=rasterize_paragraph(*entry.layout,static_cast<std::uint32_t>(atlas.width-2),static_cast<std::uint32_t>(atlas.height-2));
+    // Validate the complete transport before consuming any stable atlas slots.
+    std::vector<ScalarGlyph> glyphs;
+    std::string transport;
+    for(std::size_t line=0;line<entry.layout->lines().size();++line) {
+        const auto& metrics=entry.layout->lines()[line];
+        const auto first=glyphs.size();
+        for(auto& tile:tiles) if(tile.line==line) {
+            if(tile.x<-32768||tile.x>32767||tile.y-metrics.top<-32768||tile.y-metrics.top>32767)
+                throw std::length_error("Native shaped glyph offset exceeds capacity");
+            ScalarGlyph glyph{};
+            glyph.metrics.width=static_cast<std::int16_t>(tile.bitmap.width);
+            glyph.metrics.height=static_cast<std::int16_t>(tile.bitmap.height);
+            glyph.metrics.x_offset=static_cast<std::int16_t>(tile.x);
+            glyph.metrics.y_offset=static_cast<std::int16_t>(tile.y-metrics.top);
+            glyph.alpha=std::move(tile.bitmap.alpha);glyphs.push_back(std::move(glyph));
+        }
+        if(glyphs.size()==first) {
+            ScalarGlyph blank{};blank.metrics.width=blank.metrics.height=1;blank.alpha={0};
+            glyphs.push_back(std::move(blank));
+        }
+        // The native scratch word buffer is 256 bytes. A shaped run is a draw
+        // unit, not an independently wrappable Unicode character.
+        if((glyphs.size()-first)*4>240||std::ceil(metrics.width)>32767)
+            throw std::length_error("Native shaped line exceeds transport capacity");
+        glyphs.back().metrics.advance=static_cast<std::int16_t>(std::ceil(metrics.width));
+        for(auto index=first;index<glyphs.size();++index) transport+=encode(atlas.next_paragraph_token+static_cast<std::uint32_t>(index));
+        if(line+1<entry.layout->lines().size()) transport+='\n';
+    }
+    if(transport.size()>32000||atlas.next_paragraph_token+glyphs.size()>0xffffe)
+        throw std::length_error("Native paragraph transport token budget exhausted");
+    const auto estimate=sizeof(NativeParagraph)+transport.size()+glyphs.size()*(sizeof(NativeGlyph)+64);
+    if(estimate>8ull*1024*1024-atlas.paragraph_bytes)
+        throw std::length_error("Native paragraph cache budget exhausted");
+    auto geometry=std::make_shared<NativeParagraph>();
+    geometry->layout=entry.layout;geometry->draw_text=std::move(transport);geometry->first_token=atlas.next_paragraph_token;
+    geometry->records.resize(glyphs.size());
+    geometry->glyphs.reserve(glyphs.size());
+    try {
+        for(std::size_t index=0;index<glyphs.size();++index) {
+            const auto packed=queue_glyph(atlas,std::move(glyphs[index]));
+            auto& record=geometry->records[index];record=packed.metrics;
+            glyph_pages[&record]={&atlas,packed.page};geometry->glyphs.push_back(&record);
+        }
+    } catch(...) {
+        for(const auto& record:geometry->records) glyph_pages.erase(&record);
+        throw;
+    }
+    atlas.next_paragraph_token+=static_cast<std::uint32_t>(glyphs.size());
+    atlas.paragraph_bytes+=estimate;entry.geometry=std::move(geometry);
+    return entry.geometry;
+}
 void release_font_atlas(void* const* table) noexcept {
     if(!table) return;
     try {
         std::lock_guard<std::recursive_mutex> lock(mutex);const auto anchor=identity(table);
+        const auto binding=bindings.find(anchor);
+        const auto last=binding!=bindings.end()&&binding->second.use_count()==1?binding->second.get():nullptr;
         for(auto i=glyph_pages.begin();i!=glyph_pages.end();) {
-            if(i->second.anchor==anchor) i=glyph_pages.erase(i);else ++i;
+            if(i->second.anchor==anchor||(last&&i->second.anchor==last)) i=glyph_pages.erase(i);else ++i;
         }
         bindings.erase(anchor);
         if(bindings.empty())

@@ -722,6 +722,7 @@ void* allocate_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept {
     return record;
 }
 void* find_supplementary_glyph(void* const* table,std::uint32_t scalar) noexcept {
+    if(auto shaped=eu4unicode::find_paragraph_glyph(table,scalar)) return shaped;
     auto glyph=eu4unicode::find_unicode_glyph(table,scalar);
     return glyph?glyph:eu4unicode::find_dynamic_glyph(table,scalar);
 }
@@ -746,6 +747,10 @@ std::size_t bounded_text_length(const char* source,std::size_t length) noexcept 
 void mark_popup_font_glyph(const eu4unicode::NativeGlyph* glyph,eu4unicode::PopupFontVertex* vertices) noexcept { eu4unicode::mark_popup_font_glyph(glyph,vertices); }
 void begin_popup_font(void* font) { eu4unicode::begin_popup_font(font); }
 void end_popup_font() noexcept { eu4unicode::end_popup_font(); }
+const EngineString* begin_main_paragraph(void* font,const EngineString* source,const int* box,int inset) noexcept {
+    return eu4unicode::begin_native_paragraph(font,source,box,inset);
+}
+void end_main_paragraph() noexcept { eu4unicode::end_native_paragraph(); }
 std::size_t next_layout_scalar(const EngineString* source,std::size_t offset) noexcept {
     return eu4unicode::native_scalar_next({source->data(),static_cast<std::size_t>(source->size)},offset);
 }
@@ -947,6 +952,8 @@ bool initialize(HMODULE module) {
         {0x1599728,"410fb601498b8cc62001000048894d004885c9"},
         {0x159a796,"460fb60409f3410f109e680900004b8b94c620010000"},
         {0x1598963,"4c8be24c8bf1488b0d380bdb00"},
+        {0x159b470,"4c8bdc49895b20555741564881ec00010000"},
+        {0x159b7c0,"488bc441564881ecf00000000f2970c8"},
         {0x159b3b0,"4c8d9c2408240000410f2873e8"},
         {0x15966ec,"498bd8488bf9488b95c8210000"},
         {0x1598841,"4c8d9c2460220000498b5b48"},
@@ -1318,6 +1325,12 @@ bool initialize(HMODULE module) {
     if(MH_CreateHook(image+0x1704af0,reinterpret_cast<void*>(layout_substring),
         reinterpret_cast<void**>(&original_layout_substring))!=MH_OK) {
         log("Layout substring hook creation failed; no hooks enabled.");MH_Uninitialize();return false;
+    }
+    if(MH_CreateHook(image+0x159b7c0,reinterpret_cast<void*>(eu4unicode::measure_paragraph_text),
+        reinterpret_cast<void**>(&eu4unicode::original_text_width))!=MH_OK||
+       MH_CreateHook(image+0x159b470,reinterpret_cast<void*>(eu4unicode::measure_paragraph_height),
+        reinterpret_cast<void**>(&eu4unicode::original_text_height))!=MH_OK) {
+        log("Paragraph measurement hook creation failed; no hooks enabled.");MH_Uninitialize();return false;
     }
     if(MH_CreateHook(image+0x170cd10,reinterpret_cast<void*>(eu4unicode::construct_script_file),
         reinterpret_cast<void**>(&eu4unicode::original_script_file))!=MH_OK||

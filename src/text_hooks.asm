@@ -54,6 +54,8 @@ EXTERN g_main_page_return:QWORD
 EXTERN g_button_page_return:QWORD
 EXTERN begin_popup_font:PROC
 EXTERN end_popup_font:PROC
+EXTERN begin_main_paragraph:PROC
+EXTERN end_main_paragraph:PROC
 EXTERN g_main_geometry_entry_return:QWORD
 EXTERN g_main_geometry_end_return:QWORD
 EXTERN g_button_geometry_entry_return:QWORD
@@ -66,6 +68,12 @@ main_geometry_entry_hook PROC
     SAVE_CONTEXT
     call begin_popup_font
     RESTORE_CONTEXT
+    SAVE_CONTEXT
+    mov r8, [rbp+2380h]
+    mov r9d, [rbp+2388h]
+    call begin_main_paragraph
+    mov [rsp+90h], rax
+    RESTORE_CONTEXT
     mov r12, rdx
     mov r14, rcx
     jmp qword ptr [g_main_geometry_entry_return]
@@ -73,6 +81,7 @@ main_geometry_entry_hook ENDP
 
 main_geometry_end_hook PROC
     SAVE_CONTEXT
+    call end_main_paragraph
     call end_popup_font
     RESTORE_CONTEXT
     lea r11, [rsp+2408h]
