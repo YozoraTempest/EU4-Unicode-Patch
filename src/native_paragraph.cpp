@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
@@ -42,7 +43,25 @@ NativeLineAdvance plan_paragraph_line(const ShapedParagraph& paragraph,std::size
 namespace {
 void(*logger)(const char*)=nullptr;
 std::atomic<bool> reported_error{false};
-std::atomic<bool> reported_shaping{false};
+std::atomic<unsigned> reported_shaping{0};
+enum class Renderer : unsigned { main,button,popup };
+void report_shaping(Renderer renderer,std::string_view text,bool formatted) {
+    if(!logger) return;
+    bool commands=false;
+    for(std::size_t offset=0;offset<text.size();) {
+        const auto unit=native_text_unit(text,offset,true);
+        if(unit.kind!=TextUnitKind::glyph) { commands=true;break; }
+        offset=unit.end;
+    }
+    const auto state=static_cast<unsigned>(renderer)*4+(formatted?1u:0u)+(commands?2u:0u);
+    const auto bit=1u<<state;
+    if(reported_shaping.fetch_or(bit)&bit) return;
+    constexpr const char* names[]{"main","button","popup"};
+    char message[128];
+    std::snprintf(message,sizeof(message),"Native paragraph shaping active: renderer=%s formatted=%s commands=%s.",
+        names[static_cast<unsigned>(renderer)],formatted?"yes":"no",commands?"yes":"no");
+    logger(message);
+}
 void paragraph_failure() noexcept {
     if(logger&&!reported_error.exchange(true)) logger("Native paragraph preparation failed; existing text path retained.");
 }
@@ -74,7 +93,7 @@ struct LookupMask {
     LookupMask() { if(scope) scope->lookup_enabled=false; }
     ~LookupMask() { if(scope) scope->lookup_enabled=previous; }
 };
-const EngineString* begin_paragraph(void* font,const EngineString* source,float pixels,bool wrap,bool formatted) noexcept {
+const EngineString* begin_paragraph(void* font,const EngineString* source,float pixels,bool wrap,bool formatted,Renderer renderer) noexcept {
     // An empty frame masks any parent invocation, including another font.
     const auto index=depth++;
     if(index>=scopes.size()) return source;
@@ -92,22 +111,22 @@ const EngineString* begin_paragraph(void* font,const EngineString* source,float 
         scope.draw.storage.pointer=scope.paragraph->draw_text.c_str();
         scope.draw.size=scope.paragraph->draw_text.size();
         scope.draw.capacity=(std::max)(scope.draw.size,std::uint64_t{16});
-        if(logger&&!reported_shaping.exchange(true)) logger("Native paragraph shaping active for UI text.");
+        report_shaping(renderer,text,formatted);
         return &scope.draw;
     } catch(...) { paragraph_failure();scope={};return source; }
 }
 }
 const EngineString* begin_native_paragraph(void* font,const EngineString* source,const int* box,int inset,bool formatted) noexcept {
     const auto pixels=box&&inset>=0?static_cast<float>(static_cast<std::int64_t>(box[2]?box[2]:320)-2ll*inset):0.f;
-    return begin_paragraph(font,source,pixels,true,formatted);
+    return begin_paragraph(font,source,pixels,true,formatted,Renderer::main);
 }
 const EngineString* begin_native_button_paragraph(void* font,const EngineString* source,int width,const int* margin,bool formatted) noexcept {
     const auto pixels=margin?static_cast<float>(static_cast<std::int64_t>(width?width:320)-2ll*margin[0]):0.f;
-    return begin_paragraph(font,source,pixels,true,formatted);
+    return begin_paragraph(font,source,pixels,true,formatted,Renderer::button);
 }
 const EngineString* begin_native_popup_paragraph(void* font,const EngineString* source,int width) noexcept {
     const auto scale=dynamic_font(font)?native_scale(font):1.f;
-    return begin_paragraph(font,source,width<0?32767.f*scale:static_cast<float>(width),width>=0,true);
+    return begin_paragraph(font,source,width<0?32767.f*scale:static_cast<float>(width),width>=0,true,Renderer::popup);
 }
 void end_native_paragraph() noexcept {
     if(!depth) return;
@@ -163,5 +182,5 @@ int measure_paragraph_height(void* font,const EngineString* source,int width,int
     } catch(...) { paragraph_failure(); }
     LookupMask mask;return original_text_height(font,source,width,height,margin,formatted);
 }
-void configure_paragraph_log(void(*log)(const char*)) noexcept { logger=log;reported_error=false;reported_shaping=false; }
+void configure_paragraph_log(void(*log)(const char*)) noexcept { logger=log;reported_error=false;reported_shaping=0; }
 }

@@ -19,6 +19,8 @@ void check(bool value,const char* message) {
 }
 namespace {
 using namespace eu4unicode;
+std::vector<std::string> paragraph_logs;
+void paragraph_log(const char* message) { paragraph_logs.emplace_back(message); }
 int icon_width(void*,const char* name) { return std::strcmp(name,"adm")==0?18:0; }
 bool color_lookup(void*,unsigned char code,std::uint32_t* value) {
     *value=0xffffffff;return code=='Y'||code=='R'||code=='G'||code=='!';
@@ -72,6 +74,7 @@ int main() {
     std::ofstream metrics(directory/"gfx/fonts/zh-hans-18.fnt");
     metrics<<"common lineHeight=18 scaleW=2048 scaleH=4096\nchar id=65 x=1 y=4080 width=7 height=10\n";metrics.close();
     configure_font_atlases(directory,directory/"no-optional-fonts",nullptr,"gfx/fonts/",true);
+    configure_paragraph_log(paragraph_log);
     native_paragraph_color=color_lookup;
     int manager=0;
     Font font(&manager),alias(&manager),other(nullptr);
@@ -140,6 +143,16 @@ int main() {
         static_cast<int>(plan_paragraph_line(*colored_layout,0,1).pixels),"formatted width uses the contextual paragraph");
     check(begin_native_paragraph(font.data(),&colored,box,0)!=&colored,"formatted draws receive the scoped paragraph transport");
     end_native_paragraph();
+    const auto literal_geometry=font_paragraph_geometry(font.data(),formatted,200,true,false);
+    check(literal_geometry->layout->content().visible()==formatted&&literal_geometry->layout->content().colors().size()==1,
+        "unformatted draw requests preserve literal formatting markers");
+    for(int repeat=0;repeat<2;++repeat) {
+        check(begin_native_paragraph(font.data(),&colored,box,0,false)!=&colored,"literal complex text receives shaping without parsing colors");
+        end_native_paragraph();
+    }
+    check(std::count(paragraph_logs.begin(),paragraph_logs.end(),
+        "Native paragraph shaping active: renderer=main formatted=no commands=yes.")==1,
+        "the diagnostic reports a literal marker path once without changing its contract");
     std::string nested;
     for(int depth=0;depth<41;++depth) nested+=u8"§Y";
     nested+=u8"العربية";
@@ -178,6 +191,12 @@ int main() {
             "public width includes original native icon advances");
     }
     original_text_width=native_width;
+    for(const auto* message:{
+        "Native paragraph shaping active: renderer=main formatted=yes commands=yes.",
+        "Native paragraph shaping active: renderer=button formatted=yes commands=yes.",
+        "Native paragraph shaping active: renderer=popup formatted=yes commands=yes."})
+        check(std::count(paragraph_logs.begin(),paragraph_logs.end(),message)==1,
+            "renderer diagnostics distinguish formatted draw entries without logging source strings");
     font.put(0x968,1.5f);
     check(measure_paragraph_text(font.data(),text.c_str(),-1,true)==
         static_cast<int>(std::ceil(unwrapped->metrics().width)*1.5f),"native scaling follows the shaped integer advance");
