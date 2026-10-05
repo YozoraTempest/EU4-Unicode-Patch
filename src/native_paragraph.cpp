@@ -83,8 +83,8 @@ bool transport_text(void* font,std::string_view text,bool formatted) noexcept {
     for(std::size_t offset=0;offset<text.size();) {
         const auto unit=native_text_unit(text,offset,formatted);
         if(unit.kind==TextUnitKind::glyph&&unit.scalar!='\n') {
-            if(!find_paragraph_glyph(table,unit.scalar)) return false;
-            token=true;
+            if(find_paragraph_glyph(table,unit.scalar)) token=true;
+            else if(!(unit.scalar<=255?table[unit.scalar]:find_unicode_glyph(table,unit.scalar))) return false;
         }
         offset=unit.end;
     }
@@ -104,6 +104,13 @@ const EngineString* begin_paragraph(void* font,const EngineString* source,float 
     try {
         if(!source) return source;
         const auto text=std::string_view(source->data(),static_cast<std::size_t>(source->size));
+        // The popup renderer has no country-flag branch. Only the guarded main
+        // and button renderers can consume a native flag transport command.
+        if(renderer==Renderer::popup&&formatted) for(std::size_t offset=0;offset<text.size();) {
+            const auto unit=native_text_unit(text,offset,true);
+            if(unit.kind==TextUnitKind::flag) return source;
+            offset=unit.end;
+        }
         if(!dynamic_font(font)||pixels<=0||!std::isfinite(pixels)) return source;
         if(!needs_native_paragraph_shaping(text,formatted)) return source;
         const auto scale=native_scale(font);

@@ -5,6 +5,8 @@
 #include "unicode_services.hpp"
 #include "formatted_text.hpp"
 #include "unicode_editor.hpp"
+#include "native_editor_text.hpp"
+#include "native_editor_presentation.hpp"
 #include "native_text_event.hpp"
 #include "unicode_search.hpp"
 #include "unicode_pinyin.hpp"
@@ -200,8 +202,11 @@ thread_local EditorImeRectState editor_ime_rect_state{};
 thread_local unsigned editor_focus_depth=0;
 void clear_editor_affinity() noexcept;
 void paint_editor_selection(void* outer) noexcept;
+eu4unicode::PrefixMeasure native_editor_measure(void* widget,std::string_view text);
+void forget_editor_history(void* widget) noexcept;
 void focus_editor_ime_rect(void* outer) {
     clear_editor_affinity();
+    eu4unicode::clear_native_composition();
     editor_ime_rect_state={};
     struct FocusScope {
         FocusScope() { ++editor_focus_depth; }
@@ -210,6 +215,7 @@ void focus_editor_ime_rect(void* outer) {
     original_editor_focus(outer);
 }
 void paint_editor_ime_rect(void* outer) {
+    eu4unicode::EditorPresentation presentation(outer);
     original_editor_paint(outer);
     paint_editor_selection(outer);
     // Focus performs an immediate paint before the next UI frame has supplied
@@ -311,7 +317,7 @@ void load_font_atlas(void* font) {
         (*reinterpret_cast<const float*>(context+0x32600)>=threshold&&large->size?0x100:0xe0));
     const auto path=std::string_view(selected->data(),static_cast<std::size_t>(selected->size));
     try {
-        if(native_font_source(path)) eu4unicode::register_font_atlas(font,path);
+        eu4unicode::register_font_atlas(font,path);
     } catch(const std::exception& error) { log(error.what()); }
 #else
     eu4unicode::register_font_atlas(font);
@@ -321,15 +327,6 @@ void destroy_font_table(void* const* table) {
     eu4unicode::release_font_atlas(table);
     eu4unicode::release_unicode_font(table);
     original_font_table_destroy(table);
-}
-bool single_line_editor(void* widget,std::string_view& value) {
-    const auto base=static_cast<const std::byte*>(widget);
-    const auto text=reinterpret_cast<const EngineString*>(base+0x30);
-    if(*reinterpret_cast<const std::uint16_t*>(base+0x56)||
-       *reinterpret_cast<const std::uint16_t*>(base+0x60)>1||text->size>32000||
-       *reinterpret_cast<const std::uint16_t*>(base+0x54)>text->size) return false;
-    value={text->data(),static_cast<std::size_t>(text->size)};
-    return value.find('\n')==std::string_view::npos&&eu4unicode::valid_utf8(value);
 }
 struct EditorAffinity {
     void* owner=nullptr;
@@ -344,6 +341,14 @@ std::shared_ptr<const eu4unicode::ShapedParagraph> editor_paragraph(void* widget
     const auto font=*reinterpret_cast<void* const*>(static_cast<const std::byte*>(widget)+0x98);
     return eu4unicode::font_paragraph_layout(font,value,32767,false,false);
 }
+EditorAction original_editor_text=nullptr;
+using EditorLines=void(*)(void*,int);
+EditorLines original_editor_lines=nullptr;
+void draw_editor_text(void* outer) { eu4unicode::EditorPresentation presentation(outer);original_editor_text(outer); }
+void draw_editor_lines(void* outer,int index) {
+    eu4unicode::EditorPresentation presentation(outer);
+    original_editor_lines(outer,index);
+}
 bool editor_trailing(void* widget,std::string_view value,std::size_t offset) {
     return editor_affinity.owner==widget&&editor_affinity.text==value&&
         editor_affinity.offset==offset&&editor_affinity.trailing;
@@ -356,19 +361,22 @@ using EditorPixelPosition=EditorPixelPoint*(*)(void*,EditorPixelPoint*);
 EditorPixelPosition original_editor_caret=nullptr,original_editor_anchor=nullptr;
 EditorPixelPoint* shaped_editor_position(void* widget,EditorPixelPoint* result,bool anchor) {
     const auto original=anchor?original_editor_anchor:original_editor_caret;
-    if(anchor&&*reinterpret_cast<const std::uint16_t*>(static_cast<const std::byte*>(widget)+0x94))
-        return original(widget,result);
-    std::string_view value;
     try {
-        if(single_line_editor(widget,value)) if(const auto paragraph=editor_paragraph(widget,value)) {
-            const auto base=static_cast<const std::byte*>(widget);
+        const auto view=eu4unicode::native_edit_view(widget);
+        const auto base=static_cast<const std::byte*>(widget);
+        const auto row=*reinterpret_cast<const std::uint16_t*>(base+(anchor?0x94:0x56));
+        const auto& line=view.rows.rows().at(row);
+        const auto value=view.text.substr(line.start,line.length);
+        if(const auto paragraph=editor_paragraph(widget,value)) {
             const auto offset=*reinterpret_cast<const std::uint16_t*>(base+(anchor?0x92:0x54));
             if(offset<=value.size()) {
                 const auto font=*reinterpret_cast<const std::byte* const*>(base+0x98);
                 const auto scale=*reinterpret_cast<const float*>(font+0x968);
-                const auto caret=paragraph->caret(offset,!anchor&&editor_trailing(widget,value,offset));
+                const auto caret=paragraph->caret(offset,!anchor&&editor_trailing(widget,view.text,line.start+offset));
                 const auto x=std::round(caret.x*scale)+*reinterpret_cast<const int*>(font+0x38)+(anchor?3:0);
-                const auto y=std::round(caret.y*scale)+*reinterpret_cast<const int*>(font+0x3c);
+                const auto line_height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void* const* const*>(font))[0x68/8])(const_cast<std::byte*>(font));
+                const auto y=std::round(caret.y*scale)+*reinterpret_cast<const int*>(font+0x3c)+
+                    (base[0xd9]!=std::byte{0}?row*line_height:0);
                 if(std::isfinite(x)&&std::isfinite(y)&&x<=65535&&y<=65535) {
                     result->x=static_cast<std::uint16_t>((std::max)(0.f,x));
                     result->y=static_cast<std::uint16_t>((std::max)(0.f,y));
@@ -394,6 +402,7 @@ void* create_editor_sprite(void* manager,const EngineString* name,void* context,
     return sprite;
 }
 void destroy_editor(void* outer) {
+    forget_editor_history(static_cast<std::byte*>(outer)+0xc8);
     if(editor_selections) editor_selections->release(outer,*reinterpret_cast<void**>(static_cast<std::byte*>(outer)+0x1f8));
     original_editor_destroy(outer);
 }
@@ -409,17 +418,17 @@ void paint_editor_selection(void* outer) noexcept {
     if(!editor_selections) return;
     try {
         const auto base=static_cast<std::byte*>(outer),widget=base+0xc8;
-        std::string_view value;
-        if(base[0xc5]==std::byte{0}||!*reinterpret_cast<void**>(base+0x148)||
-           base[0x262]!=std::byte{0}||*reinterpret_cast<std::uint64_t*>(base+0x2f0)||
-           widget[0x90]!=std::byte{1}||*reinterpret_cast<std::uint16_t*>(widget+0x94)||
-           !single_line_editor(widget,value)) { editor_selections->hide(outer);return; }
-        const auto paragraph=editor_paragraph(widget,value);
-        if(!paragraph) { editor_selections->hide(outer);return; }
-        const auto caret_offset=*reinterpret_cast<std::uint16_t*>(widget+0x54);
-        const auto anchor_offset=*reinterpret_cast<std::uint16_t*>(widget+0x92);
-        if(anchor_offset>value.size()) { editor_selections->hide(outer);return; }
-        const auto regions=paragraph->selection((std::min)(caret_offset,anchor_offset),(std::max)(caret_offset,anchor_offset));
+        const auto preview=eu4unicode::editor_preedit_preview(outer);
+        if(base[0xc5]==std::byte{0}||base[0x262]!=std::byte{0}||*reinterpret_cast<std::uint64_t*>(base+0x2f0)||
+           (!preview&&(widget[0x90]!=std::byte{1}||!*reinterpret_cast<std::uint64_t*>(base+0x148)))) {
+            editor_selections->hide(outer);return;
+        }
+        const auto view=eu4unicode::native_edit_view(widget);
+        if(!preview&&view.rows.rows().size()==1&&!eu4unicode::needs_paragraph_shaping(view.text)) { editor_selections->hide(outer);return; }
+        const auto caret_offset=view.rows.offset({*reinterpret_cast<std::uint16_t*>(widget+0x56),*reinterpret_cast<std::uint16_t*>(widget+0x54)});
+        const auto anchor_offset=preview?preview->begin:view.rows.offset({*reinterpret_cast<std::uint16_t*>(widget+0x94),*reinterpret_cast<std::uint16_t*>(widget+0x92)});
+        const auto begin=preview?preview->begin:(std::min)(caret_offset,anchor_offset);
+        const auto end=preview?preview->end:(std::max)(caret_offset,anchor_offset);
         const auto font=*reinterpret_cast<std::byte**>(widget+0x98);
         const auto sprite=*reinterpret_cast<void**>(base+0x1f0);
         if(!sprite) { editor_selections->hide(outer);return; }
@@ -429,12 +438,27 @@ void paint_editor_selection(void* outer) noexcept {
         if(!std::isfinite(origin.x)||!std::isfinite(origin.y)) { editor_selections->hide(outer);return; }
         EditorPixelPoint pixel{};shaped_editor_position(widget,&pixel,false);
         origin.x-=pixel.x;origin.y-=pixel.y;
-        const auto height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void***>(font))[0x68/8])(font)/2;
-        std::vector<eu4unicode::NativeSelectionRect> boxes;boxes.reserve(regions.size());
-        for(const auto& region:regions) boxes.push_back({
-            static_cast<int>(std::round(origin.x+region.x*scale))+*reinterpret_cast<int*>(font+0x38)+3,
-            static_cast<int>(std::round(origin.y+region.y*scale))+*reinterpret_cast<int*>(font+0x3c)+height,
-            static_cast<int>(std::ceil(region.width*scale))+2,height+2});
+        const auto line_height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void***>(font))[0x68/8])(font);
+        const auto height=line_height/2;
+        std::vector<eu4unicode::NativeSelectionRect> boxes;
+        for(std::size_t index=0;index<view.rows.rows().size();++index) {
+            const auto& row=view.rows.rows()[index];
+            const auto first=(std::max)(begin,row.start),last=(std::min)(end,row.start+row.length);
+            if(first>=last) continue;
+            const auto text=view.text.substr(row.start,row.length);
+            std::vector<eu4unicode::SelectionRegion> regions;
+            if(const auto paragraph=editor_paragraph(widget,text)) regions=paragraph->selection(first-row.start,last-row.start);
+            else {
+                const auto measure=native_editor_measure(widget,text);
+                const auto x=measure(first-row.start),finish=measure(last-row.start);
+                regions.push_back({first,last-first,static_cast<float>(x)/scale,0,static_cast<float>(finish-x)/scale,static_cast<float>(line_height)/scale,0});
+            }
+            const auto top=widget[0xd9]!=std::byte{0}?index*line_height:0;
+            for(const auto& region:regions) boxes.push_back({
+                static_cast<int>(std::round(origin.x+region.x*scale))+*reinterpret_cast<int*>(font+0x38)+(preview?0:3),
+                static_cast<int>(std::round(origin.y+region.y*scale+top))+*reinterpret_cast<int*>(font+0x3c)+(preview?line_height-2:height),
+                static_cast<int>(std::ceil(region.width*scale))+(preview?0:2),preview?1:height+2});
+        }
         editor_selections->update(outer,*reinterpret_cast<void**>(base+0x1f8),*reinterpret_cast<void**>(base+0x298),boxes);
     } catch(...) { editor_selections->hide(outer);log("Native shaped selection update failed."); }
 }
@@ -450,24 +474,27 @@ eu4unicode::PrefixMeasure native_editor_measure(void* widget,std::string_view te
     };
 }
 void editor_point(void* widget,const EngineString* row,const EditorPoint* point) {
-    std::string_view value;
-    const auto row_text=std::string_view(row->data(),static_cast<std::size_t>(row->size));
-    if(!single_line_editor(widget,value)||value!=row_text||value.empty()||point->x<0||point->y<0) {
+    if(point->x<0||point->y<0) {
         original_editor_point(widget,row,point); return;
     }
     try {
+        const auto view=eu4unicode::native_edit_view(widget);
+        const auto base=static_cast<std::byte*>(widget);
+        const auto font=*reinterpret_cast<const std::byte* const*>(base+0x98);
+        const auto height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void* const* const*>(font))[0x68/8])(const_cast<std::byte*>(font));
+        if(height<=0) { original_editor_point(widget,row,point);return; }
+        const auto index=base[0xd9]!=std::byte{0}?(std::min)(static_cast<std::size_t>(point->y/height),view.rows.rows().size()-1):0;
+        const auto& line=view.rows.rows()[index];const auto value=view.text.substr(line.start,line.length);
         std::size_t hit=0;bool trailing=false;
         if(const auto paragraph=editor_paragraph(widget,value)) {
-            const auto font=*reinterpret_cast<const std::byte* const*>(static_cast<const std::byte*>(widget)+0x98);
             const auto scale=*reinterpret_cast<const float*>(font+0x968);
-            const auto position=paragraph->hit_test(point->x/scale,point->y/scale);
+            const auto position=paragraph->hit_test(point->x/scale,0);
             hit=position.byte_offset;trailing=position.trailing;
         } else hit=eu4unicode::nearest_grapheme_boundary(value,point->x,native_editor_measure(widget,value));
-        auto base=static_cast<std::byte*>(widget);
         *reinterpret_cast<std::uint16_t*>(base+0x54)=static_cast<std::uint16_t>(hit);
-        *reinterpret_cast<std::uint16_t*>(base+0x56)=0;
-        remember_editor_affinity(widget,value,hit,trailing);
-    } catch(...) { log("Unicode editor hit testing failed; caret preserved."); }
+        *reinterpret_cast<std::uint16_t*>(base+0x56)=static_cast<std::uint16_t>(index);
+        remember_editor_affinity(widget,view.text,line.start+hit,trailing);
+    } catch(...) { log("Unicode editor hit testing failed; native hit testing retained.");original_editor_point(widget,row,point); }
 }
 int editor_width_fit(void* widget,const EngineString* text) {
     const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
@@ -498,97 +525,149 @@ int editor_word_break(void* widget,const EngineString* text,int fit) {
 }
 void editor_arrow(void* widget,bool right) {
     const auto original=right?original_editor_right:original_editor_left;
-    std::string_view value;
-    if(single_line_editor(widget,value)) {
-        auto column=reinterpret_cast<std::uint16_t*>(static_cast<std::byte*>(widget)+0x54);
-        try {
+    try {
+            const auto view=eu4unicode::native_edit_view(widget);
+            auto base=static_cast<std::byte*>(widget);
+            auto column=reinterpret_cast<std::uint16_t*>(base+0x54);
+            const auto index=*reinterpret_cast<std::uint16_t*>(base+0x56);
+            const auto& row=view.rows.rows().at(index);
+            const auto value=view.text.substr(row.start,row.length);
+            const auto offset=view.rows.offset({index,*column});
             if(const auto paragraph=editor_paragraph(widget,value)) {
-                const auto target=paragraph->move_caret(*column,editor_trailing(widget,value,*column),right);
-                *column=static_cast<std::uint16_t>(target.byte_offset);
-                auto base=static_cast<std::byte*>(widget);
-                *reinterpret_cast<std::uint32_t*>(base+0x50)=*column;
-                base[0x90]=std::byte{0};
-                auto selected=reinterpret_cast<EngineString*>(base+0x70);
-                const auto data=selected->capacity<16?selected->storage.inline_bytes:const_cast<char*>(selected->storage.pointer);
-                selected->size=0;data[0]=0;
-                remember_editor_affinity(widget,value,target.byte_offset,target.trailing);
+                const auto target=paragraph->move_caret(*column,editor_trailing(widget,view.text,offset),right);
+                if(target.byte_offset==*column&&target.trailing==editor_trailing(widget,view.text,offset)&&view.rows.rows().size()>1&&
+                   ((right&&index+1<view.rows.rows().size())||(!right&&index))) {
+                    const auto next=right?index+1:index-1;const auto& line=view.rows.rows()[next];
+                    const auto content=view.text.substr(line.start,line.length);std::size_t hit=right?0:line.length;bool trailing=false;
+                    if(const auto layout=editor_paragraph(widget,content)) { const auto stop=layout->hit_test(right?-1.f:32767.f,0);hit=stop.byte_offset;trailing=stop.trailing; }
+                    eu4unicode::native_edit_caret(widget,line.start+hit);
+                    *reinterpret_cast<std::uint16_t*>(base+0x56)=static_cast<std::uint16_t>(next);*column=static_cast<std::uint16_t>(hit);
+                    remember_editor_affinity(widget,view.text,line.start+hit,trailing);
+                } else {
+                    eu4unicode::native_edit_caret(widget,row.start+target.byte_offset);
+                    *reinterpret_cast<std::uint16_t*>(base+0x56)=index;*column=static_cast<std::uint16_t>(target.byte_offset);
+                    remember_editor_affinity(widget,view.text,row.start+target.byte_offset,target.trailing);
+                }
                 reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
                 return;
             }
-            const auto target=eu4unicode::plan_edit(value,*column,
+            const auto target=eu4unicode::plan_edit(view.text,offset,
                 right?eu4unicode::EditKey::right:eu4unicode::EditKey::left).caret;
-            // Let the native one-byte mover reach the final complete boundary.
-            // It retains selection clearing, geometry and its ordinary callback.
-            if(right&&target>*column) *column=static_cast<std::uint16_t>(target-1);
-            else if(!right&&target<*column) *column=static_cast<std::uint16_t>(target+1);
-        } catch(...) { log("Unicode editor movement failed; key ignored."); return; }
-    }
-    original(widget);
+            eu4unicode::native_edit_caret(widget,target);
+            reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
+    } catch(...) { log("Unicode editor movement failed; native action retained.");original(widget); }
 }
 void editor_left(void* widget) { editor_arrow(widget,false); }
 void editor_right(void* widget) { editor_arrow(widget,true); }
 void editor_selection(void* widget) {
     auto base=static_cast<std::byte*>(widget);
-    std::string_view value;
-    if(single_line_editor(widget,value)&&!(*reinterpret_cast<std::uint16_t*>(base+0x94))) {
-        auto anchor=reinterpret_cast<std::uint16_t*>(base+0x92);
-        auto column=reinterpret_cast<std::uint16_t*>(base+0x54);
-        if(*anchor<=value.size()) {
-            try {
-                const auto selection=eu4unicode::align_selection(value,*anchor,*column);
-                *anchor=static_cast<std::uint16_t>(selection.anchor);
-                *column=static_cast<std::uint16_t>(selection.caret);
-                *reinterpret_cast<std::uint32_t*>(base+0x50)=*column;
-            } catch(...) { log("Unicode editor selection failed; selection update excluded."); return; }
-        }
-    }
+    try {
+        const auto view=eu4unicode::native_edit_view(widget);
+        const auto anchor=view.rows.offset({*reinterpret_cast<std::uint16_t*>(base+0x94),*reinterpret_cast<std::uint16_t*>(base+0x92)});
+        const auto caret=view.rows.offset({*reinterpret_cast<std::uint16_t*>(base+0x56),*reinterpret_cast<std::uint16_t*>(base+0x54)});
+        const auto selection=eu4unicode::align_selection(view.text,anchor,caret);
+        const auto first=view.rows.position(selection.anchor),last=view.rows.position(selection.caret);
+        *reinterpret_cast<std::uint16_t*>(base+0x92)=static_cast<std::uint16_t>(first.column);
+        *reinterpret_cast<std::uint16_t*>(base+0x94)=static_cast<std::uint16_t>(first.row);
+        *reinterpret_cast<std::uint16_t*>(base+0x54)=static_cast<std::uint16_t>(last.column);
+        *reinterpret_cast<std::uint16_t*>(base+0x56)=static_cast<std::uint16_t>(last.row);
+        *reinterpret_cast<std::uint32_t*>(base+0x50)=static_cast<std::uint32_t>(last.column);
+    } catch(...) { log("Unicode editor selection alignment failed; native selection retained."); }
     original_editor_selection(widget);
 }
-bool editor_key(void* widget,const KeyEvent* event) {
+struct EditorHistoryEntry {
+    eu4unicode::EditHistory history;
+    eu4unicode::EditState before;
+    unsigned depth=0;
+    bool alive=true;
+};
+thread_local std::unordered_map<void*,std::shared_ptr<EditorHistoryEntry>> editor_histories;
+void forget_editor_history(void* widget) noexcept {
+    const auto found=editor_histories.find(widget);
+    if(found!=editor_histories.end()) { found->second->alive=false;editor_histories.erase(found); }
+    if(editor_affinity.owner==widget) clear_editor_affinity();
+}
+struct EditorTransaction {
+    void* widget;std::shared_ptr<EditorHistoryEntry> entry;
+    explicit EditorTransaction(void* owner):widget(owner) {
+        try {
+            auto& stored=editor_histories[owner];if(!stored) stored=std::make_shared<EditorHistoryEntry>();
+            entry=stored;
+            if(!entry->depth) entry->before=eu4unicode::native_edit_state(widget);
+            ++entry->depth;
+        } catch(...) { entry.reset(); }
+    }
+    ~EditorTransaction() {
+        if(!entry||--entry->depth||!entry->alive) return;
+        try { entry->history.record(entry->before,eu4unicode::native_edit_state(widget)); }
+        catch(...) { entry->history.clear(); }
+    }
+};
+void editor_vertical(void* widget,bool down,bool extend) {
+    const auto view=eu4unicode::native_edit_view(widget);
     auto base=static_cast<std::byte*>(widget);
-    auto text=reinterpret_cast<EngineString*>(base+0x30);
-    auto column=reinterpret_cast<std::uint16_t*>(base+0x54);
     const auto row=*reinterpret_cast<std::uint16_t*>(base+0x56);
-    const auto selection=*reinterpret_cast<std::uint64_t*>(base+0x80);
-    std::string_view single_line;
-    if(single_line_editor(widget,single_line)) {
-        if(selection) editor_selection(widget);
+    if((down&&row+1>=view.rows.rows().size())||(!down&&!row)) return;
+    EditorPixelPoint point{};shaped_editor_position(widget,&point,false);
+    const auto font=*reinterpret_cast<const std::byte* const*>(base+0x98);
+    const auto x=(std::max)(0,static_cast<int>(point.x)-*reinterpret_cast<const int*>(font+0x38));
+    const auto next=down?row+1:row-1;const auto& line=view.rows.rows()[next];
+    const auto value=view.text.substr(line.start,line.length);
+    std::size_t hit=0;bool trailing=false;
+    if(const auto paragraph=editor_paragraph(widget,value)) {
+        const auto target=paragraph->hit_test(x/(*reinterpret_cast<const float*>(font+0x968)),0);
+        hit=target.byte_offset;trailing=target.trailing;
+    } else hit=eu4unicode::nearest_grapheme_boundary(value,x,native_editor_measure(widget,value));
+    if(extend&&base[0x90]==std::byte{0}) *reinterpret_cast<std::uint32_t*>(base+0x92)=*reinterpret_cast<std::uint32_t*>(base+0x54);
+    eu4unicode::native_edit_caret(widget,line.start+hit,!extend);
+    *reinterpret_cast<std::uint16_t*>(base+0x56)=static_cast<std::uint16_t>(next);
+    *reinterpret_cast<std::uint16_t*>(base+0x54)=static_cast<std::uint16_t>(hit);
+    if(extend) { editor_selection(widget);base[0x90]=std::byte{1}; }
+    remember_editor_affinity(widget,view.text,line.start+hit,trailing);
+    reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
+}
+bool editor_key(void* widget,const KeyEvent* event) {
+    try {
+        const auto composition=eu4unicode::native_composition();
+        if(composition.active&&(event->key==8||event->key==127||event->key==13||
+           (event->key>=0x4000004a&&event->key<=0x40000052))) return true;
+        if((event->modifiers==1&&(event->key=='z'||event->key=='y'))||(event->modifiers==5&&event->key=='z')) {
+            if(composition.active) return true;
+            const auto found=editor_histories.find(widget);
+            if(found!=editor_histories.end()) {
+                const auto state=eu4unicode::native_edit_state(widget);
+                const auto target=event->key=='z'&&event->modifiers==1?found->second->history.undo(state):found->second->history.redo(state);
+                if(target) { eu4unicode::native_edit_restore(widget,*target);clear_editor_affinity(); }
+            }
+            return true;
+        }
+        EditorTransaction transaction(widget);
+        const auto state=eu4unicode::native_edit_state(widget);
+        const auto base=static_cast<std::byte*>(widget);
+        if(base[0x90]!=std::byte{0}) editor_selection(widget);
         if(event->modifiers==4&&(event->key==0x40000050||event->key==0x4000004f)) {
-            // These native selection actions exist but the key handler does not
-            // dispatch Shift+arrows. They maintain the original selection ABI.
             const auto vtable=*static_cast<void***>(widget);
             reinterpret_cast<EditorAction>(vtable[(event->key==0x40000050?0xd0:0xe0)/8])(widget);
             return true;
         }
-    }
-    if(event->modifiers || row || selection || *column>text->size)
-        return original_editor_key(widget,event);
-    const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
-    if(!eu4unicode::valid_utf8(value)) return original_editor_key(widget,event);
-    eu4unicode::EditPlan plan{};
-    try {
-        eu4unicode::EditKey key;
-        switch(event->key) {
-        case 8: key=eu4unicode::EditKey::backspace; break;
-        case 127: key=eu4unicode::EditKey::forward_delete; break;
-        default: return original_editor_key(widget,event);
+        if((event->modifiers==0||event->modifiers==4)&&base[0xd9]!=std::byte{0}&&
+           (event->key==0x40000051||event->key==0x40000052)) {
+            editor_vertical(widget,event->key==0x40000051,event->modifiers==4);return true;
         }
-        plan=eu4unicode::plan_edit(value,*column,key);
-    } catch(...) { log("Unicode editing boundary failed; key ignored."); return true; }
-    if(event->key==8 || event->key==127) {
-        const auto start=plan.erase_begin,end=plan.erase_end;
-        const auto length=end-start;
-        if(length<=1) return original_editor_key(widget,event);
-        // Remove all but the cluster's first byte before invoking the native
-        // one-byte deletion. The engine then emits its ordinary change event
-        // only after the complete grapheme has been removed.
-        auto data=const_cast<char*>(text->data());
-        std::memmove(data+start+1,data+end,static_cast<std::size_t>(text->size)-end+1);
-        text->size-=length-1;
-        *column=static_cast<std::uint16_t>(event->key==8?start+1:start);
+        if(!event->modifiers&&(event->key==8||event->key==127)) {
+            eu4unicode::EditResult result;
+            if(state.selection.anchor!=state.selection.caret)
+                result=eu4unicode::replace_selection(state.text,state.selection.anchor,state.selection.caret,"",32000);
+            else {
+                const auto plan=eu4unicode::plan_edit(state.text,state.selection.caret,event->key==8?
+                    eu4unicode::EditKey::backspace:eu4unicode::EditKey::forward_delete);
+                result={state.text,plan.caret};result.text.erase(plan.erase_begin,plan.erase_end-plan.erase_begin);
+            }
+            if(result.text!=state.text) eu4unicode::native_edit_restore(widget,{std::move(result.text),{result.caret,result.caret}});
+            return true;
+        }
         return original_editor_key(widget,event);
-    }
-    return original_editor_key(widget,event);
+    } catch(...) { log("Unicode editor key handling failed; native action retained.");return original_editor_key(widget,event); }
 }
 using EditorCharacter=bool(*)(void*,const char*);
 using EditorInsert=void(*)(void*,const EngineString*);
@@ -597,12 +676,22 @@ EditorInsert original_editor_insert=nullptr;
 struct ActiveCommit { void* widget; const EngineString* text; };
 thread_local ActiveCommit active_commit{};
 void insert_editor_commit(void* widget,const EngineString* text) {
+    EditorTransaction transaction(widget);
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
         reinterpret_cast<std::uintptr_t>(image);
     if(caller==0x1535615&&active_commit.widget==widget&&active_commit.text)
         text=active_commit.text;
     if(static_cast<std::byte*>(widget)[0x90]!=std::byte{0}) editor_selection(widget);
     original_editor_insert(widget,text);
+    if(transaction.entry&&!transaction.entry->alive) return;
+    try {
+        const auto view=eu4unicode::native_edit_view(widget);
+        const auto base=static_cast<std::byte*>(widget);
+        const auto caret=view.rows.offset({*reinterpret_cast<std::uint16_t*>(base+0x56),*reinterpret_cast<std::uint16_t*>(base+0x54)});
+        const auto boundaries=eu4unicode::grapheme_boundaries(view.text);
+        const auto aligned=*std::lower_bound(boundaries.begin(),boundaries.end(),caret);
+        if(aligned!=caret) eu4unicode::native_edit_caret(widget,aligned);
+    } catch(...) { log("Unicode commit caret alignment failed."); }
 }
 void paste_editor_clipboard(void* widget) {
     using ClipboardText=char*(*)();
@@ -857,6 +946,7 @@ void* allocate_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept {
 }
 void* find_supplementary_glyph(void* const* table,std::uint32_t scalar) noexcept {
     if(auto shaped=eu4unicode::find_paragraph_glyph(table,scalar)) return shaped;
+    if(scalar<=255&&table[scalar]) return table[scalar];
     auto glyph=eu4unicode::find_unicode_glyph(table,scalar);
     return glyph?glyph:eu4unicode::find_dynamic_glyph(table,scalar);
 }
@@ -1214,6 +1304,12 @@ bool initialize(HMODULE module) {
         ,{0x1539820,"48895c241848896c242057415441574883ec204c"}
         ,{0x1539240,"40534883ec40488bd9c6819000000000e83bb21f00"}
         ,{0x1534250,"48895c242055565741564157488bec4883ec40"}
+        ,{0x1534bb0,"48895c24184889742420555741544156415748"}
+        ,{0x1534f90,"48895c24188954241055565741544155415641"}
+        ,{0x15373a0,"40574883ec4080b90001000000488bf9"}
+        ,{0x1536e70,"488b0b488b01ff5020488b4310488bd84885c075eb"}
+        ,{0x159a2bf,"3c400f853e010000"}
+        ,{0x159a3ee,"ff90f8000000"}
         ,{0x1535250,"40574883ec3080b96102000000488bf9"}
         ,{0x14db940,"48895c241044884c24205556574156"}
         ,{0x1533a0f,"e82c7ffaff"}
@@ -1554,6 +1650,8 @@ bool initialize(HMODULE module) {
         log("Dynamic font atlas hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
     if(experimental_input) {
+        eu4unicode::configure_native_editor_text(image);
+        eu4unicode::configure_editor_presentation(image);
         if(MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),
              reinterpret_cast<void**>(&eu4unicode::original_ime_message))!=MH_OK ||
            MH_CreateHook(image+0x17657c0,reinterpret_cast<void*>(eu4unicode::position_native_ime_candidates),
@@ -1581,6 +1679,10 @@ bool initialize(HMODULE module) {
            MH_CreateHook(image+0x1539240,reinterpret_cast<void*>(paste_editor_clipboard),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x1534250,reinterpret_cast<void*>(paint_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_paint))!=MH_OK ||
+           MH_CreateHook(image+0x1534bb0,reinterpret_cast<void*>(draw_editor_text),
+             reinterpret_cast<void**>(&original_editor_text))!=MH_OK ||
+           MH_CreateHook(image+0x1534f90,reinterpret_cast<void*>(draw_editor_lines),
+             reinterpret_cast<void**>(&original_editor_lines))!=MH_OK ||
            MH_CreateHook(image+0x1535250,reinterpret_cast<void*>(focus_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_focus))!=MH_OK ||
            MH_CreateHook(image+0x14db940,reinterpret_cast<void*>(create_editor_sprite),
@@ -1604,7 +1706,7 @@ bool initialize(HMODULE module) {
         editor_selections=std::make_unique<eu4unicode::NativeEditorSelections>(original_editor_sprite_factory,
             reinterpret_cast<eu4unicode::NativeSpriteDestroy>(image+0x14db6a0),
             reinterpret_cast<eu4unicode::NativeStringDestroy>(image+0x95660));
-        log("Experimental UTF-8 input and single-line grapheme editing enabled.");
+        log("UTF-8 input, multiline grapheme editing, IME presentation and undo enabled.");
         log("Native Windows IME candidate UI and caret exclusion rectangle enabled.");
     }
     struct DataPatch { std::size_t rva; std::vector<std::byte> before,after; };

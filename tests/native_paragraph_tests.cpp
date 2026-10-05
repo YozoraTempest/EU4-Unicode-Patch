@@ -22,6 +22,7 @@ using namespace eu4unicode;
 std::vector<std::string> paragraph_logs;
 void paragraph_log(const char* message) { paragraph_logs.emplace_back(message); }
 int icon_width(void*,const char* name) { return std::strcmp(name,"adm")==0?18:0; }
+int flag_width(void* font) { return static_cast<int>(22*(*reinterpret_cast<float*>(static_cast<std::byte*>(font)+0x968))); }
 bool color_lookup(void*,unsigned char code,std::uint32_t* value) {
     *value=0xffffffff;return code=='Y'||code=='R'||code=='G'||code=='!';
 }
@@ -32,7 +33,7 @@ struct Font {
     std::array<void*,32> methods{};
     template<class T> void put(std::size_t offset,T value) { std::memcpy(object.data()+offset,&value,sizeof(value)); }
     Font(void* manager) {
-        methods[0xe8/8]=reinterpret_cast<void*>(icon_width);put(0,methods.data());
+        methods[0xe8/8]=reinterpret_cast<void*>(icon_width);methods[0xf8/8]=reinterpret_cast<void*>(flag_width);put(0,methods.data());
         put(0x48,context.data());put(0x120+0x41*8,&anchor);put(0x960,18);put(0x968,1.f);
         put(0x970,7);put(0x978,2048);put(0x97c,4096);
         std::memcpy(context.data()+0x480,&manager,sizeof(manager));
@@ -58,6 +59,7 @@ int transport_width(void* font,const char* source,int length,bool formatted) {
         const auto unit=native_text_unit(text,offset,formatted);offset=unit.end;
         if(unit.kind==TextUnitKind::color) continue;
         if(unit.kind==TextUnitKind::icon) { width+=18;continue; }
+        if(unit.kind==TextUnitKind::flag) { width+=flag_width(font);continue; }
         if(unit.scalar=='\n') { maximum=(std::max)(maximum,width);width=0;continue; }
         const auto glyph=find_paragraph_glyph(table,unit.scalar);
         check(glyph!=nullptr,"formatted transport measurement uses the active paragraph glyphs");
@@ -163,8 +165,11 @@ int main() {
     const std::string flagged=u8"العربية (@FRA) / @ENG";auto flagged_source=borrow(flagged);
     button_arguments[0x20]=std::byte{0};button_arguments[0x38]=std::byte{1};
     const auto flagged_draw=begin_native_button_paragraph_arguments(font.data(),&flagged_source,button_arguments.data());
-    check(flagged_draw==&flagged_source,
-        "formatted country flags retain the original native flag renderer");
+    check(flagged_draw!=&flagged_source&&font_paragraph_layout(font.data(),flagged,200,true)->objects().size()==2,
+        "formatted country flags participate in shaped paragraph layout");
+    const std::string_view flag_transport(flagged_draw->data(),flagged_draw->size);
+    check(flag_transport.find("@FRA")!=std::string_view::npos&&flag_transport.find("@ENG")!=std::string_view::npos,
+        "shaped country flags retain their original native drawing commands");
     end_native_paragraph();
     for(int repeat=0;repeat<2;++repeat) {
         check(begin_native_paragraph(font.data(),&colored,box,0,false)!=&colored,"literal complex text receives shaping without parsing colors");

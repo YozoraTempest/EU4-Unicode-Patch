@@ -31,6 +31,11 @@ int main() {
         for(std::size_t limit=2;limit<8;++limit)
             check(icon.prefix(limit)==1,"prefix split an icon token");
         check(icon.visible_text()==u8"A\ufffcZ","icon name entered visible text");
+        const FormattedText flags("x@FRA@D01y");
+        check(flags.visible_text()==u8"x\ufffc\ufffcy","country tags are inline objects");
+        check(flags.prefix(3)==1&&flags.prefix(6)==5,"country tags cannot be truncated inside a tag");
+        check(FormattedText("@FR @abc").visible_text()=="@FR @abc","incomplete tags remain literal text");
+        check(FormattedText("@FRA",false).visible_text()=="@FRA","unformatted tags remain literal text");
         const FormattedText color(u8"§Y中文§!");
         check(color.visible_text()==u8"中文","color code entered visible text");
         check(color.prefix(1)==0&&color.prefix(2)==0&&color.prefix(3)==3,"color directive split");

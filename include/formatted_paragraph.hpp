@@ -14,7 +14,10 @@ class ParagraphText {
 public:
     using IconMeasure=std::function<float(std::string_view)>;
     using ColorLookup=std::function<bool(unsigned char)>;
-    ParagraphText(std::string_view source,bool formatted=true,IconMeasure icons={},ColorLookup colors={});
+    // A negative result leaves a cluster to DirectWrite. Present bitmap glyphs
+    // retain the mod's advance and are emitted through its original renderer.
+    using BitmapMeasure=std::function<float(std::uint32_t)>;
+    ParagraphText(std::string_view source,bool formatted=true,IconMeasure icons={},ColorLookup colors={},IconMeasure flags={},BitmapMeasure bitmap={});
     const std::string& source() const noexcept { return source_; }
     const std::string& visible() const noexcept { return visible_; }
     const std::vector<TextStyleRange>& styles() const noexcept { return styles_; }
