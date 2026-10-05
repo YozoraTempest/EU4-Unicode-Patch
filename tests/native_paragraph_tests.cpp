@@ -166,6 +166,12 @@ int main() {
         end_native_paragraph();
     }
     const std::string flagged=u8"العربية (@FRA) / @ENG";auto flagged_source=borrow(flagged);
+    check(begin_native_popup_paragraph(font.data(),&flagged_source,200)==&flagged_source,
+        "popup commands retain the renderer's native source contract");
+    check(measure_paragraph_text(font.data(),flagged.c_str(),-1,true)==-42&&
+          measure_paragraph_height(font.data(),&flagged_source,200,100,margin,true)==-43,
+        "a retained popup draw cannot use incompatible shaped metrics");
+    end_native_paragraph();
     button_arguments[0x20]=std::byte{0};button_arguments[0x38]=std::byte{1};
     const auto flagged_draw=begin_native_button_paragraph_arguments(font.data(),&flagged_source,button_arguments.data());
     check(flagged_draw!=&flagged_source&&font_paragraph_layout(font.data(),flagged,200,true)->objects().size()==2,

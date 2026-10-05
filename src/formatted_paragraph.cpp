@@ -86,7 +86,7 @@ ParagraphText::ParagraphText(std::string_view source,bool formatted,IconMeasure 
         const auto id=units[unit].style;
         const auto cluster=std::string_view(visible_).substr(start,end-start);
         const auto scalar=decode(cluster);
-        if(bitmap&&scalar.bytes==cluster.size()&&scalar.value!=0xfffc&&scalar.value>0x20&&
+        if(bitmap&&scalar.bytes==cluster.size()&&scalar.value!=0xfffc&&scalar.value>=0x20&&
            scalar.value!=0x85&&scalar.value!=0x2028&&scalar.value!=0x2029&&!needs_paragraph_shaping(cluster)) {
             const auto advance=bitmap(scalar.value);
             if(std::isfinite(advance)&&advance>=0&&advance<=32767)

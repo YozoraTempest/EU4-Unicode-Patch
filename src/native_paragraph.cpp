@@ -68,6 +68,7 @@ void paragraph_failure() noexcept {
 struct Scope {
     bool lookup_enabled=true;
     bool map=false;
+    bool native_metrics=false;
     void* const* table=nullptr;
     std::shared_ptr<const NativeParagraph> paragraph;
     EngineString draw{};
@@ -77,6 +78,12 @@ struct Scope {
 thread_local std::array<Scope,32> scopes;
 thread_local std::size_t depth=0;
 float native_scale(void* font) { return *reinterpret_cast<const float*>(static_cast<const std::byte*>(font)+0x968); }
+bool retained_native_metrics(void* font) noexcept {
+    if(!font||!depth||depth>scopes.size()) return false;
+    const auto& scope=scopes[depth-1];
+    const auto table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(font)+0x120);
+    return scope.native_metrics&&scope.table&&(table==scope.table||table[0x41]==scope.table[0x41]);
+}
 bool transport_text(void* font,std::string_view text,bool formatted) noexcept {
     const auto table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(font)+0x120);
     bool token=false;
@@ -102,13 +109,16 @@ const EngineString* begin_paragraph(void* font,const EngineString* source,float 
     if(index>=scopes.size()) return source;
     auto& scope=scopes[index];scope={};
     try {
-        if(!source) return source;
+        if(!source||!font) return source;
         const auto text=std::string_view(source->data(),static_cast<std::size_t>(source->size));
-        // The popup renderer has no country-flag branch. Only the guarded main
-        // and button renderers can consume a native flag transport command.
+        // The popup renderer has no country-flag or native-symbol branch.
+        // Retain its drawing and measurement contract for these commands.
         if(renderer==Renderer::popup&&formatted) for(std::size_t offset=0;offset<text.size();) {
             const auto unit=native_text_unit(text,offset,true);
-            if(unit.kind==TextUnitKind::flag||unit.kind==TextUnitKind::symbol) return source;
+            if(unit.kind==TextUnitKind::flag||unit.kind==TextUnitKind::symbol) {
+                scope.native_metrics=true;scope.table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(font)+0x120);
+                return source;
+            }
             offset=unit.end;
         }
         if(!dynamic_font(font)||pixels<=0||!std::isfinite(pixels)) return source;
@@ -200,6 +210,7 @@ NativeGlyph* find_paragraph_glyph(void* const* table,std::uint32_t token) noexce
     return nullptr;
 }
 int measure_paragraph_text(void* font,const char* source,int length,bool formatted) {
+    if(retained_native_metrics(font)) return original_text_width(font,source,length,formatted);
     try {
         if(source&&dynamic_font(font)) {
             const auto bytes=length<0?strnlen_s(source,32001):static_cast<std::size_t>(length);
@@ -222,6 +233,7 @@ int measure_paragraph_text(void* font,const char* source,int length,bool formatt
     LookupMask mask;return original_text_width(font,source,length,formatted);
 }
 int measure_paragraph_height(void* font,const EngineString* source,int width,int height,const int* margin,bool formatted) {
+    if(retained_native_metrics(font)) return original_text_height(font,source,width,height,margin,formatted);
     try {
         if(source&&margin&&dynamic_font(font)) {
             const auto text=std::string_view(source->data(),static_cast<std::size_t>(source->size));

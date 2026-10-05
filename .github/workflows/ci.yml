@@ -47,4 +47,6 @@ jobs:
             build/*.log
             build/*.pdb
             build/*.map
+            build/native_font_atlas_tests.exe
+            build/native_font_pages_tests.exe
             build/open-font-preview.png

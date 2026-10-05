@@ -652,6 +652,7 @@ bool editor_key(void* widget,const KeyEvent* event) {
         }
         if((event->modifiers==0||event->modifiers==4)&&base[0xd9]!=std::byte{0}&&
            (event->key==0x40000051||event->key==0x40000052)) {
+            if(base[0x102]!=std::byte{0}) return false;
             editor_vertical(widget,event->key==0x40000051,event->modifiers==4);return true;
         }
         if(!event->modifiers&&(event->key==8||event->key==127)) {
