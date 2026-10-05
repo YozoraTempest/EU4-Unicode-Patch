@@ -13,6 +13,8 @@
 | `unicode_search` / `unicode_pinyin` / `native_search` | 中文与拼音匹配、词组读音及国家／省份搜索适配 |
 | `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
+| `shaped_paragraph` / `formatted_paragraph` / `native_paragraph` | 整段塑形、颜色及图标映射、原生绘制调用适配 |
+| `native_editor_selection` | 复杂文字选区的原生矩形及控件生命周期 |
 | `glyph_registry` / `scalar_glyph` / `native_font_atlas` | 稀疏字形记录、按需图集和设备恢复 |
 | `font_assets` / `font_atlas_assets` | 原版字体路径映射与运行时基础图集生成 |
 | `plugin.cpp` / MASM | 指令检查、引擎挂钩与失败回滚 |
@@ -43,6 +45,12 @@ ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径
 
 每页约占 32 MiB GPU 内存，动态上传另占约 32 MiB CPU staging。每个图集最多 8 页，纹理预算为 256 MiB，顶点缓存上限为 64 MiB。五种字号各使用一页时分别约占 160 MiB，另计字体和缓存。达到容量上限或字体缺字时仍可能显示占位符。
 
+每个图集的排版缓存预算为 8 MiB，按最近使用顺序移除未被调用方持有的布局和字形记录，并回收绘制令牌。图集像素和 UV 保持稳定，以保留游戏已缓存的顶点。排版缓存预算按文本、字素和光标位置的估算成本计费。
+
+UI 绘制、测宽和换行共用 DirectWrite 布局；颜色标记不切断塑形，图标作为内嵌对象参与双向排列。单行编辑将 UTF-8 字节位置映射到视觉光标和选区。地图国名与省份名使用整段塑形后的字形簇，保留原生领土适配与曲线布局；连写文字不插入原生字间填充空格。
+
+绘制令牌仅存在于当前绘制调用，原始本地化、编辑文本和存档保留 UTF-8。位图字体模组继续使用自身字库和度量，复杂排版用于补丁生成图集。
+
 字库 cmap 覆盖审计使用 `tools/audit-open-fonts.py`，依赖见 `tools/requirements-font-audit.txt`。
 
 ## 输入与保存
@@ -69,7 +77,7 @@ fuzzy_pinyin=1
 西藏: xi zang
 ```
 
-保存路径修正代理对转换与比较，并保留已观察保存入口的 UTF-8 名称。完整复杂排版已有独立 DirectWrite 实现，尚未接入游戏的测宽、绘制和选区。
+保存路径修正代理对转换与比较，并保留已观察保存入口的 UTF-8 名称。复杂文字编辑目前接入单行控件，多行、预编辑和撤销路径仍需分别适配。
 
 ## 旧汉化迁移
 
@@ -111,11 +119,3 @@ Frida 探针需要独立 Python 环境、Frida 和 psutil；剪贴板探针另�
 `tools/trace-*.py` 跟踪原生调用，`tools/verify-*.py` 检查编辑、绘制和设备行为。
 
 动态 GPU 探针在外交搜索框聚焦后使用 `private/dynamic-font-arm.txt` 开始、`private/dynamic-font-finish.txt` 结束。`--player` 改为验证普通目录中的正式 DLL。
-
-## 后续任务
-
-- 图集：更多字体重载场景及长时间运行的容量管理。
-- 排版：将 DirectWrite 整段排版接入游戏测宽、绘制、光标和选区。
-- 输入：更多输入法、控件、缩放、预编辑、多行、撤销及系统剪贴板。
-- 保存：其他入口、输入产生的名称、自动保存周期及云存档。
-- 联机：中文聊天与名称同步。
