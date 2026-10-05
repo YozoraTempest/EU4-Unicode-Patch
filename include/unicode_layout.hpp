@@ -11,7 +11,7 @@ namespace eu4unicode {
 // registry settings are changed. Runs retain the selected file-backed face.
 class TextFonts {
 public:
-    explicit TextFonts(const std::vector<std::filesystem::path>& files);
+    explicit TextFonts(const std::vector<std::filesystem::path>& files,bool system_first=false);
     ~TextFonts();
     TextFonts(const TextFonts&)=delete;
     TextFonts& operator=(const TextFonts&)=delete;
@@ -41,6 +41,7 @@ struct GlyphRun {
     // Retains the exact fallback face; a family name cannot identify glyph IDs.
     std::shared_ptr<const GlyphFace> face;
     GlyphMeasure measuring=GlyphMeasure::Natural;
+    std::uint32_t style=0;
 };
 struct GlyphBitmap {
     std::uint32_t width,height;
@@ -51,7 +52,49 @@ struct GlyphBitmap {
 };
 GlyphBitmap rasterize_glyph_run(const GlyphRun& run);
 struct LayoutMetrics { float width,height; std::uint32_t lines; };
-struct HitPosition { std::size_t byte_offset; bool inside; };
+enum class TextDirection { LeftToRight,RightToLeft,Automatic };
+struct TextStyleRange {
+    std::size_t text_start,text_length;
+    std::uint32_t style;
+};
+struct TextInlineObject {
+    std::size_t text_start,text_length;
+    float width,height,baseline;
+    std::uint32_t id;
+};
+struct InlinePlacement {
+    std::size_t text_start,text_length;
+    float x,y,width,height;
+    std::uint32_t id,style;
+    bool rtl;
+};
+struct LayoutDrawing {
+    std::vector<GlyphRun> runs;
+    std::vector<InlinePlacement> objects;
+};
+struct TextLayoutOptions {
+    TextDirection direction=TextDirection::LeftToRight;
+    bool wrap=true;
+    // Zero uses the font's natural spacing. Native UI fonts have a fixed grid.
+    float line_height=0;
+    std::vector<TextStyleRange> styles;
+    std::vector<TextInlineObject> objects;
+};
+struct LayoutLine {
+    std::size_t text_start,text_length,newline_length;
+    float width,top,height,baseline;
+};
+struct HitPosition { std::size_t byte_offset; bool inside; bool trailing=false; };
+struct CaretPosition {
+    std::size_t byte_offset;
+    float x,y,height;
+    bool trailing=false;
+};
+struct SelectionRegion {
+    std::size_t text_start,text_length;
+    float x,y,width,height;
+    std::uint32_t bidi_level;
+};
 struct RasterImage {
     std::uint32_t width,height;
     float baseline;
@@ -64,15 +107,21 @@ class TextLayout {
 public:
     TextLayout(std::string_view text,float size,float width,float height,
                std::wstring_view family=L"Segoe UI",
-               std::shared_ptr<const TextFonts> fonts={});
+               std::shared_ptr<const TextFonts> fonts={},TextLayoutOptions options={});
     ~TextLayout();
     TextLayout(TextLayout&&) noexcept;
     TextLayout& operator=(TextLayout&&) noexcept;
     TextLayout(const TextLayout&)=delete;
     TextLayout& operator=(const TextLayout&)=delete;
     LayoutMetrics metrics() const;
+    std::vector<LayoutLine> lines() const;
     std::vector<GlyphRun> glyph_runs() const;
+    LayoutDrawing drawing() const;
     HitPosition hit_test(float x,float y) const;
+    CaretPosition caret(std::size_t byte_offset,bool trailing=false) const;
+    std::vector<SelectionRegion> selection(std::size_t begin,std::size_t end) const;
+    // Application effects and inline objects are emitted by drawing(); the
+    // standalone PNG renderer handles ordinary text layouts.
     RasterImage rasterize() const;
     void render_png(const std::filesystem::path& path) const;
 private:

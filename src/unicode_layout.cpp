@@ -6,7 +6,9 @@
 #include <d2d1.h>
 #include <wincodec.h>
 #include <wrl/client.h>
+#include <icu.h>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -56,9 +58,52 @@ std::string family_name(IDWriteFontFace* face) {
     name.resize(length);
     return to_utf8(name);
 }
+class StyleEffect final : public IUnknown {
+    std::atomic<ULONG> references_{1};
+public:
+    std::uint32_t style;
+    explicit StyleEffect(std::uint32_t value):style(value) {}
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** value) override {
+        if(!value) return E_POINTER;
+        *value=nullptr;
+        if(id!=__uuidof(IUnknown)) return E_NOINTERFACE;
+        *value=static_cast<IUnknown*>(this);AddRef();return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++references_; }
+    ULONG STDMETHODCALLTYPE Release() override { const auto count=--references_;if(!count) delete this;return count; }
+};
+class InlineObject final : public IDWriteInlineObject {
+    std::atomic<ULONG> references_{1};
+public:
+    TextInlineObject value;
+    explicit InlineObject(TextInlineObject object):value(object) {}
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** result) override {
+        if(!result) return E_POINTER;
+        *result=nullptr;
+        if(id!=__uuidof(IUnknown)&&id!=__uuidof(IDWriteInlineObject)) return E_NOINTERFACE;
+        *result=static_cast<IDWriteInlineObject*>(this);AddRef();return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++references_; }
+    ULONG STDMETHODCALLTYPE Release() override { const auto count=--references_;if(!count) delete this;return count; }
+    HRESULT STDMETHODCALLTYPE Draw(void*,IDWriteTextRenderer*,FLOAT,FLOAT,BOOL,BOOL,IUnknown*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetMetrics(DWRITE_INLINE_OBJECT_METRICS* metrics) override {
+        if(!metrics) return E_POINTER;
+        *metrics={value.width,value.height,value.baseline,FALSE};return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetOverhangMetrics(DWRITE_OVERHANG_METRICS* metrics) override {
+        if(!metrics) return E_POINTER;
+        *metrics={};return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetBreakConditions(DWRITE_BREAK_CONDITION* before,DWRITE_BREAK_CONDITION* after) override {
+        if(!before||!after) return E_POINTER;
+        *before=*after=DWRITE_BREAK_CONDITION_NEUTRAL;return S_OK;
+    }
+};
+std::uint32_t drawing_style(IUnknown* effect) { return effect?static_cast<StyleEffect*>(effect)->style:0; }
 class RunCollector final : public IDWriteTextRenderer {
 public:
     std::vector<GlyphRun> runs;
+    std::vector<InlinePlacement> objects;
     const std::vector<std::size_t>& byte_positions;
     explicit RunCollector(const std::vector<std::size_t>& positions):byte_positions(positions) {}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** value) override {
@@ -75,7 +120,7 @@ public:
     HRESULT STDMETHODCALLTYPE GetCurrentTransform(void*,DWRITE_MATRIX* value) override { *value={1,0,0,1,0,0}; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetPixelsPerDip(void*,FLOAT* value) override { *value=1; return S_OK; }
     HRESULT STDMETHODCALLTYPE DrawGlyphRun(void*,FLOAT x,FLOAT y,DWRITE_MEASURING_MODE measuring,
-        const DWRITE_GLYPH_RUN* run,const DWRITE_GLYPH_RUN_DESCRIPTION* description,IUnknown*) override {
+        const DWRITE_GLYPH_RUN* run,const DWRITE_GLYPH_RUN_DESCRIPTION* description,IUnknown* effect) override {
         try {
             const auto start=byte_positions.at(description->textPosition);
             const auto end=byte_positions.at(description->textPosition+description->stringLength);
@@ -88,6 +133,7 @@ public:
             result.sideways=run->isSideways!=FALSE;
             result.face=std::make_shared<GlyphFace>(run->fontFace);
             result.measuring=static_cast<GlyphMeasure>(measuring);
+            result.style=drawing_style(effect);
             for(UINT32 index=0;index<run->glyphCount;++index) {
                 const auto offset=run->glyphOffsets?run->glyphOffsets[index]:DWRITE_GLYPH_OFFSET{};
                 result.offsets.push_back({offset.advanceOffset,offset.ascenderOffset});
@@ -116,7 +162,14 @@ public:
     }
     HRESULT STDMETHODCALLTYPE DrawUnderline(void*,FLOAT,FLOAT,const DWRITE_UNDERLINE*,IUnknown*) override { return S_OK; }
     HRESULT STDMETHODCALLTYPE DrawStrikethrough(void*,FLOAT,FLOAT,const DWRITE_STRIKETHROUGH*,IUnknown*) override { return S_OK; }
-    HRESULT STDMETHODCALLTYPE DrawInlineObject(void*,FLOAT,FLOAT,IDWriteInlineObject*,BOOL,BOOL,IUnknown*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE DrawInlineObject(void*,FLOAT x,FLOAT y,IDWriteInlineObject* object,BOOL sideways,BOOL rtl,IUnknown* effect) override {
+        try {
+            if(sideways||!object) return E_INVALIDARG;
+            const auto& value=static_cast<InlineObject*>(object)->value;
+            objects.push_back({value.text_start,value.text_length,x,y,value.width,value.height,value.id,drawing_style(effect),rtl!=FALSE});
+            return S_OK;
+        } catch(...) { return E_FAIL; }
+    }
 };
 struct ComApartment {
     HRESULT status=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
@@ -128,7 +181,8 @@ struct TextFonts::Impl {
     ComPtr<IDWriteFontCollection1> collection;
     ComPtr<IDWriteFontFallback> fallback;
     std::vector<std::wstring> names;
-    explicit Impl(const std::vector<std::filesystem::path>& files) {
+    bool system_first;
+    explicit Impl(const std::vector<std::filesystem::path>& files,bool prefer_system):system_first(prefer_system) {
         if(files.empty()) throw std::invalid_argument("Font collection requires files");
         ComPtr<IDWriteFactory3> factory;
         checked(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory3),
@@ -166,17 +220,18 @@ struct TextFonts::Impl {
         }
         ComPtr<IDWriteFontFallbackBuilder> fallback_builder;
         checked(factory->CreateFontFallbackBuilder(&fallback_builder));
+        ComPtr<IDWriteFontFallback> system;
+        checked(factory->GetSystemFontFallback(&system));
+        if(system_first) checked(fallback_builder->AddMappings(system.Get()));
         const DWRITE_UNICODE_RANGE range{0,0x10ffff};
         std::vector<const wchar_t*> targets;
         for(const auto& name:names) targets.push_back(name.c_str());
         checked(fallback_builder->AddMapping(&range,1,targets.data(),static_cast<UINT32>(targets.size()),collection.Get()));
-        ComPtr<IDWriteFontFallback> system;
-        checked(factory->GetSystemFontFallback(&system));
-        checked(fallback_builder->AddMappings(system.Get()));
+        if(!system_first) checked(fallback_builder->AddMappings(system.Get()));
         checked(fallback_builder->CreateFontFallback(&fallback));
     }
 };
-TextFonts::TextFonts(const std::vector<std::filesystem::path>& files):impl_(std::make_unique<Impl>(files)) {}
+TextFonts::TextFonts(const std::vector<std::filesystem::path>& files,bool system_first):impl_(std::make_unique<Impl>(files,system_first)) {}
 TextFonts::~TextFonts()=default;
 std::vector<std::string> TextFonts::families() const {
     std::vector<std::string> result;
@@ -187,13 +242,19 @@ struct TextLayout::Impl {
     std::string text;
     std::wstring wide;
     std::vector<std::size_t> byte_positions;
+    std::vector<std::size_t> grapheme_positions;
     ComPtr<IDWriteFactory2> factory;
     ComPtr<IDWriteTextLayout2> layout;
     std::shared_ptr<const TextFonts> fonts;
+    bool application_drawing=false;
     Impl(std::string_view value,float size,float width,float height,std::wstring_view family,
-         std::shared_ptr<const TextFonts> custom):text(value),wide(to_wide(value)),fonts(std::move(custom)) {
+         std::shared_ptr<const TextFonts> custom,TextLayoutOptions options):text(value),wide(to_wide(value)),
+         grapheme_positions(grapheme_boundaries(value)),fonts(std::move(custom)) {
         if(!std::isfinite(size)||!std::isfinite(width)||!std::isfinite(height)||size<=0||width<=0||height<=0)
             throw std::invalid_argument("Layout dimensions must be positive finite values");
+        if(!std::isfinite(options.line_height)||options.line_height<0)
+            throw std::invalid_argument("Line spacing must be finite and nonnegative");
+        if(wide.size()>INT32_MAX) throw std::length_error("Text exceeds paragraph analysis range");
         auto remaining=value;
         std::size_t offset=0;
         while(!remaining.empty()) {
@@ -206,19 +267,51 @@ struct TextLayout::Impl {
         byte_positions.push_back(offset);
         checked(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory2),reinterpret_cast<IUnknown**>(factory.GetAddressOf())));
         ComPtr<IDWriteTextFormat> format;
-        const std::wstring name=fonts?fonts->impl_->names.front():std::wstring(family);
-        checked(factory->CreateTextFormat(name.c_str(),fonts?fonts->impl_->collection.Get():nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,
+        const bool file_first=fonts&&!fonts->impl_->system_first;
+        const std::wstring name=file_first?fonts->impl_->names.front():std::wstring(family);
+        checked(factory->CreateTextFormat(name.c_str(),file_first?fonts->impl_->collection.Get():nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,size,L"zh-CN",&format));
+        const bool rtl=options.direction==TextDirection::RightToLeft||
+            (options.direction==TextDirection::Automatic&&ubidi_getBaseDirection(
+                reinterpret_cast<const UChar*>(wide.data()),static_cast<int32_t>(wide.size()))==UBIDI_RTL);
+        checked(format->SetReadingDirection(rtl?DWRITE_READING_DIRECTION_RIGHT_TO_LEFT:DWRITE_READING_DIRECTION_LEFT_TO_RIGHT));
+        // Keep a physical left origin. The native UI applies its own alignment
+        // to the measured paragraph box after DirectWrite orders its glyphs.
+        checked(format->SetTextAlignment(rtl?DWRITE_TEXT_ALIGNMENT_TRAILING:DWRITE_TEXT_ALIGNMENT_LEADING));
+        checked(format->SetWordWrapping(options.wrap?DWRITE_WORD_WRAPPING_WRAP:DWRITE_WORD_WRAPPING_NO_WRAP));
+        if(options.line_height>0)
+            checked(format->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM,options.line_height,size*.8f));
         ComPtr<IDWriteTextLayout> base;
         checked(factory->CreateTextLayout(wide.data(),static_cast<UINT32>(wide.size()),format.Get(),width,height,&base));
         checked(base.As(&layout));
         ComPtr<IDWriteFontFallback> fallback;
         checked(factory->GetSystemFontFallback(&fallback));
         checked(layout->SetFontFallback(fonts?fonts->impl_->fallback.Get():fallback.Get()));
+        auto range=[this](std::size_t start,std::size_t length) {
+            if(start>text.size()||length>text.size()-start) throw std::invalid_argument("Layout range exceeds text");
+            const auto first=std::lower_bound(byte_positions.begin(),byte_positions.end(),start);
+            const auto last=std::lower_bound(byte_positions.begin(),byte_positions.end(),start+length);
+            if(first==byte_positions.end()||last==byte_positions.end()||*first!=start||*last!=start+length)
+                throw std::invalid_argument("Layout range splits a UTF-8 scalar");
+            return DWRITE_TEXT_RANGE{static_cast<UINT32>(first-byte_positions.begin()),static_cast<UINT32>(last-first)};
+        };
+        for(const auto& style:options.styles) if(style.style) {
+            ComPtr<IUnknown> effect;effect.Attach(new StyleEffect(style.style));
+            checked(layout->SetDrawingEffect(effect.Get(),range(style.text_start,style.text_length)));
+            application_drawing=true;
+        }
+        for(const auto& value:options.objects) {
+            if(!std::isfinite(value.width)||!std::isfinite(value.height)||!std::isfinite(value.baseline)||
+               value.width<0||value.height<=0||value.baseline<0||value.baseline>value.height)
+                throw std::invalid_argument("Invalid inline object metrics");
+            ComPtr<IDWriteInlineObject> object;object.Attach(new InlineObject(value));
+            checked(layout->SetInlineObject(object.Get(),range(value.text_start,value.text_length)));
+            application_drawing=true;
+        }
     }
 };
 TextLayout::TextLayout(std::string_view text,float size,float width,float height,std::wstring_view family,
-    std::shared_ptr<const TextFonts> fonts):impl_(std::make_unique<Impl>(text,size,width,height,family,std::move(fonts))) {}
+    std::shared_ptr<const TextFonts> fonts,TextLayoutOptions options):impl_(std::make_unique<Impl>(text,size,width,height,family,std::move(fonts),options)) {}
 TextLayout::~TextLayout()=default;
 TextLayout::TextLayout(TextLayout&&) noexcept=default;
 TextLayout& TextLayout::operator=(TextLayout&&) noexcept=default;
@@ -227,10 +320,40 @@ LayoutMetrics TextLayout::metrics() const {
     checked(impl_->layout->GetMetrics(&value));
     return {value.widthIncludingTrailingWhitespace,value.height,value.lineCount};
 }
+std::vector<LayoutLine> TextLayout::lines() const {
+    std::vector<DWRITE_LINE_METRICS> native(metrics().lines);
+    UINT32 count=0;
+    checked(impl_->layout->GetLineMetrics(native.data(),static_cast<UINT32>(native.size()),&count));
+    std::vector<LayoutLine> result;
+    UINT32 start=0;float top=0;
+    for(UINT32 index=0;index<count;++index) {
+        const auto& line=native[index];
+        const auto byte_start=impl_->byte_positions.at(start);
+        const auto byte_end=impl_->byte_positions.at(start+line.length);
+        const auto content_end=impl_->byte_positions.at(start+line.length-line.newlineLength);
+        float width=0;
+        if(line.length>line.newlineLength) {
+            UINT32 boxes=0;
+            const auto status=impl_->layout->HitTestTextRange(start,line.length-line.newlineLength,0,0,nullptr,0,&boxes);
+            if(status!=E_NOT_SUFFICIENT_BUFFER) checked(status);
+            std::vector<DWRITE_HIT_TEST_METRICS> hits(boxes);
+            if(boxes) checked(impl_->layout->HitTestTextRange(start,line.length-line.newlineLength,0,0,hits.data(),boxes,&boxes));
+            float left=(std::numeric_limits<float>::max)(),right=-(std::numeric_limits<float>::max)();
+            for(const auto& hit:hits) { left=(std::min)(left,hit.left);right=(std::max)(right,hit.left+hit.width); }
+            if(boxes) width=right-left;
+        }
+        result.push_back({byte_start,byte_end-byte_start,byte_end-content_end,width,top,line.height,line.baseline});
+        top+=line.height;start+=line.length;
+    }
+    return result;
+}
 std::vector<GlyphRun> TextLayout::glyph_runs() const {
+    return drawing().runs;
+}
+LayoutDrawing TextLayout::drawing() const {
     RunCollector collector(impl_->byte_positions);
     checked(impl_->layout->Draw(nullptr,&collector,0,0));
-    return std::move(collector.runs);
+    return {std::move(collector.runs),std::move(collector.objects)};
 }
 HitPosition TextLayout::hit_test(float x,float y) const {
     BOOL trailing=FALSE,inside=FALSE;
@@ -238,13 +361,52 @@ HitPosition TextLayout::hit_test(float x,float y) const {
     checked(impl_->layout->HitTestPoint(x,y,&trailing,&inside,&hit));
     const auto index=hit.textPosition+(trailing?hit.length:0);
     auto offset=impl_->byte_positions.at(index);
-    const auto boundaries=grapheme_boundaries(impl_->text);
+    const auto& boundaries=impl_->grapheme_positions;
     auto position=std::lower_bound(boundaries.begin(),boundaries.end(),offset);
     if(position!=boundaries.end()&&*position!=offset) {
         if(trailing) offset=*position;
         else if(position!=boundaries.begin()) offset=*--position;
     }
-    return {offset,inside!=FALSE};
+    return {offset,inside!=FALSE,trailing!=FALSE};
+}
+CaretPosition TextLayout::caret(std::size_t offset,bool trailing) const {
+    const auto& boundaries=impl_->grapheme_positions;
+    auto boundary=std::lower_bound(boundaries.begin(),boundaries.end(),offset);
+    if(boundary==boundaries.end()||*boundary!=offset)
+        throw std::invalid_argument("Caret position must be a UTF-8 grapheme boundary");
+    auto position=offset;
+    if(trailing&&boundary!=boundaries.begin()) position=*std::prev(boundary);
+    else trailing=false;
+    const auto found=std::lower_bound(impl_->byte_positions.begin(),impl_->byte_positions.end(),position);
+    FLOAT x=0,y=0;DWRITE_HIT_TEST_METRICS hit{};
+    checked(impl_->layout->HitTestTextPosition(static_cast<UINT32>(found-impl_->byte_positions.begin()),
+        trailing?TRUE:FALSE,&x,&y,&hit));
+    return {offset,x,y,hit.height,trailing};
+}
+std::vector<SelectionRegion> TextLayout::selection(std::size_t begin,std::size_t end) const {
+    if(begin>end||end>impl_->text.size()) throw std::out_of_range("Selection exceeds UTF-8 text");
+    if(begin==end) return {};
+    const auto& boundaries=impl_->grapheme_positions;
+    if(!std::binary_search(boundaries.begin(),boundaries.end(),begin)||
+       !std::binary_search(boundaries.begin(),boundaries.end(),end))
+        throw std::invalid_argument("Selection must contain complete graphemes");
+    const auto first=std::lower_bound(impl_->byte_positions.begin(),impl_->byte_positions.end(),begin);
+    const auto last=std::lower_bound(impl_->byte_positions.begin(),impl_->byte_positions.end(),end);
+    const auto position=static_cast<UINT32>(first-impl_->byte_positions.begin());
+    const auto length=static_cast<UINT32>(last-first);
+    UINT32 count=0;
+    const auto status=impl_->layout->HitTestTextRange(position,length,0,0,nullptr,0,&count);
+    if(status!=E_NOT_SUFFICIENT_BUFFER) checked(status);
+    std::vector<DWRITE_HIT_TEST_METRICS> boxes(count);
+    if(count) checked(impl_->layout->HitTestTextRange(position,length,0,0,boxes.data(),count,&count));
+    std::vector<SelectionRegion> result;
+    for(UINT32 index=0;index<count;++index) {
+        const auto& box=boxes[index];
+        const auto start=impl_->byte_positions.at(box.textPosition);
+        const auto finish=impl_->byte_positions.at(box.textPosition+box.length);
+        if(box.width>0) result.push_back({start,finish-start,box.left,box.top,box.width,box.height,box.bidiLevel});
+    }
+    return result;
 }
 GlyphBitmap rasterize_glyph_run(const GlyphRun& run) {
     if(!run.face||!std::isfinite(run.em_size)||run.em_size<=0||
@@ -286,6 +448,7 @@ GlyphBitmap rasterize_glyph_run(const GlyphRun& run) {
     return result;
 }
 RasterImage TextLayout::rasterize() const {
+    if(impl_->application_drawing) throw std::logic_error("Application text effects require the custom drawing renderer");
     ComApartment apartment;
     const auto size=metrics();
     if(size.width>16320 || size.height>16320) throw std::length_error("Glyph bitmap exceeds dimension limit");
@@ -315,6 +478,7 @@ RasterImage TextLayout::rasterize() const {
     return result;
 }
 void TextLayout::render_png(const std::filesystem::path& path) const {
+    if(impl_->application_drawing) throw std::logic_error("Application text effects require the custom drawing renderer");
     ComApartment apartment;
     const auto size=metrics();
     if(size.width>16320 || size.height>16320) throw std::length_error("Diagnostic bitmap exceeds dimension limit");

@@ -9,6 +9,13 @@ EXTERN copy_last_map_scalar:PROC
 EXTERN mark_map_font_glyph:PROC
 EXTERN remember_map_font_glyph:PROC
 EXTERN mark_current_map_font_glyph:PROC
+EXTERN shape_country_map_text:PROC
+EXTERN shape_province_map_text:PROC
+EXTERN map_paragraph_active:PROC
+EXTERN g_country_shape_return:QWORD
+EXTERN g_province_shape_return:QWORD
+EXTERN g_country_gap_return:QWORD
+EXTERN g_country_gap_skip:QWORD
 EXTERN g_map_copy_return:QWORD
 EXTERN g_map_measure_return:QWORD
 EXTERN g_map_draw_return:QWORD
@@ -36,6 +43,45 @@ EXTERN g_map_adjust_last_return:QWORD
 include hook_context.inc
 
 .CODE
+country_shape_hook PROC
+    SAVE_CONTEXT
+    mov rcx, [rbp+240h]
+    mov rcx, [rcx+30h]
+    lea rdx, [rbp+0b0h]
+    call shape_country_map_text
+    RESTORE_CONTEXT
+    mov qword ptr [rbp+0f8h], 0
+    mov qword ptr [rbp+20h], 0
+    jmp qword ptr [g_country_shape_return]
+country_shape_hook ENDP
+
+province_shape_hook PROC
+    SAVE_CONTEXT
+    mov rcx, r12
+    mov rdx, rbx
+    call shape_province_map_text
+    mov rbx, rax
+    RESTORE_CONTEXT
+    movsxd r8, dword ptr [rbx+20h]
+    mov edi, r13d
+    jmp qword ptr [g_province_shape_return]
+province_shape_hook ENDP
+
+country_shape_gap_hook PROC
+    SAVE_CONTEXT
+    call map_paragraph_active
+    test al, al
+    jnz country_shape_gap_active
+    RESTORE_CONTEXT
+    comiss xmm12, xmm1
+    jbe country_shape_gap_skip
+    jmp qword ptr [g_country_gap_return]
+country_shape_gap_active:
+    RESTORE_CONTEXT
+country_shape_gap_skip:
+    jmp qword ptr [g_country_gap_skip]
+country_shape_gap_hook ENDP
+
 map_fit_format_hook PROC
     mov rax, rbx
     mov r8, [rbx+18h]

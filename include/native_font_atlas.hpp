@@ -6,6 +6,7 @@
 #include <d3d9.h>
 #include <wrl/client.h>
 #include "glyph_registry.hpp"
+#include "native_paragraph.hpp"
 struct IDirect3DTexture9;
 struct IDirect3DBaseTexture9;
 
@@ -20,7 +21,10 @@ NativeGlyph* find_dynamic_glyph(void* const* table,std::uint32_t scalar) noexcep
 void release_font_atlas(void* const* table) noexcept;
 void* synchronize_font_texture(void* manager,int id);
 bool dynamic_map_font(void* font) noexcept;
+bool dynamic_font(void* font) noexcept;
+std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void* font,std::string_view text,float width,bool wrap,bool formatted=true);
+std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::string_view text,float width,bool wrap,bool formatted=true);
 std::uint32_t font_glyph_page(const NativeGlyph* glyph) noexcept;
 using FontTexturePages=std::vector<Microsoft::WRL::ComPtr<IDirect3DTexture9>>;
-FontTexturePages map_font_texture_pages(IDirect3DBaseTexture9* first);
+FontTexturePages font_texture_pages(IDirect3DBaseTexture9* first);
 }

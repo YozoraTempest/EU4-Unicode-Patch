@@ -13,6 +13,8 @@
 | `unicode_search` / `unicode_pinyin` / `native_search` | 中文与拼音匹配、词组读音及国家／省份搜索适配 |
 | `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
+| `shaped_paragraph` / `formatted_paragraph` / `native_paragraph` | 整段塑形、颜色及图标映射、原生绘制调用适配 |
+| `native_editor_selection` | 复杂文字选区的原生矩形及控件生命周期 |
 | `glyph_registry` / `scalar_glyph` / `native_font_atlas` | 稀疏字形记录、按需图集和设备恢复 |
 | `font_assets` / `font_atlas_assets` | 原版字体路径映射与运行时基础图集生成 |
 | `plugin.cpp` / MASM | 指令检查、引擎挂钩与失败回滚 |
@@ -35,13 +37,19 @@ ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径
 
 玩家版按需字形先用系统 DirectWrite 字体；缺字后才加载游戏目录中的可选字体文件。开发探针保留文件字体优先的验证方式。安装或移除字体包后需重启游戏。
 
-基础图集在原生字体加载回调中从系统字体生成，共有 14、16、18、24、88px 五页，每页 2048×4096，初始包含 192 个基础字符。同一进程重复加载时复用，下一次启动重新生成，缓存位于 `gfx/fonts/eu4-unicode/cache/`；DirectWrite 初始化在 DLL 加载锁之外执行。可选字体的版本与 SHA-256 见[清单](../fixtures/open-fonts.json)，版权与许可证见[第三方说明](../THIRD_PARTY_NOTICES.md)。
+基础图集在原生字体加载回调中从系统字体生成，共有 14、16、18、24、88px 五种字号，每种初始一页，大小为 2048×4096，包含 192 个基础字符。UI 与地图图集均按需分页。同一进程重复加载时复用，下一次启动重新生成，缓存位于 `gfx/fonts/eu4-unicode/cache/`；DirectWrite 初始化在 DLL 加载锁之外执行。可选字体的版本与 SHA-256 见[清单](../fixtures/open-fonts.json)，版权与许可证见[第三方说明](../THIRD_PARTY_NOTICES.md)。
 
 模组位图字体保留已收录字形与度量；动态补字目前只用于补丁生成图集。
 
-测宽阶段只生成 CPU 字形，纹理查找阶段上传，旧坐标和 UV 保留。共享纹理的字体共用一页，Reset 后从 CPU staging 恢复；补丁不持有 default-pool 纹理引用。
+测宽阶段只生成 CPU 字形，纹理查找阶段上传，旧坐标和 UV 保留。共享纹理的字体共用图集，Reset 后从 CPU staging 恢复。原生纹理只作非持有引用，补丁的分页纹理与绘制缓冲在 Reset 前释放；托管顶点缓冲保留缓存，临时缓冲在原生释放入口清理。
 
-每页约占 32 MiB GPU 内存，动态上传另占约 32 MiB CPU staging。五页全部使用时分别约占 160 MiB，另计字体和缓存。图集满或字体缺字时仍可能显示占位符。
+每页约占 32 MiB GPU 内存，动态上传另占约 32 MiB CPU staging。每个图集最多 8 页，纹理预算为 256 MiB，顶点缓存上限为 64 MiB。五种字号各使用一页时分别约占 160 MiB，另计字体和缓存。达到容量上限或字体缺字时仍可能显示占位符。
+
+每个图集的排版缓存预算为 8 MiB，按最近使用顺序移除未被调用方持有的布局和字形记录，并回收绘制令牌。图集像素和 UV 保持稳定，以保留游戏已缓存的顶点。排版缓存预算按文本、字素和光标位置的估算成本计费。
+
+UI 绘制、测宽和换行共用 DirectWrite 布局；颜色标记不切断塑形，图标作为内嵌对象参与双向排列。单行编辑将 UTF-8 字节位置映射到视觉光标和选区。地图国名与省份名使用整段塑形后的字形簇，保留原生领土适配与曲线布局；连写文字不插入原生字间填充空格。
+
+绘制令牌仅存在于当前绘制调用，原始本地化、编辑文本和存档保留 UTF-8。位图字体模组继续使用自身字库和度量，复杂排版用于补丁生成图集。
 
 字库 cmap 覆盖审计使用 `tools/audit-open-fonts.py`，依赖见 `tools/requirements-font-audit.txt`。
 
@@ -69,7 +77,7 @@ fuzzy_pinyin=1
 西藏: xi zang
 ```
 
-保存路径修正代理对转换与比较，并保留已观察保存入口的 UTF-8 名称。完整复杂排版已有独立 DirectWrite 实现，尚未接入游戏的测宽、绘制和选区。
+保存路径修正代理对转换与比较，并保留已观察保存入口的 UTF-8 名称。复杂文字编辑目前接入单行控件，多行、预编辑和撤销路径仍需分别适配。
 
 ## 旧汉化迁移
 
@@ -111,11 +119,3 @@ Frida 探针需要独立 Python 环境、Frida 和 psutil；剪贴板探针另�
 `tools/trace-*.py` 跟踪原生调用，`tools/verify-*.py` 检查编辑、绘制和设备行为。
 
 动态 GPU 探针在外交搜索框聚焦后使用 `private/dynamic-font-arm.txt` 开始、`private/dynamic-font-finish.txt` 结束。`--player` 改为验证普通目录中的正式 DLL。
-
-## 后续任务
-
-- 图集：UI 分页、缓存淘汰、更多字体重载场景及游戏设备恢复。
-- 排版：将 DirectWrite 整段排版接入游戏测宽、绘制、光标和选区。
-- 输入：更多输入法、控件、缩放、预编辑、多行、撤销及系统剪贴板。
-- 保存：其他入口、输入产生的名称、自动保存周期及云存档。
-- 联机：中文聊天与名称同步。

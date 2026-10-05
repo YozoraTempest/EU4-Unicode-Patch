@@ -13,6 +13,7 @@
 #include "native_script_bom.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
+#include "native_editor_selection.hpp"
 #include "native_font_atlas.hpp"
 #include "native_font_draw.hpp"
 #include "font_assets.hpp"
@@ -197,7 +198,10 @@ struct InputRect { int x,y,w,h; };
 struct EditorImeRectState { void* window=nullptr; void* owner=nullptr; InputRect rect{}; };
 thread_local EditorImeRectState editor_ime_rect_state{};
 thread_local unsigned editor_focus_depth=0;
+void clear_editor_affinity() noexcept;
+void paint_editor_selection(void* outer) noexcept;
 void focus_editor_ime_rect(void* outer) {
+    clear_editor_affinity();
     editor_ime_rect_state={};
     struct FocusScope {
         FocusScope() { ++editor_focus_depth; }
@@ -207,6 +211,7 @@ void focus_editor_ime_rect(void* outer) {
 }
 void paint_editor_ime_rect(void* outer) {
     original_editor_paint(outer);
+    paint_editor_selection(outer);
     // Focus performs an immediate paint before the next UI frame has supplied
     // the editor's current parent transform. Publish only normal frame geometry.
     if(editor_focus_depth) return;
@@ -326,6 +331,113 @@ bool single_line_editor(void* widget,std::string_view& value) {
     value={text->data(),static_cast<std::size_t>(text->size)};
     return value.find('\n')==std::string_view::npos&&eu4unicode::valid_utf8(value);
 }
+struct EditorAffinity {
+    void* owner=nullptr;
+    std::string text;
+    std::size_t offset=0;
+    bool trailing=false;
+};
+thread_local EditorAffinity editor_affinity;
+void clear_editor_affinity() noexcept { editor_affinity={}; }
+std::shared_ptr<const eu4unicode::ShapedParagraph> editor_paragraph(void* widget,std::string_view value) {
+    if(!eu4unicode::needs_paragraph_shaping(value)) return {};
+    const auto font=*reinterpret_cast<void* const*>(static_cast<const std::byte*>(widget)+0x98);
+    return eu4unicode::font_paragraph_layout(font,value,32767,false,false);
+}
+bool editor_trailing(void* widget,std::string_view value,std::size_t offset) {
+    return editor_affinity.owner==widget&&editor_affinity.text==value&&
+        editor_affinity.offset==offset&&editor_affinity.trailing;
+}
+void remember_editor_affinity(void* widget,std::string_view value,std::size_t offset,bool trailing) {
+    editor_affinity={widget,std::string(value),offset,trailing};
+}
+struct EditorPixelPoint { std::uint16_t x,y; };
+using EditorPixelPosition=EditorPixelPoint*(*)(void*,EditorPixelPoint*);
+EditorPixelPosition original_editor_caret=nullptr,original_editor_anchor=nullptr;
+EditorPixelPoint* shaped_editor_position(void* widget,EditorPixelPoint* result,bool anchor) {
+    const auto original=anchor?original_editor_anchor:original_editor_caret;
+    if(anchor&&*reinterpret_cast<const std::uint16_t*>(static_cast<const std::byte*>(widget)+0x94))
+        return original(widget,result);
+    std::string_view value;
+    try {
+        if(single_line_editor(widget,value)) if(const auto paragraph=editor_paragraph(widget,value)) {
+            const auto base=static_cast<const std::byte*>(widget);
+            const auto offset=*reinterpret_cast<const std::uint16_t*>(base+(anchor?0x92:0x54));
+            if(offset<=value.size()) {
+                const auto font=*reinterpret_cast<const std::byte* const*>(base+0x98);
+                const auto scale=*reinterpret_cast<const float*>(font+0x968);
+                const auto caret=paragraph->caret(offset,!anchor&&editor_trailing(widget,value,offset));
+                const auto x=std::round(caret.x*scale)+*reinterpret_cast<const int*>(font+0x38)+(anchor?3:0);
+                const auto y=std::round(caret.y*scale)+*reinterpret_cast<const int*>(font+0x3c);
+                if(std::isfinite(x)&&std::isfinite(y)&&x<=65535&&y<=65535) {
+                    result->x=static_cast<std::uint16_t>((std::max)(0.f,x));
+                    result->y=static_cast<std::uint16_t>((std::max)(0.f,y));
+                    return result;
+                }
+            }
+        }
+    } catch(...) { log("Unicode editor caret positioning failed; native position retained."); }
+    return original(widget,result);
+}
+EditorPixelPoint* editor_caret_position(void* widget,EditorPixelPoint* result) { return shaped_editor_position(widget,result,false); }
+EditorPixelPoint* editor_anchor_position(void* widget,EditorPixelPoint* result) { return shaped_editor_position(widget,result,true); }
+std::unique_ptr<eu4unicode::NativeEditorSelections> editor_selections;
+eu4unicode::NativeSpriteFactory original_editor_sprite_factory=nullptr;
+EditorAction original_editor_destroy=nullptr,original_editor_hide=nullptr;
+using EditorSetup=void(*)(void*,void*);
+EditorSetup original_editor_setup=nullptr;
+void* create_editor_sprite(void* manager,const EngineString* name,void* context,unsigned char flags,EngineString* output) {
+    const bool selection=reinterpret_cast<std::byte*>(_ReturnAddress())==image+0x1533a14;
+    auto sprite=original_editor_sprite_factory(manager,name,context,flags,output);
+    if(selection&&editor_selections) try { editor_selections->capture(sprite,manager,flags); }
+        catch(...) { log("Native selection resource capture failed."); }
+    return sprite;
+}
+void destroy_editor(void* outer) {
+    if(editor_selections) editor_selections->release(outer,*reinterpret_cast<void**>(static_cast<std::byte*>(outer)+0x1f8));
+    original_editor_destroy(outer);
+}
+void hide_editor(void* outer) {
+    if(editor_selections) editor_selections->hide(outer);
+    original_editor_hide(outer);
+}
+void setup_editor(void* outer,void* value) {
+    original_editor_setup(outer,value);
+    if(editor_selections) editor_selections->setup(outer,value);
+}
+void paint_editor_selection(void* outer) noexcept {
+    if(!editor_selections) return;
+    try {
+        const auto base=static_cast<std::byte*>(outer),widget=base+0xc8;
+        std::string_view value;
+        if(base[0xc5]==std::byte{0}||!*reinterpret_cast<void**>(base+0x148)||
+           base[0x262]!=std::byte{0}||*reinterpret_cast<std::uint64_t*>(base+0x2f0)||
+           widget[0x90]!=std::byte{1}||*reinterpret_cast<std::uint16_t*>(widget+0x94)||
+           !single_line_editor(widget,value)) { editor_selections->hide(outer);return; }
+        const auto paragraph=editor_paragraph(widget,value);
+        if(!paragraph) { editor_selections->hide(outer);return; }
+        const auto caret_offset=*reinterpret_cast<std::uint16_t*>(widget+0x54);
+        const auto anchor_offset=*reinterpret_cast<std::uint16_t*>(widget+0x92);
+        if(anchor_offset>value.size()) { editor_selections->hide(outer);return; }
+        const auto regions=paragraph->selection((std::min)(caret_offset,anchor_offset),(std::max)(caret_offset,anchor_offset));
+        const auto font=*reinterpret_cast<std::byte**>(widget+0x98);
+        const auto sprite=*reinterpret_cast<void**>(base+0x1f0);
+        if(!sprite) { editor_selections->hide(outer);return; }
+        const auto scale=*reinterpret_cast<float*>(font+0x968);
+        if(!std::isfinite(scale)||scale<=0) { editor_selections->hide(outer);return; }
+        auto origin=eu4unicode::native_sprite_input_position(sprite);
+        if(!std::isfinite(origin.x)||!std::isfinite(origin.y)) { editor_selections->hide(outer);return; }
+        EditorPixelPoint pixel{};shaped_editor_position(widget,&pixel,false);
+        origin.x-=pixel.x;origin.y-=pixel.y;
+        const auto height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void***>(font))[0x68/8])(font)/2;
+        std::vector<eu4unicode::NativeSelectionRect> boxes;boxes.reserve(regions.size());
+        for(const auto& region:regions) boxes.push_back({
+            static_cast<int>(std::round(origin.x+region.x*scale))+*reinterpret_cast<int*>(font+0x38)+3,
+            static_cast<int>(std::round(origin.y+region.y*scale))+*reinterpret_cast<int*>(font+0x3c)+height,
+            static_cast<int>(std::ceil(region.width*scale))+2,height+2});
+        editor_selections->update(outer,*reinterpret_cast<void**>(base+0x1f8),*reinterpret_cast<void**>(base+0x298),boxes);
+    } catch(...) { editor_selections->hide(outer);log("Native shaped selection update failed."); }
+}
 eu4unicode::PrefixMeasure native_editor_measure(void* widget,std::string_view text) {
     const auto base=static_cast<const std::byte*>(widget);
     const auto font=*reinterpret_cast<void* const*>(base+0x98);
@@ -344,10 +456,17 @@ void editor_point(void* widget,const EngineString* row,const EditorPoint* point)
         original_editor_point(widget,row,point); return;
     }
     try {
-        const auto hit=eu4unicode::nearest_grapheme_boundary(value,point->x,native_editor_measure(widget,value));
+        std::size_t hit=0;bool trailing=false;
+        if(const auto paragraph=editor_paragraph(widget,value)) {
+            const auto font=*reinterpret_cast<const std::byte* const*>(static_cast<const std::byte*>(widget)+0x98);
+            const auto scale=*reinterpret_cast<const float*>(font+0x968);
+            const auto position=paragraph->hit_test(point->x/scale,point->y/scale);
+            hit=position.byte_offset;trailing=position.trailing;
+        } else hit=eu4unicode::nearest_grapheme_boundary(value,point->x,native_editor_measure(widget,value));
         auto base=static_cast<std::byte*>(widget);
         *reinterpret_cast<std::uint16_t*>(base+0x54)=static_cast<std::uint16_t>(hit);
         *reinterpret_cast<std::uint16_t*>(base+0x56)=0;
+        remember_editor_affinity(widget,value,hit,trailing);
     } catch(...) { log("Unicode editor hit testing failed; caret preserved."); }
 }
 int editor_width_fit(void* widget,const EngineString* text) {
@@ -383,6 +502,19 @@ void editor_arrow(void* widget,bool right) {
     if(single_line_editor(widget,value)) {
         auto column=reinterpret_cast<std::uint16_t*>(static_cast<std::byte*>(widget)+0x54);
         try {
+            if(const auto paragraph=editor_paragraph(widget,value)) {
+                const auto target=paragraph->move_caret(*column,editor_trailing(widget,value,*column),right);
+                *column=static_cast<std::uint16_t>(target.byte_offset);
+                auto base=static_cast<std::byte*>(widget);
+                *reinterpret_cast<std::uint32_t*>(base+0x50)=*column;
+                base[0x90]=std::byte{0};
+                auto selected=reinterpret_cast<EngineString*>(base+0x70);
+                const auto data=selected->capacity<16?selected->storage.inline_bytes:const_cast<char*>(selected->storage.pointer);
+                selected->size=0;data[0]=0;
+                remember_editor_affinity(widget,value,target.byte_offset,target.trailing);
+                reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
+                return;
+            }
             const auto target=eu4unicode::plan_edit(value,*column,
                 right?eu4unicode::EditKey::right:eu4unicode::EditKey::left).caret;
             // Let the native one-byte mover reach the final complete boundary.
@@ -643,6 +775,9 @@ bool write(std::size_t rva,const void* data,std::size_t size) {
 
 extern "C" {
 std::uintptr_t g_main_draw_return,g_main_copy_return,g_main_measure_return;
+std::uintptr_t g_ui_vertices,g_main_page_return,g_button_page_return;
+std::uintptr_t g_main_geometry_entry_return,g_main_geometry_end_return;
+std::uintptr_t g_button_geometry_entry_return,g_button_geometry_end_return;
 std::uintptr_t g_bitmap_measure_return,g_bitmap_split_return,g_copy_buffer;
 std::uintptr_t g_bitmap_advance_return,g_list_measure_return,g_list_advance_return;
 std::uintptr_t g_split_format_return,g_split_plain_entry,g_list_format_return,g_list_plain_entry;
@@ -672,6 +807,7 @@ std::uintptr_t g_map_page_tag_return,g_map_justify_page_tag_return;
 std::uintptr_t g_map_kern_call;
 std::uintptr_t g_map_fit_format_return,g_map_fit_plain_entry,g_map_fit_measure_return,g_map_fit_kern_return;
 std::uintptr_t g_map_fit_icon_end_return,g_map_adjust_gap_end_return,g_map_adjust_last_return;
+std::uintptr_t g_country_shape_return,g_province_shape_return,g_country_gap_return,g_country_gap_skip;
 std::uintptr_t g_input_return;
 std::uintptr_t g_editor_fit_return;
 std::uintptr_t g_text_limit_return;
@@ -679,6 +815,9 @@ std::uintptr_t g_font_allocate,g_font_duplicate,g_font_store_return,g_font_initi
 std::uintptr_t g_path_pair_return;
 std::uintptr_t g_wide_compare_left_return,g_wide_compare_right_return;
 void main_draw_hook(); void main_copy_hook(); void main_measure_hook();
+void main_page_hook();void button_page_hook();
+void main_geometry_entry_hook();void main_geometry_end_hook();
+void button_geometry_entry_hook();void button_geometry_end_hook();
 void bitmap_measure_hook(); void bitmap_split_hook();
 void bitmap_advance_hook();void list_measure_hook();void list_advance_hook();
 void split_format_hook();void list_format_hook();void alternate_format_hook();void alternate_advance_hook();
@@ -703,6 +842,7 @@ void map_vertex_count_hook();
 void map_page_tag_hook();void map_justify_page_tag_hook();
 void map_fit_format_hook();void map_fit_measure_hook();void map_fit_kern_hook();void map_fit_icon_end_hook();
 void map_adjust_gap_end_hook();void map_adjust_last_hook();
+void country_shape_hook();void province_shape_hook();void country_shape_gap_hook();
 void input_hook();
 void editor_fit_hook();
 void text_limit_hook();
@@ -716,6 +856,7 @@ void* allocate_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept {
     return record;
 }
 void* find_supplementary_glyph(void* const* table,std::uint32_t scalar) noexcept {
+    if(auto shaped=eu4unicode::find_paragraph_glyph(table,scalar)) return shaped;
     auto glyph=eu4unicode::find_unicode_glyph(table,scalar);
     return glyph?glyph:eu4unicode::find_dynamic_glyph(table,scalar);
 }
@@ -740,6 +881,24 @@ std::size_t bounded_text_length(const char* source,std::size_t length) noexcept 
 void mark_popup_font_glyph(const eu4unicode::NativeGlyph* glyph,eu4unicode::PopupFontVertex* vertices) noexcept { eu4unicode::mark_popup_font_glyph(glyph,vertices); }
 void begin_popup_font(void* font) { eu4unicode::begin_popup_font(font); }
 void end_popup_font() noexcept { eu4unicode::end_popup_font(); }
+const EngineString* begin_main_paragraph(void* font,const EngineString* source,const int* box,const std::byte* arguments) noexcept {
+    const auto inset=*reinterpret_cast<const int*>(arguments);
+    const auto formatted=arguments[0x18]!=std::byte{0};
+    return eu4unicode::begin_native_paragraph(font,source,box,inset,formatted);
+}
+const EngineString* begin_button_paragraph(void* font,const EngineString* source,const std::byte* arguments) noexcept {
+    return eu4unicode::begin_native_button_paragraph_arguments(font,source,arguments);
+}
+const EngineString* begin_popup_paragraph(void* font,const EngineString* source,int width) noexcept {
+    return eu4unicode::begin_native_popup_paragraph(font,source,width);
+}
+void end_main_paragraph() noexcept { eu4unicode::end_native_paragraph(); }
+void shape_country_map_text(void* font,EngineString* source) noexcept {
+    const auto draw=eu4unicode::prepare_native_map_paragraph(font,source);
+    if(draw!=source) reinterpret_cast<eu4unicode::NativeStringAssignment>(image+0x95110)(source,draw->data(),draw->size);
+}
+const void* shape_province_map_text(void* font,const void* source) noexcept { return eu4unicode::prepare_native_map_label(font,source); }
+bool map_paragraph_active() noexcept { return eu4unicode::native_map_paragraph_active(); }
 std::size_t next_layout_scalar(const EngineString* source,std::size_t offset) noexcept {
     return eu4unicode::native_scalar_next({source->data(),static_cast<std::size_t>(source->size)},offset);
 }
@@ -940,6 +1099,18 @@ bool initialize(HMODULE module) {
         {0x15995b0,"4c63cf488b55f84c03ca4863ce410fb6014c8d1d08a7e90042880419ffc6"},
         {0x1599728,"410fb601498b8cc62001000048894d004885c9"},
         {0x159a796,"460fb60409f3410f109e680900004b8b94c620010000"},
+        {0x1598963,"4c8be24c8bf1488b0d380bdb00"},
+        {0x159b470,"4c8bdc49895b20555741564881ec00010000"},
+        {0x159b7c0,"488bc441564881ecf00000000f2970c8"},
+        {0x159b3b0,"4c8d9c2408240000410f2873e8"},
+        {0x15966ec,"498bd8488bf9488b95c8210000"},
+        {0x15968cb,"80bd10220000000f8481070000"},
+        {0x1597d70,"80bd10220000000f840d060000"},
+        {0x1598841,"4c8d9c2460220000498b5b48"},
+        {0x159af87,"8b5c244883c306895c2448"},
+        {0x15986f6,"8b95c8210000ffc28995c8210000"},
+        {0x16d5f20,"48895c241044894c24204489442418"},
+        {0x16d65d0,"4885c9745b534883ec20488bd9488b09"},
         {0x159b687,"0fb60407498b8cc6200100004885c9"},
         {0x159ef48,"f3410f10b6480800000fb604024d8b3cc64d85ff"},
         {0x159f1db,"ffc78bd7448b5310413bfa0f8d17020000"},
@@ -1007,6 +1178,10 @@ bool initialize(HMODULE module) {
         ,{0xfd6600,"8b85a0000000ffc84c63e0"}
         ,{0xfd66e4,"488d85900000004983fd10480f43c648638da00000000fb64408ff884500"}
         ,{0xfd7200,"4c89442418488954241048894c2408"}
+        ,{0xfd5b70,"44894c24204489442418488954241048894c2408"}
+        ,{0xfd64ca,"48c785f80000000000000048c7452000000000"}
+        ,{0xfd7315,"4c634320418bfd"}
+        ,{0xfd65e8,"440f2fe10f86d1020000"}
         ,{0x16d6640,"4885d20f84a60000004889742418"}
         ,{0x14ba825,"0fbe0c28488d1c28e836065900ffc788038bc7"}
         ,{0x1550425,"0fbe0c28488d1c28e80aaa4f00ffc788038bc7"}
@@ -1032,12 +1207,24 @@ bool initialize(HMODULE module) {
         ,{0x15385a0,"48895c2408574883ec40440fb74156"}
         ,{0x153b170,"48895c240848896c24104889742418574883ec40"}
         ,{0x15361f0,"48895c2408488974241048897c24204c89442418"}
+        ,{0x1536060,"48895c240848896c2410488974241848897c2420"}
+        ,{0x1535eb0,"48895c240848896c2410488974241848897c2420"}
         ,{0x1536340,"448b45d0ff50603906440f4ff3488b55"}
         ,{0x1537210,"48895c240848896c2410488974241848897c2420"}
         ,{0x1539820,"48895c241848896c242057415441574883ec204c"}
         ,{0x1539240,"40534883ec40488bd9c6819000000000e83bb21f00"}
         ,{0x1534250,"48895c242055565741564157488bec4883ec40"}
         ,{0x1535250,"40574883ec3080b96102000000488bf9"}
+        ,{0x14db940,"48895c241044884c24205556574156"}
+        ,{0x1533a0f,"e82c7ffaff"}
+        ,{0x1533d90,"48895c240848896c24104889742418"}
+        ,{0x15340a0,"40534883ec20c681c500000000"}
+        ,{0x1534100,"48895c2408574883ec2048899198020000"}
+        ,{0x14db6a0,"48895c240848897424184889542410"}
+        ,{0x162f0b0,"4883ec58660f6e02488d4424080f5bc0"}
+        ,{0x162f1b0,"0fb78150010000f30f1089e0000000"}
+        ,{0x162f070,"3991b4010000750f488bc248c1e820"}
+        ,{0x95660,"40534883ec20488b5118488bd94883"}
         ,{0x17345f0,"48ff25a1bf8700"}
         ,{0x17349f0,"48ff2541c58700"}
         ,{0x1735940,"48ff25b9ac8700"}
@@ -1095,9 +1282,11 @@ bool initialize(HMODULE module) {
         ,{0x11421ad,"e8ced65d00ffc0"}
         ,{0x1706010,"488bc4488958084889681048897018574883ec40"}
         ,{0xa901fe,"e80d5ec700"}
+        ,{0x15a0390,"40534883ec50"}
     };
     for(const auto& site:sites) if(!check(site)) return false;
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
+    eu4unicode::native_paragraph_color=reinterpret_cast<eu4unicode::NativeParagraphColor>(address(0x15a0390));
     g_main_draw_return=address(0x159a7ac);
     g_main_copy_return=address(0x15995ce);
     g_main_measure_return=address(0x159973b);
@@ -1138,6 +1327,13 @@ bool initialize(HMODULE module) {
     g_popup_measure_kern_return=address(0x159c8a6);
     g_popup_draw_kern_return=address(0x159da1b);
     g_popup_page_return=address(0x159d9a9);
+    g_ui_vertices=address(0x235ba60);
+    g_main_page_return=address(0x159af8e);
+    g_button_page_return=address(0x15986fc);
+    g_main_geometry_entry_return=address(0x1598969);
+    g_main_geometry_end_return=address(0x159b3b8);
+    g_button_geometry_entry_return=address(0x15966f2);
+    g_button_geometry_end_return=address(0x1598849);
     g_copy_buffer=address(0x2433cd0);
     g_heap_pointer=address(0x233d850);
     g_heap_alloc=address(0x1b66570);
@@ -1188,6 +1384,10 @@ bool initialize(HMODULE module) {
     g_map_adjust_last_return=address(0xfd671a);
     g_map_upper_return=address(0x14ba838);
     g_map_lower_return=address(0x1550438);
+    g_country_shape_return=address(0xfd64dd);
+    g_province_shape_return=address(0xfd731c);
+    g_country_gap_return=address(0xfd65f2);
+    g_country_gap_skip=address(0xfd68c3);
     g_input_return=address(0x156a22a);
     g_editor_fit_return=address(0x1536e5d);
     g_text_limit_return=address(0x15989e4);
@@ -1208,6 +1408,12 @@ bool initialize(HMODULE module) {
     const Hook hooks[]={ {0x16fd650,reinterpret_cast<void*>(import_text)},
         {0x15995b0,reinterpret_cast<void*>(main_copy_hook)}, {0x1599728,reinterpret_cast<void*>(main_measure_hook)},
         {0x159a796,reinterpret_cast<void*>(main_draw_hook)}, {0x159b687,reinterpret_cast<void*>(bitmap_measure_hook)},
+        {0x159af87,reinterpret_cast<void*>(main_page_hook)},
+        {0x15986f6,reinterpret_cast<void*>(button_page_hook)},
+        {0x1598963,reinterpret_cast<void*>(main_geometry_entry_hook)},
+        {0x159b3b0,reinterpret_cast<void*>(main_geometry_end_hook)},
+        {0x15966ec,reinterpret_cast<void*>(button_geometry_entry_hook)},
+        {0x1598841,reinterpret_cast<void*>(button_geometry_end_hook)},
         {0x159ef48,reinterpret_cast<void*>(bitmap_split_hook)},
         {0x159f1db,reinterpret_cast<void*>(bitmap_advance_hook)},
         {0x159f87d,reinterpret_cast<void*>(list_measure_hook)},
@@ -1270,6 +1476,9 @@ bool initialize(HMODULE module) {
         {0x159e6f1,reinterpret_cast<void*>(map_fit_icon_end_hook)},
         {0xfd6600,reinterpret_cast<void*>(map_adjust_gap_end_hook)},
         {0xfd66e4,reinterpret_cast<void*>(map_adjust_last_hook)},
+        {0xfd64ca,reinterpret_cast<void*>(country_shape_hook)},
+        {0xfd7315,reinterpret_cast<void*>(province_shape_hook)},
+        {0xfd65e8,reinterpret_cast<void*>(country_shape_gap_hook)},
         {0x14ba825,reinterpret_cast<void*>(map_upper_hook)},
         {0x1550425,reinterpret_cast<void*>(map_lower_hook)},
         {0x15989d8,reinterpret_cast<void*>(text_limit_hook)},
@@ -1291,6 +1500,12 @@ bool initialize(HMODULE module) {
     if(MH_CreateHook(image+0x1704af0,reinterpret_cast<void*>(layout_substring),
         reinterpret_cast<void**>(&original_layout_substring))!=MH_OK) {
         log("Layout substring hook creation failed; no hooks enabled.");MH_Uninitialize();return false;
+    }
+    if(MH_CreateHook(image+0x159b7c0,reinterpret_cast<void*>(eu4unicode::measure_paragraph_text),
+        reinterpret_cast<void**>(&eu4unicode::original_text_width))!=MH_OK||
+       MH_CreateHook(image+0x159b470,reinterpret_cast<void*>(eu4unicode::measure_paragraph_height),
+        reinterpret_cast<void**>(&eu4unicode::original_text_height))!=MH_OK) {
+        log("Paragraph measurement hook creation failed; no hooks enabled.");MH_Uninitialize();return false;
     }
     if(MH_CreateHook(image+0x170cd10,reinterpret_cast<void*>(eu4unicode::construct_script_file),
         reinterpret_cast<void**>(&eu4unicode::original_script_file))!=MH_OK||
@@ -1328,8 +1543,14 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&eu4unicode::original_texture_lookup))!=MH_OK||
        MH_CreateHook(image+0xfd7200,reinterpret_cast<void*>(eu4unicode::build_map_font_geometry),
         reinterpret_cast<void**>(&eu4unicode::original_map_geometry))!=MH_OK||
+       MH_CreateHook(image+0xfd5b70,reinterpret_cast<void*>(eu4unicode::build_country_font_geometry),
+        reinterpret_cast<void**>(&eu4unicode::original_country_geometry))!=MH_OK||
        MH_CreateHook(image+0x16d6640,reinterpret_cast<void*>(eu4unicode::upload_map_font_vertices),
-        reinterpret_cast<void**>(&eu4unicode::original_vertex_upload))!=MH_OK) {
+        reinterpret_cast<void**>(&eu4unicode::original_vertex_upload))!=MH_OK||
+       MH_CreateHook(image+0x16d5f20,reinterpret_cast<void*>(eu4unicode::create_font_vertices),
+        reinterpret_cast<void**>(&eu4unicode::original_vertex_create))!=MH_OK||
+       MH_CreateHook(image+0x16d65d0,reinterpret_cast<void*>(eu4unicode::release_font_vertices),
+        reinterpret_cast<void**>(&eu4unicode::original_vertex_release))!=MH_OK) {
         log("Dynamic font atlas hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
     }
     if(experimental_input) {
@@ -1349,6 +1570,10 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_selection))!=MH_OK ||
            MH_CreateHook(image+0x15361f0,reinterpret_cast<void*>(editor_point),
              reinterpret_cast<void**>(&original_editor_point))!=MH_OK ||
+           MH_CreateHook(image+0x1536060,reinterpret_cast<void*>(editor_caret_position),
+             reinterpret_cast<void**>(&original_editor_caret))!=MH_OK ||
+           MH_CreateHook(image+0x1535eb0,reinterpret_cast<void*>(editor_anchor_position),
+             reinterpret_cast<void**>(&original_editor_anchor))!=MH_OK ||
            MH_CreateHook(image+0x1537210,reinterpret_cast<void*>(editor_width_fit),
              reinterpret_cast<void**>(&original_editor_width_fit))!=MH_OK ||
            MH_CreateHook(image+0x1539820,reinterpret_cast<void*>(editor_word_break),
@@ -1358,6 +1583,14 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_paint))!=MH_OK ||
            MH_CreateHook(image+0x1535250,reinterpret_cast<void*>(focus_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_focus))!=MH_OK ||
+           MH_CreateHook(image+0x14db940,reinterpret_cast<void*>(create_editor_sprite),
+             reinterpret_cast<void**>(&original_editor_sprite_factory))!=MH_OK ||
+           MH_CreateHook(image+0x1533d90,reinterpret_cast<void*>(destroy_editor),
+             reinterpret_cast<void**>(&original_editor_destroy))!=MH_OK ||
+           MH_CreateHook(image+0x15340a0,reinterpret_cast<void*>(hide_editor),
+             reinterpret_cast<void**>(&original_editor_hide))!=MH_OK ||
+           MH_CreateHook(image+0x1534100,reinterpret_cast<void*>(setup_editor),
+             reinterpret_cast<void**>(&original_editor_setup))!=MH_OK ||
            MH_CreateHook(image+0x95110,reinterpret_cast<void*>(assign_editor_prefix),
              reinterpret_cast<void**>(&original_assign_text))!=MH_OK ||
            MH_CreateHook(image+0xb19590,reinterpret_cast<void*>(filter_editor_text),
@@ -1368,6 +1601,9 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_insert))!=MH_OK) {
             log("Input hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
         }
+        editor_selections=std::make_unique<eu4unicode::NativeEditorSelections>(original_editor_sprite_factory,
+            reinterpret_cast<eu4unicode::NativeSpriteDestroy>(image+0x14db6a0),
+            reinterpret_cast<eu4unicode::NativeStringDestroy>(image+0x95660));
         log("Experimental UTF-8 input and single-line grapheme editing enabled.");
         log("Native Windows IME candidate UI and caret exclusion rectangle enabled.");
     }
