@@ -3,7 +3,7 @@ import ctypes as C
 import struct
 
 
-def verify(base, fn, hook, engine_string, font_source, callbacks):
+def verify(base, fn, hook, engine_string, font_source, callbacks, crt):
     fn('configure_native_editor_text', None, C.c_void_p)(base)
     fn('configure_editor_presentation', None, C.c_void_p)(base)
     for rva, name, original in (
@@ -103,6 +103,23 @@ def verify(base, fn, hook, engine_string, font_source, callbacks):
         for target in (0, len(original)):
             caret(widget, target, True)
             assert offset(widget) == target, (sample, target, offset(widget), rows)
+        if len(rows) > 1:
+            caret(widget, 0, True)
+            dispatch(widget, 0x40000051)
+            assert C.c_uint16.from_address(widget + 0x56).value == 1, sample
+            point = (C.c_uint16 * 2)()
+            fn('editor_caret_position', C.c_void_p, C.c_void_p, C.c_void_p)(widget, C.addressof(point))
+            expected_y = max(0, 16 + C.c_int.from_buffer(font, 0x3c).value)
+            # DirectWrite may put a fallback script's text top above its
+            # uniform line box. The caret must stay on the selected row.
+            assert abs(point[1] - expected_y) < 8, (sample, list(point), expected_y)
+            dispatch(widget, 0x40000052)
+            assert C.c_uint16.from_address(widget + 0x56).value == 0, sample
+            caret(widget, 0, True)
+            dispatch(widget, 0x40000051, 4)
+            selected = engine_type.from_address(widget + 0x70).value()
+            assert selected and selected.decode() and C.c_uint8.from_address(widget + 0x90).value, sample
+            caret(widget, len(original), True)
         if original:
             dispatch(widget, 8)
             deleted = current(widget)
@@ -126,6 +143,11 @@ def verify(base, fn, hook, engine_string, font_source, callbacks):
         results.append({'text': sample, 'native_rows': len(rows), 'wrap_width': width,
                         'undo_redo': bool(original), 'cross_row_delete': bool(original)})
         fn('forget_editor_history', None, C.c_void_p)(widget)
+        start, finish, _capacity = (C.c_void_p * 3).from_address(get_rows(widget))
+        for entry in range(start or 0, finish or 0, 40):
+            destroy(entry)
+        if start:
+            crt.free(start)
         destroy(widget + 0x30)
         destroy(widget + 0x70)
     assert notifications

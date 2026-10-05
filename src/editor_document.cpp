@@ -26,6 +26,10 @@ EditRows::EditRows(std::string_view source,const std::vector<EditRowInput>& rows
     }
     if(start!=source.size()) throw std::invalid_argument("Native editor row cache is incomplete");
     if(rows_.empty()) rows_.push_back({0,0,0});
+    // The native cache omits the empty row following a final hard newline.
+    // Its absolute-offset routine accepts row == cache.size(), column == 0.
+    if(!source.empty()&&source.back()=='\n'&&rows_.back().consumed>rows_.back().length)
+        rows_.push_back({source.size(),0,0});
     const auto boundaries=grapheme_boundaries(source);
     for(const auto& row:rows_) if(!std::binary_search(boundaries.begin(),boundaries.end(),row.start)||
        !std::binary_search(boundaries.begin(),boundaries.end(),row.start+row.length))

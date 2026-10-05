@@ -452,7 +452,7 @@ selection_results = selection_check['verify'](base, symbols, address_hook, callb
 map_check = __import__('runpy').run_path(str(root / 'tools/native-map-check.py'))
 map_results = map_check['verify'](base, fn, hook, engine_string, game.parent, pointer, symbol, executable_code)
 editor_check = __import__('runpy').run_path(str(root / 'tools/native-editor-check.py'))
-editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks)
+editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks, crt)
 report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_hash,
           'game_exe_sha256': game_hash, 'site_guards': len(guards),
           'native_width': results, 'native_layout': layout_results,
