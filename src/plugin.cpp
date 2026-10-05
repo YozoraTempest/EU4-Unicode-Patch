@@ -807,6 +807,7 @@ std::uintptr_t g_map_page_tag_return,g_map_justify_page_tag_return;
 std::uintptr_t g_map_kern_call;
 std::uintptr_t g_map_fit_format_return,g_map_fit_plain_entry,g_map_fit_measure_return,g_map_fit_kern_return;
 std::uintptr_t g_map_fit_icon_end_return,g_map_adjust_gap_end_return,g_map_adjust_last_return;
+std::uintptr_t g_country_shape_return,g_province_shape_return,g_country_gap_return,g_country_gap_skip;
 std::uintptr_t g_input_return;
 std::uintptr_t g_editor_fit_return;
 std::uintptr_t g_text_limit_return;
@@ -841,6 +842,7 @@ void map_vertex_count_hook();
 void map_page_tag_hook();void map_justify_page_tag_hook();
 void map_fit_format_hook();void map_fit_measure_hook();void map_fit_kern_hook();void map_fit_icon_end_hook();
 void map_adjust_gap_end_hook();void map_adjust_last_hook();
+void country_shape_hook();void province_shape_hook();void country_shape_gap_hook();
 void input_hook();
 void editor_fit_hook();
 void text_limit_hook();
@@ -895,6 +897,12 @@ const EngineString* begin_popup_paragraph(void* font,const EngineString* source,
     return eu4unicode::begin_native_popup_paragraph(font,source,width);
 }
 void end_main_paragraph() noexcept { eu4unicode::end_native_paragraph(); }
+void shape_country_map_text(void* font,EngineString* source) noexcept {
+    const auto draw=eu4unicode::prepare_native_map_paragraph(font,source);
+    if(draw!=source) reinterpret_cast<eu4unicode::NativeStringAssignment>(image+0x95110)(source,draw->data(),draw->size);
+}
+const void* shape_province_map_text(void* font,const void* source) noexcept { return eu4unicode::prepare_native_map_label(font,source); }
+bool map_paragraph_active() noexcept { return eu4unicode::native_map_paragraph_active(); }
 std::size_t next_layout_scalar(const EngineString* source,std::size_t offset) noexcept {
     return eu4unicode::native_scalar_next({source->data(),static_cast<std::size_t>(source->size)},offset);
 }
@@ -1172,6 +1180,10 @@ bool initialize(HMODULE module) {
         ,{0xfd6600,"8b85a0000000ffc84c63e0"}
         ,{0xfd66e4,"488d85900000004983fd10480f43c648638da00000000fb64408ff884500"}
         ,{0xfd7200,"4c89442418488954241048894c2408"}
+        ,{0xfd5b70,"44894c24204489442418488954241048894c2408"}
+        ,{0xfd64ca,"48c785f80000000000000048c7452000000000"}
+        ,{0xfd7315,"4c634320418bfd"}
+        ,{0xfd65e8,"440f2fe10f86d1020000"}
         ,{0x16d6640,"4885d20f84a60000004889742418"}
         ,{0x14ba825,"0fbe0c28488d1c28e836065900ffc788038bc7"}
         ,{0x1550425,"0fbe0c28488d1c28e80aaa4f00ffc788038bc7"}
@@ -1374,6 +1386,10 @@ bool initialize(HMODULE module) {
     g_map_adjust_last_return=address(0xfd671a);
     g_map_upper_return=address(0x14ba838);
     g_map_lower_return=address(0x1550438);
+    g_country_shape_return=address(0xfd64dd);
+    g_province_shape_return=address(0xfd731c);
+    g_country_gap_return=address(0xfd65f2);
+    g_country_gap_skip=address(0xfd68c3);
     g_input_return=address(0x156a22a);
     g_editor_fit_return=address(0x1536e5d);
     g_text_limit_return=address(0x15989e4);
@@ -1462,6 +1478,9 @@ bool initialize(HMODULE module) {
         {0x159e6f1,reinterpret_cast<void*>(map_fit_icon_end_hook)},
         {0xfd6600,reinterpret_cast<void*>(map_adjust_gap_end_hook)},
         {0xfd66e4,reinterpret_cast<void*>(map_adjust_last_hook)},
+        {0xfd64ca,reinterpret_cast<void*>(country_shape_hook)},
+        {0xfd7315,reinterpret_cast<void*>(province_shape_hook)},
+        {0xfd65e8,reinterpret_cast<void*>(country_shape_gap_hook)},
         {0x14ba825,reinterpret_cast<void*>(map_upper_hook)},
         {0x1550425,reinterpret_cast<void*>(map_lower_hook)},
         {0x15989d8,reinterpret_cast<void*>(text_limit_hook)},
@@ -1526,6 +1545,8 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&eu4unicode::original_texture_lookup))!=MH_OK||
        MH_CreateHook(image+0xfd7200,reinterpret_cast<void*>(eu4unicode::build_map_font_geometry),
         reinterpret_cast<void**>(&eu4unicode::original_map_geometry))!=MH_OK||
+       MH_CreateHook(image+0xfd5b70,reinterpret_cast<void*>(eu4unicode::build_country_font_geometry),
+        reinterpret_cast<void**>(&eu4unicode::original_country_geometry))!=MH_OK||
        MH_CreateHook(image+0x16d6640,reinterpret_cast<void*>(eu4unicode::upload_map_font_vertices),
         reinterpret_cast<void**>(&eu4unicode::original_vertex_upload))!=MH_OK||
        MH_CreateHook(image+0x16d5f20,reinterpret_cast<void*>(eu4unicode::create_font_vertices),

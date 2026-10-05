@@ -1,4 +1,5 @@
 #include "native_font_draw.hpp"
+#include "native_paragraph.hpp"
 #include <windows.h>
 #include <d3d9.h>
 #include <wrl/client.h>
@@ -15,6 +16,7 @@
 
 namespace eu4unicode {
 NativeMapGeometry original_map_geometry=nullptr;
+NativeCountryGeometry original_country_geometry=nullptr;
 NativeVertexUpload original_vertex_upload=nullptr;
 NativeVertexCreate original_vertex_create=nullptr;
 NativeVertexRelease original_vertex_release=nullptr;
@@ -299,7 +301,16 @@ void build_map_font_geometry(void* owner,void* sector,void* labels,int count,voi
     } scope{capturing};
     capturing=dynamic_map_font(font);
     if(logger&&capturing&&!logged_geometry) { logger("Map font geometry capture enabled.");logged_geometry=true; }
+    begin_native_map_paragraph();
+    struct ParagraphScope { ~ParagraphScope(){end_native_paragraph();} } paragraph_scope;
     original_map_geometry(owner,sector,labels,count,font);
+}
+bool build_country_font_geometry(void* owner,const int* provinces,int country,int label,int width,int height,void* name) {
+    struct CaptureScope { bool previous;~CaptureScope(){capturing=previous;} } capture_scope{capturing};
+    capturing=owner&&dynamic_map_font(*reinterpret_cast<void**>(static_cast<std::byte*>(owner)+0x30));
+    begin_native_map_paragraph();
+    struct ParagraphScope { ~ParagraphScope(){end_native_paragraph();} } paragraph_scope;
+    return original_country_geometry(owner,provinces,country,label,width,height,name);
 }
 void upload_map_font_vertices(void* context,void* buffer,const void* data,int vertices,int offset,int mode) {
     // In 1.37.5 a negative vertex count uploads the wrapper's full capacity.

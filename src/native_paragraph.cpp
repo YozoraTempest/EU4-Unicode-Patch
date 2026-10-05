@@ -79,9 +79,12 @@ void paragraph_failure() noexcept {
 }
 struct Scope {
     bool lookup_enabled=true;
+    bool map=false;
     void* const* table=nullptr;
     std::shared_ptr<const NativeParagraph> paragraph;
     EngineString draw{};
+    std::vector<std::shared_ptr<const NativeParagraph>> map_paragraphs;
+    std::vector<std::unique_ptr<std::array<std::byte,0x30>>> map_labels;
 };
 thread_local std::array<Scope,32> scopes;
 thread_local std::size_t depth=0;
@@ -148,13 +151,51 @@ void end_native_paragraph() noexcept {
     const auto index=--depth;
     if(index<scopes.size()) scopes[index]={};
 }
+void begin_native_map_paragraph() noexcept {
+    const auto index=depth++;
+    if(index<scopes.size()) { scopes[index]={};scopes[index].map=true; }
+}
+const EngineString* prepare_native_map_paragraph(void* font,const EngineString* source) noexcept {
+    if(!source||!depth||depth>scopes.size()||!scopes[depth-1].map) return source;
+    auto& scope=scopes[depth-1];
+    try {
+        const auto text=std::string_view(source->data(),static_cast<std::size_t>(source->size));
+        if(!dynamic_map_font(font)||text.find_first_of("\r\n")!=std::string_view::npos||scope.map_paragraphs.size()>=4096) return source;
+        const auto geometry=font_paragraph_geometry(font,text,32767,false,false);
+        if(!geometry) return source;
+        if(!scope.table) scope.table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(font)+0x120);
+        scope.map_paragraphs.push_back(geometry);
+        scope.draw.storage.pointer=geometry->draw_text.c_str();scope.draw.size=geometry->draw_text.size();
+        scope.draw.capacity=(std::max)(scope.draw.size,std::uint64_t{16});
+        return &scope.draw;
+    } catch(...) { paragraph_failure();return source; }
+}
+const void* prepare_native_map_label(void* font,const void* text_block) noexcept {
+    if(!text_block) return text_block;
+    const auto source=reinterpret_cast<const EngineString*>(static_cast<const std::byte*>(text_block)+0x10);
+    const auto draw=prepare_native_map_paragraph(font,source);
+    if(draw==source) return text_block;
+    try {
+        auto copy=std::make_unique<std::array<std::byte,0x30>>();
+        std::memcpy(copy->data(),text_block,copy->size());std::memcpy(copy->data()+0x10,draw,sizeof(*draw));
+        const auto result=copy->data();scopes[depth-1].map_labels.push_back(std::move(copy));return result;
+    } catch(...) { paragraph_failure();return text_block; }
+}
+bool native_map_paragraph_active() noexcept {
+    return depth&&depth<=scopes.size()&&scopes[depth-1].map&&!scopes[depth-1].map_paragraphs.empty();
+}
 NativeGlyph* find_paragraph_glyph(void* const* table,std::uint32_t token) noexcept {
     if(!depth||depth>scopes.size()||!table) return nullptr;
     const auto& scope=scopes[depth-1];
-    if(!scope.lookup_enabled||!scope.paragraph||!scope.table||
-       (table!=scope.table&&table[0x41]!=scope.table[0x41])||token<scope.paragraph->first_token) return nullptr;
-    const auto index=static_cast<std::size_t>(token-scope.paragraph->first_token);
-    return index<scope.paragraph->glyphs.size()?scope.paragraph->glyphs[index]:nullptr;
+    if(!scope.lookup_enabled||!scope.table||(table!=scope.table&&table[0x41]!=scope.table[0x41])) return nullptr;
+    auto find=[token](const std::shared_ptr<const NativeParagraph>& paragraph)->NativeGlyph* {
+        if(!paragraph||token<paragraph->first_token) return nullptr;
+        const auto index=static_cast<std::size_t>(token-paragraph->first_token);
+        return index<paragraph->glyphs.size()?paragraph->glyphs[index]:nullptr;
+    };
+    if(const auto glyph=find(scope.paragraph)) return glyph;
+    for(const auto& paragraph:scope.map_paragraphs) if(const auto glyph=find(paragraph)) return glyph;
+    return nullptr;
 }
 int measure_paragraph_text(void* font,const char* source,int length,bool formatted) {
     try {

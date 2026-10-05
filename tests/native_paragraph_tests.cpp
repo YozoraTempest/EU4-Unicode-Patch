@@ -221,6 +221,35 @@ int main() {
         find_paragraph_glyph(font.table(),geometry->first_token)==geometry->glyphs.front(),
         "an externally retained paragraph still resolves its original transport after eviction");
     end_native_paragraph();
+    std::ofstream map_metrics(directory/"gfx/fonts/zh-hans-map.fnt");
+    map_metrics<<"common lineHeight=88 scaleW=2048 scaleH=4096\nchar id=65 x=1 y=4080 width=7 height=10\n";map_metrics.close();
+    Font map_font(&manager);map_font.put(0x960,88);map_font.put(0x970,8);
+    register_font_atlas(map_font.data(),"gfx/fonts/zh-hans-map");
+    for(const std::string label:{std::string(u8"العربية"),std::string(u8"हिन्दी"),std::string(u8"English العربية 123"),std::string(u8"a\u0301 e\u0308")}) {
+        const auto shaped=font_paragraph_geometry(map_font.data(),label,32767,false,false);
+        check(shaped&&shaped->layout->lines().size()==1,"map font uses the complete contextual line layout");
+        std::size_t clusters=0;for(const auto& run:shaped->layout->runs()) clusters+=run.clusters.size();
+        check(shaped->glyphs.size()==clusters,"map draw units follow shaped clusters rather than UTF-8 bytes");
+        int width=0;for(const auto& glyph:shaped->glyphs) width+=glyph->advance;
+        check(width==static_cast<int>(std::ceil(shaped->layout->metrics().width)),"map fitting retains the shaped line advance");
+        auto name=borrow(label);
+        begin_native_map_paragraph();
+        const auto transport=prepare_native_map_paragraph(map_font.data(),&name);
+        check(transport!=&name&&native_map_paragraph_active(),"country map labels prepare invocation-local transport");
+        const auto token=shaped->first_token;
+        check(find_paragraph_glyph(map_font.table(),token)==shaped->glyphs.front(),"native map fitting resolves the same shaped records as drawing");
+        std::array<std::byte,0x30> block{};std::memcpy(block.data()+0x10,&name,sizeof(name));
+        const auto copy=prepare_native_map_label(map_font.data(),block.data());
+        const auto copied=reinterpret_cast<const EngineString*>(static_cast<const std::byte*>(copy)+0x10);
+        check(copy!=block.data()&&std::string_view(copied->data(),copied->size)==shaped->draw_text,
+            "province labels borrow scoped text without modifying the original label block");
+        check(std::memcmp(block.data()+0x10,&name,sizeof(name))==0&&std::string_view(name.data(),name.size)==label,
+            "map source names retain their original UTF-8 storage");
+        begin_native_paragraph(font.data(),&ordinary,box,0);check(!find_paragraph_glyph(map_font.table(),token),"nested UI text masks map transport");
+        end_native_paragraph();check(find_paragraph_glyph(map_font.table(),token),"map transport resumes after a nested UI call");
+        end_native_paragraph();check(!find_paragraph_glyph(map_font.table(),token)&&!native_map_paragraph_active(),"map tokens cannot escape their geometry invocation");
+    }
+    release_font_atlas(map_font.table());
     const auto page=font_glyph_page(geometry->glyphs.front());
     release_font_atlas(font.table());
     check(dynamic_font(alias.data())&&font_glyph_page(geometry->glyphs.front())==page,"shaped pages survive an independent font alias release");

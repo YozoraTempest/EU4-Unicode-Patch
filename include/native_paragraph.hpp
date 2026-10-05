@@ -17,6 +17,10 @@ const EngineString* begin_native_paragraph(void* font,const EngineString* source
 const EngineString* begin_native_button_paragraph(void* font,const EngineString* source,int width,const int* margin,bool formatted) noexcept;
 const EngineString* begin_native_popup_paragraph(void* font,const EngineString* source,int width) noexcept;
 void end_native_paragraph() noexcept;
+void begin_native_map_paragraph() noexcept;
+const EngineString* prepare_native_map_paragraph(void* font,const EngineString* source) noexcept;
+const void* prepare_native_map_label(void* font,const void* text_block) noexcept;
+bool native_map_paragraph_active() noexcept;
 NativeGlyph* find_paragraph_glyph(void* const* table,std::uint32_t token) noexcept;
 using NativeTextWidth=int(*)(void*,const char*,int,bool);
 extern NativeTextWidth original_text_width;
