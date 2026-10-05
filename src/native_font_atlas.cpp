@@ -11,6 +11,7 @@
 #include <MinHook.h>
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -406,8 +407,10 @@ void register_font_atlas(void* object,std::string_view selected_path) noexcept {
         }
         auto atlas=std::make_shared<Atlas>();
         atlas->manager=manager;atlas->id=id;atlas->size=size;atlas->width=width;atlas->height=height;atlas->external=external;
-        const auto filename=std::filesystem::path(path).filename().string();
-        atlas->map=(!external&&size==88)||filename=="Mapfont"||filename=="tahoma_60"||filename.find("map")!=std::string::npos;
+        auto filename=std::filesystem::path(path).filename().string();
+        std::transform(filename.begin(),filename.end(),filename.begin(),[](unsigned char value){return static_cast<char>(std::tolower(value));});
+        atlas->map=(!external&&size==88)||filename.rfind("map",0)==0||filename=="tahoma_60"||
+            (filename.size()>=4&&(filename.compare(filename.size()-4,4,"_map")==0||filename.compare(filename.size()-4,4,"-map")==0));
         atlas->black=atlas->map;
         if(external) {
             // The original atlas may be packed or supplied by a mod archive.

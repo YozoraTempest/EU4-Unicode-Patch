@@ -86,6 +86,16 @@ int main() {
     register_font_atlas(font.data(),"gfx/fonts/zh-hans-18");
     register_font_atlas(alias.data(),"gfx/fonts/zh-hans-18");
     check(dynamic_font(font.data()),"generated native UI font is bound without a graphics device");
+    {
+        Font bitmap(nullptr);bitmap.anchor={1,1,8,8,0,0,19,0,0};
+        register_font_atlas(bitmap.data(),"gfx/fonts/mod-bitmap-18");
+        check(dynamic_font(bitmap.data())&&!dynamic_map_font(bitmap.data()),
+            "bitmap in a mod font name does not classify the font as a map resource");
+        const auto layout=font_paragraph_layout(bitmap.data(),u8"A العربية",200,false,false);
+        check(layout&&layout->objects().size()==1&&layout->content().icons()[0].advance==19,
+            "ordinary glyphs retain the custom bitmap advance during complex shaping");
+        release_font_atlas(bitmap.table());release_unicode_font(bitmap.table());
+    }
     const std::string text=u8"العربية 123 English\nالعربية";
     const auto geometry=font_paragraph_geometry(font.data(),text,200,true);
     check(geometry&&geometry->layout->text()==text,"original paragraph accompanies its native geometry");
