@@ -4,6 +4,7 @@
 #include "unicode_text.hpp"
 #include "engine_string.hpp"
 #include "formatted_paragraph.hpp"
+#include "formatted_text.hpp"
 #include <windows.h>
 #include <d3d9.h>
 #include <wrl/client.h>
