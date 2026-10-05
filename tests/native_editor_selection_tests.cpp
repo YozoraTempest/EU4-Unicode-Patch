@@ -25,15 +25,15 @@ std::array<void*,64> methods{};
 std::vector<std::unique_ptr<Sprite>> created;
 int destroyed=0,text_destroyed=0;
 void* manager=nullptr;
-void* context=nullptr;
+void* expected_parent=nullptr;
 void* create(void* received_manager,const EngineString* name,void* received_context,unsigned char flags,EngineString* output) {
-    require(received_manager==manager&&received_context==context&&flags==7);
+    require(received_manager==manager&&received_context==expected_parent&&flags==7);
     require(std::string_view(name->data(),name->size)=="gfx_transparency_white");
     require(output->size==0&&output->capacity==15);
     created.push_back(std::make_unique<Sprite>(Sprite{methods.data()}));return created.back().get();
 }
 void destroy(void* received_context,void* sprite) {
-    require(received_context==context);
+    require(received_context==manager);
     for(auto& item:created) if(item.get()==sprite) { item.reset();++destroyed;return; }
     require(false);
 }
@@ -44,22 +44,25 @@ void verify_native_editor_selections() {
     methods[0x60/8]=reinterpret_cast<void*>(show);methods[0x68/8]=reinterpret_cast<void*>(hide);
     methods[0xe0/8]=reinterpret_cast<void*>(reset);methods[0xc8/8]=reinterpret_cast<void*>(parent);
     methods[0x168/8]=reinterpret_cast<void*>(position);methods[0x1d0/8]=reinterpret_cast<void*>(size);
-    int owner=0,parent_one=0,parent_two=0,manager_value=0,context_value=0;
-    manager=&manager_value;context=&context_value;
+    int owner=0,parent_one=0,parent_two=0,manager_value=0;
+    manager=&manager_value;expected_parent=&parent_one;
     Sprite original{methods.data()};
     NativeEditorSelections selections(create,destroy,destroy_text);
-    selections.capture(&original,manager,context,7);
+    selections.capture(&original,manager,7);
     const std::vector<NativeSelectionRect> boxes{{120,30,18,11},{190,30,27,11},{250,30,8,11}};
     selections.update(&owner,&original,&parent_one,boxes);
     require(original.shown&&created.size()==2&&text_destroyed==2);
     require(original.rect.x==120&&original.rect.width==18);
     require(created[0]->rect.x==190&&created[0]->rect.width==27&&created[0]->shown&&created[0]->parent==&parent_one);
     selections.setup(&owner,&parent_two);require(created[1]->parent==&parent_two);
+    expected_parent=&parent_two;
+    selections.update(&owner,&original,&parent_two,{boxes[0],boxes[1],boxes[2],{280,30,11,11}});
+    require(created.size()==3&&created[2]->parent==&parent_two);
     selections.update(&owner,&original,&parent_two,{boxes[0]});
-    require(original.shown&&!created[0]->shown&&!created[1]->shown);
-    selections.update(&owner,&original,&parent_two,boxes);require(created.size()==2);
+    require(original.shown&&!created[0]->shown&&!created[1]->shown&&!created[2]->shown);
+    selections.update(&owner,&original,&parent_two,boxes);require(created.size()==3);
     selections.hide(&owner);require(!created[0]->shown&&!created[1]->shown);
     selections.update(&owner,&original,&parent_two,{});require(!original.shown);
-    selections.release(&owner,&original);require(destroyed==2);
-    selections.hide(&owner);selections.release(&owner,&original);require(destroyed==2);
+    selections.release(&owner,&original);require(destroyed==3);
+    selections.hide(&owner);selections.release(&owner,&original);require(destroyed==3);
 }

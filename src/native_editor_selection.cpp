@@ -24,7 +24,7 @@ void paint_sprite(void* sprite,const NativeSelectionRect& box) {
 }
 }
 struct NativeEditorSelections::Impl {
-    struct Resource { void* manager;void* context;unsigned char flags; };
+    struct Resource { void* manager;unsigned char flags; };
     struct Group { Resource resource;std::vector<void*> sprites; };
     NativeSpriteFactory create;
     NativeSpriteDestroy destroy;
@@ -37,8 +37,8 @@ NativeEditorSelections::NativeEditorSelections(NativeSpriteFactory create,Native
 // Native GUI objects are released by their editor destructor, while its context
 // is still alive. DLL shutdown must not call back into a destroyed GUI manager.
 NativeEditorSelections::~NativeEditorSelections() { delete impl_; }
-void NativeEditorSelections::capture(void* prototype,void* manager,void* context,unsigned char flags) {
-    if(prototype) impl_->resources.insert_or_assign(prototype,Impl::Resource{manager,context,flags});
+void NativeEditorSelections::capture(void* prototype,void* manager,unsigned char flags) {
+    if(prototype) impl_->resources.insert_or_assign(prototype,Impl::Resource{manager,flags});
 }
 void NativeEditorSelections::update(void* owner,void* prototype,void* setup,const std::vector<NativeSelectionRect>& rectangles) {
     if(!prototype) { hide(owner);return; }
@@ -55,7 +55,9 @@ void NativeEditorSelections::update(void* owner,void* prototype,void* setup,cons
         constexpr char resource[]="gfx_transparency_white";
         name.storage.pointer=resource;name.size=sizeof(resource)-1;name.capacity=sizeof(resource);
         output.capacity=15;
-        auto sprite=impl_->create(group.resource.manager,&name,group.resource.context,group.resource.flags,&output);
+        // The constructor's parent argument may point into a temporary render
+        // list. Use the parent supplied for this frame, never retain that pointer.
+        auto sprite=impl_->create(group.resource.manager,&name,setup,group.resource.flags,&output);
         impl_->destroy_text(&output);
         if(!sprite) throw std::runtime_error("Native selection sprite creation failed");
         group.sprites.push_back(sprite);hide_sprite(sprite);
@@ -78,7 +80,7 @@ void NativeEditorSelections::hide(void* owner) {
 void NativeEditorSelections::release(void* owner,void* prototype) {
     const auto found=impl_->groups.find(owner);
     if(found!=impl_->groups.end()) {
-        for(auto sprite:found->second.sprites) impl_->destroy(found->second.resource.context,sprite);
+        for(auto sprite:found->second.sprites) impl_->destroy(found->second.resource.manager,sprite);
         impl_->groups.erase(found);
     }
     impl_->resources.erase(prototype);

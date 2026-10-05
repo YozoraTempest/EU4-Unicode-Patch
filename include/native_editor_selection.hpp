@@ -16,7 +16,7 @@ public:
     ~NativeEditorSelections();
     NativeEditorSelections(const NativeEditorSelections&)=delete;
     NativeEditorSelections& operator=(const NativeEditorSelections&)=delete;
-    void capture(void* prototype,void* manager,void* context,unsigned char flags);
+    void capture(void* prototype,void* manager,unsigned char flags);
     void update(void* owner,void* prototype,void* setup,const std::vector<NativeSelectionRect>& rectangles);
     void setup(void* owner,void* value);
     void hide(void* owner);

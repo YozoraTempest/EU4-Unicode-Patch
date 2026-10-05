@@ -389,7 +389,7 @@ EditorSetup original_editor_setup=nullptr;
 void* create_editor_sprite(void* manager,const EngineString* name,void* context,unsigned char flags,EngineString* output) {
     const bool selection=reinterpret_cast<std::byte*>(_ReturnAddress())==image+0x1533a14;
     auto sprite=original_editor_sprite_factory(manager,name,context,flags,output);
-    if(selection&&editor_selections) try { editor_selections->capture(sprite,manager,context,flags); }
+    if(selection&&editor_selections) try { editor_selections->capture(sprite,manager,flags); }
         catch(...) { log("Native selection resource capture failed."); }
     return sprite;
 }
