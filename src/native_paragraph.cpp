@@ -44,19 +44,7 @@ namespace {
 void(*logger)(const char*)=nullptr;
 std::atomic<bool> reported_error{false};
 std::atomic<unsigned> reported_shaping{0};
-std::atomic<unsigned> reported_samples{0};
 enum class Renderer : unsigned { main,button,popup };
-void report_sample_route(Renderer renderer,void* font,std::string_view text,float pixels,bool formatted,bool selected) {
-    if(!logger||text.find(u8"العربية")==std::string_view::npos) return;
-    const bool bound=dynamic_font(font),utf8=valid_utf8(text);
-    const auto state=static_cast<unsigned>(renderer)*8+(selected?1u:0u)+(bound?2u:0u)+(utf8?4u:0u);
-    if(reported_samples.fetch_or(1u<<state)&(1u<<state)) return;
-    constexpr const char* names[]{"main","button","popup"};
-    char message[192];
-    std::snprintf(message,sizeof(message),"Paragraph sample route: renderer=%s formatted=%s dynamic=%s utf8=%s pixels=%.2f selected=%s.",
-        names[static_cast<unsigned>(renderer)],formatted?"yes":"no",bound?"yes":"no",utf8?"yes":"no",pixels,selected?"yes":"no");
-    logger(message);
-}
 void report_shaping(Renderer renderer,std::string_view text,bool formatted) {
     if(!logger) return;
     bool commands=false;
@@ -116,7 +104,6 @@ const EngineString* begin_paragraph(void* font,const EngineString* source,float 
     try {
         if(!source) return source;
         const auto text=std::string_view(source->data(),static_cast<std::size_t>(source->size));
-        report_sample_route(renderer,font,text,pixels,formatted,false);
         if(!dynamic_font(font)||pixels<=0||!std::isfinite(pixels)) return source;
         if(!needs_native_paragraph_shaping(text,formatted)) return source;
         const auto scale=native_scale(font);
@@ -129,7 +116,6 @@ const EngineString* begin_paragraph(void* font,const EngineString* source,float 
         scope.draw.size=scope.paragraph->draw_text.size();
         scope.draw.capacity=(std::max)(scope.draw.size,std::uint64_t{16});
         report_shaping(renderer,text,formatted);
-        report_sample_route(renderer,font,text,pixels,formatted,true);
         return &scope.draw;
     } catch(...) { paragraph_failure();scope={};return source; }
 }
@@ -238,5 +224,5 @@ int measure_paragraph_height(void* font,const EngineString* source,int width,int
     } catch(...) { paragraph_failure(); }
     LookupMask mask;return original_text_height(font,source,width,height,margin,formatted);
 }
-void configure_paragraph_log(void(*log)(const char*)) noexcept { logger=log;reported_error=false;reported_shaping=0;reported_samples=0; }
+void configure_paragraph_log(void(*log)(const char*)) noexcept { logger=log;reported_error=false;reported_shaping=0; }
 }

@@ -237,8 +237,11 @@ std::vector<ScalarGlyph> map_cluster_glyphs(const ShapedParagraph& paragraph,int
         const bool rtl=(run.bidi_level&1)!=0;
         for(const auto& cluster:run.clusters) {
             const auto first=cluster.first_glyph,last=first+cluster.glyph_count;
-            auto slice=run;
-            slice.clusters.clear();slice.text_start=cluster.text_start;slice.text_length=cluster.text_length;
+            GlyphRun slice{};
+            slice.font_family=run.font_family;slice.bidi_level=run.bidi_level;slice.em_size=run.em_size;
+            slice.baseline_y=run.baseline_y;slice.sideways=run.sideways;slice.face=run.face;
+            slice.measuring=run.measuring;slice.style=run.style;
+            slice.text_start=cluster.text_start;slice.text_length=cluster.text_length;
             slice.glyphs.assign(run.glyphs.begin()+first,run.glyphs.begin()+last);
             slice.advances.assign(run.advances.begin()+first,run.advances.begin()+last);
             slice.offsets.assign(run.offsets.begin()+first,run.offsets.begin()+last);

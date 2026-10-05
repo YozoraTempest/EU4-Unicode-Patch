@@ -255,6 +255,18 @@ int main() {
     check(dynamic_font(alias.data())&&font_glyph_page(geometry->glyphs.front())==page,"shaped pages survive an independent font alias release");
     release_font_atlas(alias.table());
     check(!dynamic_font(alias.data())&&font_glyph_page(geometry->glyphs.front())==0,"last atlas release clears shaped page ownership");
+    for(int reload=0;reload<100;++reload) {
+        Font reloaded(&manager),reloaded_alias(&manager);
+        register_font_atlas(reloaded.data(),"gfx/fonts/zh-hans-18");
+        register_font_atlas(reloaded_alias.data(),"gfx/fonts/zh-hans-18");
+        const auto paragraph=font_paragraph_geometry(reloaded.data(),u8"العربية",32767,false,false);
+        check(paragraph&&!paragraph->glyphs.empty(),"font reload builds a fresh contextual atlas binding");
+        const auto glyph=paragraph->glyphs.front();const auto page=font_glyph_page(glyph);
+        release_font_atlas(reloaded.table());
+        check(dynamic_font(reloaded_alias.data())&&font_glyph_page(glyph)==page,"font reload retains shared alias records");
+        release_font_atlas(reloaded_alias.table());
+        check(!dynamic_font(reloaded_alias.data())&&font_glyph_page(glyph)==0,"font reload releases its final page ownership");
+    }
     std::filesystem::remove_all(directory);
     std::cout<<"Native paragraph metrics, scoped transport, page ownership and source preservation checks passed.\n";
 }
