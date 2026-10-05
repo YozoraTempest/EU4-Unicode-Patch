@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -47,10 +48,14 @@ struct Atlas {
     struct Paragraph {
         std::shared_ptr<const ShapedParagraph> layout;
         std::shared_ptr<const NativeParagraph> geometry;
+        std::size_t bytes=0;
+        std::uint64_t used=0;
     };
     std::map<std::tuple<bool,bool,float,float,std::string,std::vector<std::string>,std::vector<float>>,Paragraph> paragraphs;
     std::size_t paragraph_bytes=0;
+    std::uint64_t paragraph_clock=0;
     std::uint32_t next_paragraph_token=0xf0000;
+    std::map<std::uint32_t,std::uint32_t> free_paragraph_tokens;
 };
 struct GlyphPage { const void* anchor;std::uint32_t page; };
 std::unordered_map<const NativeGlyph*,GlyphPage> glyph_pages;
@@ -142,6 +147,51 @@ Atlas::Glyph queue_glyph(Atlas& a,ScalarGlyph glyph) {
     page.x=x+glyph.metrics.width+1;page.y=y;page.row=(std::max)(row,static_cast<int>(glyph.metrics.height));
     return {glyph.metrics,page_index};
 }
+void release_paragraph_tokens(Atlas& atlas,std::uint32_t first,std::uint32_t count) {
+    if(!count) return;
+    auto after=atlas.free_paragraph_tokens.lower_bound(first);
+    if(after!=atlas.free_paragraph_tokens.begin()) {
+        const auto before=std::prev(after);
+        if(before->first+before->second==first) {
+            first=before->first;count+=before->second;atlas.free_paragraph_tokens.erase(before);
+        }
+    }
+    if(after!=atlas.free_paragraph_tokens.end()&&first+count==after->first) {
+        count+=after->second;atlas.free_paragraph_tokens.erase(after);
+    }
+    atlas.free_paragraph_tokens.emplace(first,count);
+}
+std::uint32_t allocate_paragraph_tokens(Atlas& atlas,std::uint32_t count) {
+    for(auto range=atlas.free_paragraph_tokens.begin();range!=atlas.free_paragraph_tokens.end();++range) if(range->second>=count) {
+        const auto first=range->first,remaining=range->second-count;atlas.free_paragraph_tokens.erase(range);
+        if(remaining) atlas.free_paragraph_tokens.emplace(first+count,remaining);
+        return first;
+    }
+    if(count>0xffffe-atlas.next_paragraph_token) throw std::length_error("Native paragraph transport token budget exhausted");
+    const auto first=atlas.next_paragraph_token;atlas.next_paragraph_token+=count;return first;
+}
+void reserve_paragraph(Atlas& atlas,std::size_t bytes,const Atlas::Paragraph* keep=nullptr) {
+    constexpr std::size_t budget=8ull*1024*1024;
+    if(bytes>budget) throw std::length_error("Native paragraph exceeds cache budget");
+    while(bytes>budget-atlas.paragraph_bytes) {
+        auto oldest=atlas.paragraphs.end();
+        for(auto entry=atlas.paragraphs.begin();entry!=atlas.paragraphs.end();++entry) {
+            const auto& paragraph=entry->second;
+            if(&paragraph==keep||(paragraph.geometry&&paragraph.geometry.use_count()!=1)||
+               paragraph.layout.use_count()>(paragraph.geometry?2:1)) continue;
+            if(oldest==atlas.paragraphs.end()||paragraph.used<oldest->second.used) oldest=entry;
+        }
+        if(oldest==atlas.paragraphs.end()) throw std::length_error("Active native paragraphs exceed cache budget");
+        // Only CPU layout/record storage is evicted. The game's cached vertices
+        // still refer to stable atlas pixels, so their slots and UVs stay intact.
+        if(oldest->second.geometry) {
+            for(const auto& record:oldest->second.geometry->records) glyph_pages.erase(&record);
+            release_paragraph_tokens(atlas,oldest->second.geometry->first_token,
+                static_cast<std::uint32_t>(oldest->second.geometry->records.size()));
+        }
+        atlas.paragraph_bytes-=oldest->second.bytes;atlas.paragraphs.erase(oldest);
+    }
+}
 Atlas::Paragraph& paragraph_layout(Atlas& atlas,void* font,std::string_view text,float width,bool wrap,bool formatted) {
     const auto scale=*reinterpret_cast<const float*>(static_cast<const std::byte*>(font)+0x968);
     if(!std::isfinite(scale)||scale<=0) throw std::invalid_argument("Invalid native paragraph scale");
@@ -158,12 +208,12 @@ Atlas::Paragraph& paragraph_layout(Atlas& atlas,void* font,std::string_view text
     std::vector<float> icons;for(const auto& icon:content->icons()) icons.push_back(icon.advance);
     const auto key=std::make_tuple(wrap,formatted,width,scale,std::string(text),content->colors(),std::move(icons));
     const auto found=atlas.paragraphs.find(key);
-    if(found!=atlas.paragraphs.end()) return found->second;
-    constexpr std::size_t budget=8ull*1024*1024;
-    // Include retained DirectWrite text/cluster storage, not only our key.
+    if(found!=atlas.paragraphs.end()) { found->second.used=++atlas.paragraph_clock;return found->second; }
+    // Include DirectWrite text/cluster storage and both affinities of cached
+    // visual caret stops, rather than charging only the lookup key.
     std::size_t color_bytes=0;for(const auto& color:content->colors()) color_bytes+=sizeof(std::string)+color.size();
-    const auto estimate=sizeof(Atlas::Paragraph)+text.size()*32+color_bytes*2+4096;
-    if(estimate>budget-atlas.paragraph_bytes) throw std::length_error("Native paragraph cache budget exhausted");
+    const auto estimate=sizeof(Atlas::Paragraph)+text.size()*96+color_bytes*2+4096;
+    reserve_paragraph(atlas,estimate);
     std::shared_ptr<const ShapedParagraph> layout;
     if(prefer_system) layout=std::make_shared<ShapedParagraph>(text,atlas.size,width,wrap,nullptr,content);
     if(!layout||layout->missing_glyphs()) {
@@ -171,7 +221,7 @@ Atlas::Paragraph& paragraph_layout(Atlas& atlas,void* font,std::string_view text
         if(paragraph_fonts) layout=std::make_shared<ShapedParagraph>(text,atlas.size,width,wrap,paragraph_fonts,content);
     }
     if(!layout||layout->missing_glyphs()) throw std::domain_error("Font collection has no glyph for shaped paragraph");
-    auto& result=atlas.paragraphs.emplace(key,Atlas::Paragraph{std::move(layout),{}}).first->second;
+    auto& result=atlas.paragraphs.emplace(key,Atlas::Paragraph{std::move(layout),{},estimate,++atlas.paragraph_clock}).first->second;
     atlas.paragraph_bytes+=estimate;
     return result;
 }
@@ -363,7 +413,8 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
         transport+=paragraph_color_transition(color,next);color=next;
     };
     auto append_glyph=[&](ScalarGlyph glyph) {
-        transport+=encode(atlas.next_paragraph_token+static_cast<std::uint32_t>(glyphs.size()));
+        // Final invocation-local token values are assigned after cache eviction.
+        transport+=encode(0xf0000+static_cast<std::uint32_t>(glyphs.size()));
         glyphs.push_back(std::move(glyph));
     };
     auto advance_glyph=[&](int advance) {
@@ -401,16 +452,25 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
             throw std::length_error("Native shaped line exceeds transport capacity");
         if(line+1<entry.layout->lines().size()) transport+='\n';
     }
-    if(transport.size()>32000||atlas.next_paragraph_token+glyphs.size()>0xffffe)
-        throw std::length_error("Native paragraph transport token budget exhausted");
+    if(transport.size()>32000||glyphs.size()>0xfffe)
+        throw std::length_error("Native paragraph transport exceeds capacity");
     const auto estimate=sizeof(NativeParagraph)+transport.size()+glyphs.size()*(sizeof(NativeGlyph)+64);
-    if(estimate>8ull*1024*1024-atlas.paragraph_bytes)
-        throw std::length_error("Native paragraph cache budget exhausted");
+    reserve_paragraph(atlas,estimate,&entry);
     auto geometry=std::make_shared<NativeParagraph>();
-    geometry->layout=entry.layout;geometry->draw_text=std::move(transport);geometry->first_token=atlas.next_paragraph_token;
+    geometry->layout=entry.layout;
     geometry->records.resize(glyphs.size());
     geometry->glyphs.reserve(glyphs.size());
+    geometry->first_token=allocate_paragraph_tokens(atlas,static_cast<std::uint32_t>(glyphs.size()));
     try {
+        for(std::size_t offset=0;offset<transport.size();) {
+            const auto unit=native_text_unit(transport,offset,formatted);
+            if(unit.kind==TextUnitKind::glyph&&unit.scalar>=0xf0000&&unit.scalar<0xf0000+glyphs.size()) {
+                const auto assigned=encode(geometry->first_token+unit.scalar-0xf0000);
+                std::copy(assigned.begin(),assigned.end(),transport.begin()+offset);
+            }
+            offset=unit.end;
+        }
+        geometry->draw_text=std::move(transport);
         for(std::size_t index=0;index<glyphs.size();++index) {
             const auto packed=queue_glyph(atlas,std::move(glyphs[index]));
             auto& record=geometry->records[index];record=packed.metrics;
@@ -418,10 +478,10 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
         }
     } catch(...) {
         for(const auto& record:geometry->records) glyph_pages.erase(&record);
+        release_paragraph_tokens(atlas,geometry->first_token,static_cast<std::uint32_t>(glyphs.size()));
         throw;
     }
-    atlas.next_paragraph_token+=static_cast<std::uint32_t>(glyphs.size());
-    atlas.paragraph_bytes+=estimate;entry.geometry=std::move(geometry);
+    atlas.paragraph_bytes+=estimate;entry.bytes+=estimate;entry.geometry=std::move(geometry);
     return entry.geometry;
 }
 void release_font_atlas(void* const* table) noexcept {

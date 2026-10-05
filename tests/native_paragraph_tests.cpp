@@ -200,6 +200,27 @@ int main() {
     font.put(0x968,1.5f);
     check(measure_paragraph_text(font.data(),text.c_str(),-1,true)==
         static_cast<int>(std::ceil(unwrapped->metrics().width)*1.5f),"native scaling follows the shaped integer advance");
+    font.put(0x968,1.f);
+    const auto retained_record=*geometry->glyphs.front();
+    const auto retained_page=font_glyph_page(geometry->glyphs.front());
+    for(int index=0;index<3000;++index) {
+        const auto content=std::string(u8"العربية ")+std::to_string(index);
+        const auto layout=font_paragraph_layout(font.data(),content,200,false,false);
+        check(layout&&layout->text()==content,"repeated editor content evicts inactive CPU layouts without losing shaping");
+        layout->move_caret(layout->text().size(),true,false);
+    }
+    for(int index=0;index<1600;++index) {
+        const auto content=std::string(u8"עברית ")+std::to_string(index);
+        const auto transient=font_paragraph_geometry(font.data(),content,200,false,false);
+        check(transient&&!transient->glyphs.empty(),"new draw geometry remains available after CPU cache pressure");
+    }
+    check(std::memcmp(&retained_record,geometry->glyphs.front(),sizeof(retained_record))==0&&
+        font_glyph_page(geometry->glyphs.front())==retained_page,
+        "active geometry retains native records, texture pages and UVs during eviction");
+    check(begin_native_paragraph(font.data(),&source,box,0)!=&source&&
+        find_paragraph_glyph(font.table(),geometry->first_token)==geometry->glyphs.front(),
+        "an externally retained paragraph still resolves its original transport after eviction");
+    end_native_paragraph();
     const auto page=font_glyph_page(geometry->glyphs.front());
     release_font_atlas(font.table());
     check(dynamic_font(alias.data())&&font_glyph_page(geometry->glyphs.front())==page,"shaped pages survive an independent font alias release");
