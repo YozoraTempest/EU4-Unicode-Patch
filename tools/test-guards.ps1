@@ -8,16 +8,19 @@ $log=Join-Path $buildRoot 'eu4_unicode_probe.log'
 & (Join-Path $buildRoot 'guard_host.exe') $dll
 if ($LASTEXITCODE -ne 0) { throw 'Guard test host failed' }
 if ((Get-Content $log -Raw) -notmatch 'outside the isolated research fixture') { throw 'Path guard did not reject host' }
-$hashFixture=Join-Path $buildRoot 'guard-case\EU4UnicodePatch\private\runtime'
-New-Item -ItemType Directory -Path $hashFixture -Force | Out-Null
-$hostPath=Join-Path $hashFixture 'guard_host.exe'
+$layoutFixture=Join-Path $buildRoot 'guard-case\EU4UnicodePatch\private\runtime'
+New-Item -ItemType Directory -Path $layoutFixture -Force | Out-Null
+$hostPath=Join-Path $layoutFixture 'guard_host.exe'
 Copy-Item (Join-Path $buildRoot 'guard_host.exe') $hostPath
 & $hostPath $dll
-if ($LASTEXITCODE -ne 0) { throw 'Hash test host failed' }
-if ((Get-Content $log -Raw) -notmatch 'executable hash mismatch') { throw 'Hash guard did not reject host' }
+if ($LASTEXITCODE -ne 0) { throw 'Layout test host failed' }
+$diagnostic=Get-Content $log -Raw
+if ($diagnostic -notmatch 'Executable SHA-256: [0-9a-f]{64}' -or $diagnostic -notmatch 'unsupported section layout') {
+    throw 'Layout guard did not reject host after recording its diagnostic hash.'
+}
 $playerDll=Join-Path $buildRoot 'eu4_unicode_patch.dll'
 & (Join-Path $buildRoot 'guard_host.exe') $playerDll
-if ($LASTEXITCODE -ne 0 -or (Get-Content (Join-Path $buildRoot 'eu4_unicode_patch.log') -Raw) -notmatch 'executable hash mismatch') {
+if ($LASTEXITCODE -ne 0 -or (Get-Content (Join-Path $buildRoot 'eu4_unicode_patch.log') -Raw) -notmatch 'unsupported section layout') {
     throw 'Player DLL did not reject an unsupported executable.'
 }
 $loaderFixture=Join-Path $buildRoot 'player-loader-case'

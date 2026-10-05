@@ -19,9 +19,12 @@
 | `glyph_registry` / `scalar_glyph` / `native_font_atlas` | 稀疏字形记录、按需图集和设备恢复 |
 | `font_assets` / `font_atlas_assets` | 原版字体路径映射与运行时基础图集生成 |
 | `plugin.cpp` / MASM | 指令检查、引擎挂钩与失败回滚 |
+| `executable_compatibility` / `eu4_1375_profile` | 映像布局、必要代码与内存范围检查 |
 | `version_proxy` | Windows version API 转发及插件加载 |
 
 `eu4_unicode_patch.dll` 用于玩家目录，输入默认开启；`eu4_unicode_probe.dll` 保留隔离目录和输入开关，供原生探针使用。
+
+EXE SHA-256 只记录到日志。加载前检查实际映像的 x64 PE 布局、必要代码与常量，以及全局地址的内存权限；允许不重叠的新增节和无关修改。挂钩创建后、首次写入前再次检查，失败或异常时清理本次挂钩并恢复已写入的常量。`executable_check.exe <eu4.exe>` 可映射本机 EXE 做同样的只读检查，不执行游戏入口。
 
 ## 引擎入口
 

@@ -28,8 +28,8 @@ if not __debug__:
 build = (root / args.build_directory).resolve()
 game = args.executable.resolve()
 game_hash = hashlib.sha256(game.read_bytes()).hexdigest()
-if game_hash != '9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a':
-    parser.error('Unsupported game executable SHA-256')
+import subprocess
+subprocess.run([str(build / 'executable_check.exe'), str(game)], check=True)
 dll_path = build / 'eu4_unicode_patch.dll'
 dll_hash = hashlib.sha256(dll_path.read_bytes()).hexdigest()
 build_info = json.loads((build / 'build-info.json').read_text(encoding='utf-8-sig'))
@@ -65,7 +65,8 @@ def fn(name, result, *args):
 pointer('image', base)
 source = (root / 'src/plugin.cpp').read_text(encoding='utf-8')
 # Verify native site bytes before any test hook changes the mapped image.
-guards = re.findall(r'\{(0x[0-9a-f]+),"([0-9a-f]+)"\}', source)
+profile = (root / 'src/eu4_1375_profile.cpp').read_text(encoding='utf-8')
+guards = re.findall(r'\{(0x[0-9a-f]+),"([0-9a-f]+)"', profile)
 assert guards, 'No native site guards found'
 for rva, pattern in guards:
     expected = bytes.fromhex(pattern)
