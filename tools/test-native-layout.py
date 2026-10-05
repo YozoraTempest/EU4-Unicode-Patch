@@ -19,6 +19,7 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--executable', required=True, type=Path)
 parser.add_argument('--build-directory', default='build', type=Path)
+parser.add_argument('--assets-directory', type=Path, help='Game resources when the EXE is stored separately')
 parser.add_argument('--report', type=Path)
 args = parser.parse_args()
 if os.name != 'nt' or C.sizeof(C.c_void_p) != 8:
@@ -451,7 +452,8 @@ for width,height,truncate,formatted in [(220,0,False,True),(220,55,False,False),
 selection_check = __import__('runpy').run_path(str(root / 'tools/native-selection-check.py'))
 selection_results = selection_check['verify'](base, symbols, address_hook, callbacks, crt)
 map_check = __import__('runpy').run_path(str(root / 'tools/native-map-check.py'))
-map_results = map_check['verify'](base, fn, hook, engine_string, game.parent, pointer, symbol, executable_code)
+assets = args.assets_directory.resolve() if args.assets_directory else game.parent
+map_results = map_check['verify'](base, fn, hook, engine_string, assets, pointer, symbol, executable_code)
 editor_check = __import__('runpy').run_path(str(root / 'tools/native-editor-check.py'))
 editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks, crt)
 report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_hash,
