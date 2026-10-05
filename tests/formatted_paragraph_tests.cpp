@@ -1,4 +1,5 @@
 #include "formatted_paragraph.hpp"
+#include "unicode_services.hpp"
 #include "formatted_text.hpp"
 #include "shaped_paragraph.hpp"
 #include "unicode_text.hpp"
