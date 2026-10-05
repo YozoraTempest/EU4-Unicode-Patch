@@ -15,6 +15,7 @@ struct NativeParagraph {
 // localization, editable text, saves, search or the Unicode scalar registry.
 const EngineString* begin_native_paragraph(void* font,const EngineString* source,const int* box,int inset,bool formatted=true) noexcept;
 const EngineString* begin_native_button_paragraph(void* font,const EngineString* source,int width,const int* margin,bool formatted) noexcept;
+const EngineString* begin_native_button_paragraph_arguments(void* font,const EngineString* source,const std::byte* arguments) noexcept;
 const EngineString* begin_native_popup_paragraph(void* font,const EngineString* source,int width) noexcept;
 void end_native_paragraph() noexcept;
 void begin_native_map_paragraph() noexcept;

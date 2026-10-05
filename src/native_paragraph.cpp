@@ -128,6 +128,15 @@ const EngineString* begin_native_button_paragraph(void* font,const EngineString*
     const auto pixels=margin?static_cast<float>(static_cast<std::int64_t>(width?width:320)-2ll*margin[0]):0.f;
     return begin_paragraph(font,source,pixels,true,formatted,Renderer::button);
 }
+const EngineString* begin_native_button_paragraph_arguments(void* font,const EngineString* source,const std::byte* arguments) noexcept {
+    int width=0;const int* margin=nullptr;
+    std::memcpy(&width,arguments,sizeof(width));
+    std::memcpy(&margin,arguments+0x10,sizeof(margin));
+    // The native formatter reads rbp+2210, relative to width at rbp+21d8.
+    // rbp+21f8 is the independent truncation flag, not the format flag.
+    const auto formatted=arguments[0x38]!=std::byte{0};
+    return begin_native_button_paragraph(font,source,width,margin,formatted);
+}
 const EngineString* begin_native_popup_paragraph(void* font,const EngineString* source,int width) noexcept {
     const auto scale=dynamic_font(font)?native_scale(font):1.f;
     return begin_paragraph(font,source,width<0?32767.f*scale:static_cast<float>(width),width>=0,true,Renderer::popup);

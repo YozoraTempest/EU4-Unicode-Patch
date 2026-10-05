@@ -887,11 +887,7 @@ const EngineString* begin_main_paragraph(void* font,const EngineString* source,c
     return eu4unicode::begin_native_paragraph(font,source,box,inset,formatted);
 }
 const EngineString* begin_button_paragraph(void* font,const EngineString* source,const std::byte* arguments) noexcept {
-    const auto width=*reinterpret_cast<const int*>(arguments);
-    const auto height=*reinterpret_cast<const int*>(arguments+8);
-    const auto margin=*reinterpret_cast<const int* const*>(arguments+0x10);
-    const auto formatted=arguments[0x20]!=std::byte{0}||(width&&height);
-    return eu4unicode::begin_native_button_paragraph(font,source,width,margin,formatted);
+    return eu4unicode::begin_native_button_paragraph_arguments(font,source,arguments);
 }
 const EngineString* begin_popup_paragraph(void* font,const EngineString* source,int width) noexcept {
     return eu4unicode::begin_native_popup_paragraph(font,source,width);
@@ -1108,6 +1104,8 @@ bool initialize(HMODULE module) {
         {0x159b7c0,"488bc441564881ecf00000000f2970c8"},
         {0x159b3b0,"4c8d9c2408240000410f2873e8"},
         {0x15966ec,"498bd8488bf9488b95c8210000"},
+        {0x15968cb,"80bd10220000000f8481070000"},
+        {0x1597d70,"80bd10220000000f840d060000"},
         {0x1598841,"4c8d9c2460220000498b5b48"},
         {0x159af87,"8b5c244883c306895c2448"},
         {0x15986f6,"8b95c8210000ffc28995c8210000"},

@@ -146,6 +146,26 @@ int main() {
     const auto literal_geometry=font_paragraph_geometry(font.data(),formatted,200,true,false);
     check(literal_geometry->layout->content().visible()==formatted&&literal_geometry->layout->content().colors().size()==1,
         "unformatted draw requests preserve literal formatting markers");
+    alignas(void*) std::array<std::byte,0x40> button_arguments{};
+    const int button_width=200;const int* button_margin=margin;
+    std::memcpy(button_arguments.data(),&button_width,sizeof(button_width));
+    std::memcpy(button_arguments.data()+0x10,&button_margin,sizeof(button_margin));
+    for(const bool truncate:{false,true}) for(const bool parse:{false,true}) for(const int height:{0,55}) {
+        std::memcpy(button_arguments.data()+8,&height,sizeof(height));
+        button_arguments[0x20]=static_cast<std::byte>(truncate);
+        button_arguments[0x38]=static_cast<std::byte>(parse);
+        const auto expected=font_paragraph_geometry(font.data(),formatted,200,true,parse);
+        const auto actual=begin_native_button_paragraph_arguments(font.data(),&colored,button_arguments.data());
+        check(actual!=&colored&&std::string_view(actual->data(),actual->size)==expected->draw_text,
+            "native button formatting is independent of height and truncation");
+        end_native_paragraph();
+    }
+    const std::string flagged=u8"العربية (@FRA) / @ENG";auto flagged_source=borrow(flagged);
+    button_arguments[0x20]=std::byte{0};button_arguments[0x38]=std::byte{1};
+    const auto flagged_draw=begin_native_button_paragraph_arguments(font.data(),&flagged_source,button_arguments.data());
+    check(flagged_draw==&flagged_source,
+        "formatted country flags retain the original native flag renderer");
+    end_native_paragraph();
     for(int repeat=0;repeat<2;++repeat) {
         check(begin_native_paragraph(font.data(),&colored,box,0,false)!=&colored,"literal complex text receives shaping without parsing colors");
         end_native_paragraph();

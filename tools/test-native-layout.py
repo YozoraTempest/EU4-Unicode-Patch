@@ -389,6 +389,7 @@ C.c_int.from_address(ui_frame_base+0x21d8).value=220
 C.c_int.from_address(ui_frame_base+0x21e0).value=55
 C.c_void_p.from_address(ui_frame_base+0x21e8).value=C.addressof(margin)
 C.c_ubyte.from_address(ui_frame_base+0x21f8).value=0
+C.c_ubyte.from_address(ui_frame_base+0x2210).value=1
 C.c_int.from_address(ui_frame_base+0x398).value=-1
 xmm_values=C.create_string_buffer(bytes(range(96)))
 load_xmm=b'\x48\xb8'+struct.pack('<Q',C.addressof(xmm_values))+b''.join(
@@ -434,6 +435,18 @@ assert scope_calls==[
     ('main',font_base,C.addressof(scope_input),C.addressof(scope_box),7,True),
     ('button',font_base,C.addressof(scope_input),220,C.addressof(margin),True),
     ('popup',font_base,C.addressof(scope_input),-1)],scope_calls
+button_format_results=[]
+begin_button=fn('begin_button_paragraph',C.c_void_p,C.c_void_p,C.c_void_p,C.c_void_p)
+for width,height,truncate,formatted in [(220,0,False,True),(220,55,False,False),
+                                      (220,0,True,False),(220,55,True,True)]:
+    C.c_int.from_address(ui_frame_base+0x21d8).value=width
+    C.c_int.from_address(ui_frame_base+0x21e0).value=height
+    C.c_ubyte.from_address(ui_frame_base+0x21f8).value=truncate
+    C.c_ubyte.from_address(ui_frame_base+0x2210).value=formatted
+    result=begin_button(font_base,C.addressof(scope_input),ui_frame_base+0x21d8)
+    assert result==C.addressof(scope_output)
+    assert scope_calls[-1]==('button',font_base,C.addressof(scope_input),width,C.addressof(margin),formatted),scope_calls[-1]
+    button_format_results.append({'width':width,'height':height,'truncate':truncate,'formatted':formatted})
 selection_check = __import__('runpy').run_path(str(root / 'tools/native-selection-check.py'))
 selection_results = selection_check['verify'](base, symbols, address_hook, callbacks, crt)
 map_check = __import__('runpy').run_path(str(root / 'tools/native-map-check.py'))
@@ -443,6 +456,7 @@ report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_
           'native_width': results, 'native_layout': layout_results,
           'substring_callers': [hex(x) for x in sorted(substring_callers)],
           'ui_page_emission':ui_page_results,'ui_geometry_scopes':ui_scope_results,
+          'button_format_arguments':button_format_results,
           'native_selection_sprites':selection_results,'native_map_fit':map_results}
 if args.report:
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -450,5 +464,6 @@ print(f"PASS: {len(results)} native width cases, {len(layout_results)} native la
       f"all {len(expected_callers)} truncation exits; player DLL {dll_hash}.", flush=True)
 print(f"PASS: {len(ui_page_results)} native UI page-emission cases preserve positions, colors and registers.",flush=True)
 print(f"PASS: {len(ui_scope_results)} native UI geometry scope cases preserve entry and exit registers.",flush=True)
+print(f"PASS: {len(button_format_results)} native button format arguments remain independent of height and truncation.",flush=True)
 print("PASS: native selection factory, expired render parents, relinking and manager release.",flush=True)
 print(f"PASS: {len(map_results)} shaped map labels retain native fitting dimensions and scoped glyphs.",flush=True)
