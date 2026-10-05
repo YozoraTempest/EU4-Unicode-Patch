@@ -425,8 +425,8 @@ void paint_editor_selection(void* outer) noexcept {
         if(!sprite) { editor_selections->hide(outer);return; }
         const auto scale=*reinterpret_cast<float*>(font+0x968);
         if(!std::isfinite(scale)||scale<=0) { editor_selections->hide(outer);return; }
-        struct Position { float x,y; } origin{};
-        reinterpret_cast<Position*(*)(void*,Position*)>((*static_cast<void***>(sprite))[0x178/8])(sprite,&origin);
+        auto origin=eu4unicode::native_sprite_input_position(sprite);
+        if(!std::isfinite(origin.x)||!std::isfinite(origin.y)) { editor_selections->hide(outer);return; }
         EditorPixelPoint pixel{};shaped_editor_position(widget,&pixel,false);
         origin.x-=pixel.x;origin.y-=pixel.y;
         const auto height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void***>(font))[0x68/8])(font)/2;
@@ -1211,6 +1211,9 @@ bool initialize(HMODULE module) {
         ,{0x15340a0,"40534883ec20c681c500000000"}
         ,{0x1534100,"48895c2408574883ec2048899198020000"}
         ,{0x14db6a0,"48895c240848897424184889542410"}
+        ,{0x162f0b0,"4883ec58660f6e02488d4424080f5bc0"}
+        ,{0x162f1b0,"0fb78150010000f30f1089e0000000"}
+        ,{0x162f070,"3991b4010000750f488bc248c1e820"}
         ,{0x95660,"40534883ec20488b5118488bd94883"}
         ,{0x17345f0,"48ff25a1bf8700"}
         ,{0x17349f0,"48ff2541c58700"}

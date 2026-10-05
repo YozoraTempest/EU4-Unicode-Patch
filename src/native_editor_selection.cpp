@@ -5,6 +5,11 @@
 #include <unordered_map>
 
 namespace eu4unicode {
+NativeSpritePoint native_sprite_input_position(const void* sprite) noexcept {
+    NativeSpritePoint point{};
+    std::memcpy(&point,static_cast<const std::byte*>(sprite)+0x148,sizeof(point));
+    return point;
+}
 namespace {
 template<class Fn> Fn method(void* sprite,std::size_t offset) {
     return reinterpret_cast<Fn>((*static_cast<void***>(sprite))[offset/sizeof(void*)]);

@@ -5,6 +5,10 @@
 
 namespace eu4unicode {
 struct NativeSelectionRect { int x,y,width,height; };
+struct NativeSpritePoint { float x,y; };
+// Coordinates supplied to the sprite's position setter, before its render
+// transform. The screen-position getter belongs to a different coordinate space.
+NativeSpritePoint native_sprite_input_position(const void* sprite) noexcept;
 using NativeSpriteFactory=void*(*)(void*,const EngineString*,void*,unsigned char,EngineString*);
 using NativeSpriteDestroy=void(*)(void*,void*);
 using NativeStringDestroy=void(*)(EngineString*);

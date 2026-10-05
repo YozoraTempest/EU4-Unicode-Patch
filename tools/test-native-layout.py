@@ -434,14 +434,18 @@ assert scope_calls==[
     ('main',font_base,C.addressof(scope_input),C.addressof(scope_box),7,True),
     ('button',font_base,C.addressof(scope_input),220,C.addressof(margin),True),
     ('popup',font_base,C.addressof(scope_input),-1)],scope_calls
+selection_check = __import__('runpy').run_path(str(root / 'tools/native-selection-check.py'))
+selection_results = selection_check['verify'](base, symbols, address_hook, callbacks, crt)
 report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_hash,
           'game_exe_sha256': game_hash, 'site_guards': len(guards),
           'native_width': results, 'native_layout': layout_results,
           'substring_callers': [hex(x) for x in sorted(substring_callers)],
-          'ui_page_emission':ui_page_results,'ui_geometry_scopes':ui_scope_results}
+          'ui_page_emission':ui_page_results,'ui_geometry_scopes':ui_scope_results,
+          'native_selection_sprites':selection_results}
 if args.report:
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f"PASS: {len(results)} native width cases, {len(layout_results)} native layouts, "
       f"all {len(expected_callers)} truncation exits; player DLL {dll_hash}.", flush=True)
 print(f"PASS: {len(ui_page_results)} native UI page-emission cases preserve positions, colors and registers.",flush=True)
 print(f"PASS: {len(ui_scope_results)} native UI geometry scope cases preserve entry and exit registers.",flush=True)
+print("PASS: native selection factory, expired render parents, relinking and manager release.",flush=True)

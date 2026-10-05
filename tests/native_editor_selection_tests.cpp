@@ -1,5 +1,6 @@
 #include "native_editor_selection.hpp"
 #include <array>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
@@ -41,6 +42,12 @@ void destroy_text(EngineString*) { ++text_destroyed; }
 }
 void verify_native_editor_selections() {
     using namespace eu4unicode;
+    std::array<std::byte,0x160> caret{};
+    const NativeSpritePoint input{235,76},screen{235,224};
+    std::memcpy(caret.data()+0x148,&input,sizeof(input));
+    std::memcpy(caret.data()+0xdc,&screen,sizeof(screen));
+    const auto point=native_sprite_input_position(caret.data());
+    require(point.x==235&&point.y==76);
     methods[0x60/8]=reinterpret_cast<void*>(show);methods[0x68/8]=reinterpret_cast<void*>(hide);
     methods[0xe0/8]=reinterpret_cast<void*>(reset);methods[0xc8/8]=reinterpret_cast<void*>(parent);
     methods[0x168/8]=reinterpret_cast<void*>(position);methods[0x1d0/8]=reinterpret_cast<void*>(size);
