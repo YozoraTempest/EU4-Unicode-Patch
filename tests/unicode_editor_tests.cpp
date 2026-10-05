@@ -97,6 +97,9 @@ int main() {
         check(rows.offset(position)==offset,"soft wraps and hard CR/LF breaks preserve document byte positions");
     }
     check(rows.rows().size()==5&&rows.rows()[1].consumed==rows.rows()[1].length+2,"real CR/LF remains source bytes while synthetic breaks do not");
+    const EditRows spaces(u8"中文 English العربية",{{u8"中文\n",false},{"English\n",false},{u8"العربية",false}});
+    check(spaces.rows()[1].start==7&&spaces.rows()[2].start==15&&spaces.offset({1,0})==7,
+        "native soft wraps replace consumed spaces without shifting source byte positions");
     rejected=false;
     try { EditRows bad(u8"e\u0301",{{"e\n",true},{u8"\u0301",false}}); } catch(const std::invalid_argument&) { rejected=true; }
     check(rejected,"native soft wraps cannot detach combining marks");

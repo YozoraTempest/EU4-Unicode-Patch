@@ -15,7 +15,10 @@ EditRows::EditRows(std::string_view source,const std::vector<EditRowInput>& rows
             if(row.empty()||row.back()!='\n') throw std::invalid_argument("Invalid native soft wrap");
             row.remove_suffix(1);
         }
-        if(row.size()>source.size()-start||source.substr(start,row.size())!=row||!valid_utf8(row))
+        const auto segment=source.substr(start,row.size());
+        const bool replaced_space=!input.synthetic_newline&&!row.empty()&&row.back()=='\n'&&
+            segment.size()==row.size()&&segment.back()==' '&&segment.substr(0,segment.size()-1)==row.substr(0,row.size()-1);
+        if(row.size()>source.size()-start||(segment!=row&&!replaced_space)||!valid_utf8(row))
             throw std::invalid_argument("Native editor rows do not match the document");
         const auto consumed=row.size();
         if(!row.empty()&&row.back()=='\n') { row.remove_suffix(1);if(!row.empty()&&row.back()=='\r') row.remove_suffix(1); }

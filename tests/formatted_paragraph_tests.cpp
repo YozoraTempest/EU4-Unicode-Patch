@@ -94,6 +94,15 @@ int main() {
         "country flags, native icons and contextual scripts share bidi layout and wrapping");
     check(flag_content->icons()[0].command=="@FRA"&&flag_content->icons()[1].command=="@D01",
         "native country commands survive shaping without replacing the flag renderer");
+    const std::string symbols=u8"العربية ¤1 / हिन्दी {12";
+    auto symbol_content=std::make_shared<ParagraphText>(symbols,true,ParagraphText::IconMeasure{},ParagraphText::ColorLookup{},
+        ParagraphText::IconMeasure{},ParagraphText::BitmapMeasure{},[](std::string_view command) {
+            check(command==u8"¤1"||command=="{12","symbol metric resolver receives the whole native command");
+            return command.front()=='{'?8.f:18.f;
+        });
+    ShapedParagraph symbol_layout(symbols,24,90,true,{},symbol_content);
+    check(symbol_layout.objects().size()==2&&symbol_content->icons()[0].command==u8"¤1"&&symbol_content->icons()[1].command=="{12",
+        "native symbol arguments survive contextual shaping and wrapping");
     check(styled.text()==raw&&styled.objects().size()==1&&styled.metrics().lines>1,
         "formatted paragraphs wrap with native icon objects and preserve the source");
     const auto& object=styled.objects().front();

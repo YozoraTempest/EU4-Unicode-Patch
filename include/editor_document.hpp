@@ -8,8 +8,8 @@ namespace eu4unicode {
 struct EditRowInput { std::string_view text;bool synthetic_newline=false; };
 struct EditRow { std::size_t start,length,consumed; };
 struct EditPosition { std::size_t row,column; };
-// The engine inserts newlines for soft wraps in a separate row cache. Source
-// positions always address the original UTF-8, including real CR/LF bytes.
+// Cached rows may insert a newline or replace a consumed space at a soft wrap.
+// Source positions always address the original UTF-8, including real CR/LF.
 class EditRows {
 public:
     EditRows(std::string_view source,const std::vector<EditRowInput>& rows);

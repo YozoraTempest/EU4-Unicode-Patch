@@ -1,0 +1,134 @@
+"""Exercise multiline edit hooks against EU4's mapped row and caret routines."""
+import ctypes as C
+import struct
+
+
+def verify(base, fn, hook, engine_string, font_source, callbacks):
+    fn('configure_native_editor_text', None, C.c_void_p)(base)
+    fn('configure_editor_presentation', None, C.c_void_p)(base)
+    for rva, name, original in (
+        (0x1537210, 'editor_width_fit', 'original_editor_width_fit'),
+        (0x1539820, 'editor_word_break', 'original_editor_word_break'),
+        (0x1536060, 'editor_caret_position', 'original_editor_caret'),
+        (0x1535eb0, 'editor_anchor_position', 'original_editor_anchor'),
+        (0x153b170, 'editor_selection', 'original_editor_selection'),
+        (0x15384d0, 'editor_left', 'original_editor_left'),
+        (0x15385a0, 'editor_right', 'original_editor_right'),
+        (0x15366c0, 'editor_key', 'original_editor_key'),
+    ):
+        hook(rva, name, original)
+
+    def callback(result, arguments, function):
+        value = C.CFUNCTYPE(result, *arguments)(function)
+        callbacks.append(value)
+        return C.cast(value, C.c_void_p).value
+
+    font = C.create_string_buffer(0x4000)
+    C.memmove(font, font_source, 0x1000)
+    font_address = C.addressof(font)
+    context = C.create_string_buffer(0x500)
+    methods = (C.c_void_p * 64)()
+    C.memmove(methods, C.c_void_p.from_buffer(font).value, C.sizeof(methods))
+    methods[0x60 // 8] = base + 0x159b7c0
+    methods[0x68 // 8] = callback(C.c_int, [C.c_void_p], lambda _: 16)
+    methods[0xa8 // 8] = callback(C.c_int, [C.c_void_p, C.c_ubyte], lambda *_: 0)
+    C.c_void_p.from_buffer(font).value = C.addressof(methods)
+    C.c_void_p.from_buffer(font, 0x48).value = C.addressof(context)
+    C.c_void_p.from_buffer(context, 0x480).value = C.addressof(context)
+    for offset, value in ((0x960, 16), (0x970, 93), (0x978, 2048), (0x97c, 4096)):
+        C.c_int.from_buffer(font, offset).value = value
+    C.c_float.from_buffer(font, 0x968).value = 1
+    name_buffer = C.create_string_buffer(b'gfx/fonts/mod-bitmap-16')
+    name = (C.c_void_p * 2)(C.addressof(name_buffer), len(name_buffer.value))
+    fn('register_font_atlas', None, C.c_void_p, C.c_void_p)(font_address, C.addressof(name))
+    assert fn('dynamic_font', C.c_bool, C.c_void_p)(font_address)
+    editor_methods = (C.c_void_p * 96)()
+    C.memmove(editor_methods, base + 0x1d915c0, C.sizeof(editor_methods))
+    notifications = []
+    editor_methods[0x208 // 8] = callback(None, [C.c_void_p], lambda widget: notifications.append(widget))
+    assign = C.CFUNCTYPE(C.c_void_p, C.c_void_p, C.c_char_p, C.c_size_t)(base + 0x95110)
+    destroy = C.CFUNCTYPE(None, C.c_void_p)(base + 0x95660)
+    get_rows = C.CFUNCTYPE(C.c_void_p, C.c_void_p)(base + 0x15373a0)
+    absolute = C.CFUNCTYPE(C.c_int, C.c_void_p, C.c_uint, C.c_uint)(base + 0x153aa90)
+    caret = fn('native_edit_caret', None, C.c_void_p, C.c_size_t, C.c_bool)
+    key = fn('editor_key', C.c_bool, C.c_void_p, C.c_void_p)
+
+    def dispatch(widget, code, modifiers=0):
+        event = (C.c_uint32 * 3)(code, 0, modifiers)
+        assert key(widget, C.addressof(event))
+
+    def current(widget):
+        return engine_type.from_address(widget + 0x30).value()
+
+    def offset(widget):
+        return absolute(widget, C.c_uint16.from_address(widget + 0x56).value,
+                        C.c_uint16.from_address(widget + 0x54).value)
+
+    engine_type = type(engine_string())
+    owners = []
+    results = []
+    for sample, width in (('中文 English\nالعربية 123\nहिन्दी e\u0301𠮷', 110),
+                          ('A中\r\nالعربية\r\nहिन्दी', 90),
+                          ('中文 English العربية हिन्दी 中文 English', 55),
+                          ('中文\n\nالعربية\n', 110), ('', 55)):
+        owner = C.create_string_buffer(0x400)
+        owners.append(owner)
+        widget = C.addressof(owner) + 0xc8
+        C.c_void_p.from_address(widget).value = C.addressof(editor_methods)
+        C.c_void_p.from_address(widget + 0x98).value = font_address
+        C.c_uint16.from_address(widget + 0x68).value = width
+        C.c_uint16.from_address(widget + 0x6a).value = 200
+        C.c_uint16.from_address(widget + 0x6e).value = 32000
+        C.c_uint16.from_address(widget + 0xdc).value = 32000
+        C.c_uint8.from_address(widget + 0xd9).value = 1
+        for field in (0x30, 0x70):
+            C.c_uint64.from_address(widget + field + 24).value = 15
+        original = sample.encode()
+        assign(widget + 0x30, original, len(original))
+        C.c_uint8.from_address(widget + 0x100).value = 1
+        C.c_uint8.from_address(widget + 0x101).value = 1
+        row_vector = get_rows(widget)
+        start, finish = (C.c_void_p * 2).from_address(row_vector)
+        rows = [engine_type.from_address(entry).value()
+                for entry in range(start or 0, finish or 0, 40)]
+        consumed = 0
+        for index, row in enumerate(rows):
+            inserted = C.c_uint8.from_address(start + index * 40 + 32).value
+            length = len(row) - bool(inserted)
+            part = original[consumed:consumed + length]
+            assert part == row[:length] or (not inserted and row.endswith(b'\n') and
+                   part.endswith(b' ') and part[:-1] == row[:-1]), (sample, rows, index, part)
+            consumed += length
+        assert consumed == len(original), (sample, rows)
+        for target in (0, len(original)):
+            caret(widget, target, True)
+            assert offset(widget) == target, (sample, target, offset(widget), rows)
+        if original:
+            dispatch(widget, 8)
+            deleted = current(widget)
+            assert len(deleted) < len(original) and deleted.decode(), (sample, deleted)
+            dispatch(widget, ord('z'), 1)
+            assert current(widget) == original and offset(widget) == len(original), sample
+            dispatch(widget, ord('y'), 1)
+            assert current(widget) == deleted, sample
+            dispatch(widget, ord('z'), 1)
+            assert current(widget) == original, sample
+            # Select all using actual native row/column conversion, then delete
+            # across hard and soft breaks as a single history operation.
+            C.c_uint32.from_address(widget + 0x92).value = 0
+            C.c_uint8.from_address(widget + 0x90).value = 1
+            fn('editor_selection', None, C.c_void_p)(widget)
+            assert engine_type.from_address(widget + 0x70).value() == original, sample
+            dispatch(widget, 127)
+            assert current(widget) == b'' and offset(widget) == 0, sample
+            dispatch(widget, ord('z'), 1)
+            assert current(widget) == original, sample
+        results.append({'text': sample, 'native_rows': len(rows), 'wrap_width': width,
+                        'undo_redo': bool(original), 'cross_row_delete': bool(original)})
+        fn('forget_editor_history', None, C.c_void_p)(widget)
+        destroy(widget + 0x30)
+        destroy(widget + 0x70)
+    assert notifications
+    fn('release_font_atlas', None, C.c_void_p)(font_address + 0x120)
+    fn('release_unicode_font', None, C.c_void_p)(font_address + 0x120)
+    return results

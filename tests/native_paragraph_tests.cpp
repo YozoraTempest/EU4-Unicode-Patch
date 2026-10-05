@@ -23,6 +23,7 @@ std::vector<std::string> paragraph_logs;
 void paragraph_log(const char* message) { paragraph_logs.emplace_back(message); }
 int icon_width(void*,const char* name) { return std::strcmp(name,"adm")==0?18:0; }
 int flag_width(void* font) { return static_cast<int>(22*(*reinterpret_cast<float*>(static_cast<std::byte*>(font)+0x968))); }
+int symbol_width(void* font) { return static_cast<int>(18*(*reinterpret_cast<float*>(static_cast<std::byte*>(font)+0x968))); }
 bool color_lookup(void*,unsigned char code,std::uint32_t* value) {
     *value=0xffffffff;return code=='Y'||code=='R'||code=='G'||code=='!';
 }
@@ -33,7 +34,8 @@ struct Font {
     std::array<void*,32> methods{};
     template<class T> void put(std::size_t offset,T value) { std::memcpy(object.data()+offset,&value,sizeof(value)); }
     Font(void* manager) {
-        methods[0xe8/8]=reinterpret_cast<void*>(icon_width);methods[0xf8/8]=reinterpret_cast<void*>(flag_width);put(0,methods.data());
+        methods[0xe8/8]=reinterpret_cast<void*>(icon_width);methods[0xf8/8]=reinterpret_cast<void*>(flag_width);
+        methods[0xf0/8]=reinterpret_cast<void*>(symbol_width);put(0,methods.data());
         put(0x48,context.data());put(0x120+0x41*8,&anchor);put(0x960,18);put(0x968,1.f);
         put(0x970,7);put(0x978,2048);put(0x97c,4096);
         std::memcpy(context.data()+0x480,&manager,sizeof(manager));
@@ -60,6 +62,7 @@ int transport_width(void* font,const char* source,int length,bool formatted) {
         if(unit.kind==TextUnitKind::color) continue;
         if(unit.kind==TextUnitKind::icon) { width+=18;continue; }
         if(unit.kind==TextUnitKind::flag) { width+=flag_width(font);continue; }
+        if(unit.kind==TextUnitKind::symbol) { width+=text[unit.begin]=='{'?8:symbol_width(font);continue; }
         if(unit.scalar=='\n') { maximum=(std::max)(maximum,width);width=0;continue; }
         const auto glyph=find_paragraph_glyph(table,unit.scalar);
         check(glyph!=nullptr,"formatted transport measurement uses the active paragraph glyphs");

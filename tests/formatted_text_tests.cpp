@@ -36,6 +36,10 @@ int main() {
         check(flags.prefix(3)==1&&flags.prefix(6)==5,"country tags cannot be truncated inside a tag");
         check(FormattedText("@FR @abc").visible_text()=="@FR @abc","incomplete tags remain literal text");
         check(FormattedText("@FRA",false).visible_text()=="@FRA","unformatted tags remain literal text");
+        const FormattedText symbols(u8"A¤1{12Z");
+        check(symbols.visible_text()==u8"A\ufffc\ufffcZ","currency and numbered symbols are atomic inline objects");
+        check(symbols.prefix(3)==1&&symbols.prefix(5)==4,"symbol arguments cannot be truncated inside a native command");
+        check(FormattedText("{1x").visible_text()=="{1x","incomplete numbered symbols remain literal text");
         const FormattedText color(u8"§Y中文§!");
         check(color.visible_text()==u8"中文","color code entered visible text");
         check(color.prefix(1)==0&&color.prefix(2)==0&&color.prefix(3)==3,"color directive split");

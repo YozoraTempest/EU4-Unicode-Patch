@@ -451,13 +451,16 @@ selection_check = __import__('runpy').run_path(str(root / 'tools/native-selectio
 selection_results = selection_check['verify'](base, symbols, address_hook, callbacks, crt)
 map_check = __import__('runpy').run_path(str(root / 'tools/native-map-check.py'))
 map_results = map_check['verify'](base, fn, hook, engine_string, game.parent, pointer, symbol, executable_code)
+editor_check = __import__('runpy').run_path(str(root / 'tools/native-editor-check.py'))
+editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks)
 report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_hash,
           'game_exe_sha256': game_hash, 'site_guards': len(guards),
           'native_width': results, 'native_layout': layout_results,
           'substring_callers': [hex(x) for x in sorted(substring_callers)],
           'ui_page_emission':ui_page_results,'ui_geometry_scopes':ui_scope_results,
           'button_format_arguments':button_format_results,
-          'native_selection_sprites':selection_results,'native_map_fit':map_results}
+          'native_selection_sprites':selection_results,'native_map_fit':map_results,
+          'native_multiline_editor':editor_results}
 if args.report:
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f"PASS: {len(results)} native width cases, {len(layout_results)} native layouts, "
@@ -467,3 +470,4 @@ print(f"PASS: {len(ui_scope_results)} native UI geometry scope cases preserve en
 print(f"PASS: {len(button_format_results)} native button format arguments remain independent of height and truncation.",flush=True)
 print("PASS: native selection factory, expired render parents, relinking and manager release.",flush=True)
 print(f"PASS: {len(map_results)} shaped map labels retain native fitting dimensions and scoped glyphs.",flush=True)
+print(f"PASS: {len(editor_results)} native multiline editors preserve rows, complete deletion and undo/redo.",flush=True)

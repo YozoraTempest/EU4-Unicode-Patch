@@ -108,7 +108,7 @@ const EngineString* begin_paragraph(void* font,const EngineString* source,float 
         // and button renderers can consume a native flag transport command.
         if(renderer==Renderer::popup&&formatted) for(std::size_t offset=0;offset<text.size();) {
             const auto unit=native_text_unit(text,offset,true);
-            if(unit.kind==TextUnitKind::flag) return source;
+            if(unit.kind==TextUnitKind::flag||unit.kind==TextUnitKind::symbol) return source;
             offset=unit.end;
         }
         if(!dynamic_font(font)||pixels<=0||!std::isfinite(pixels)) return source;

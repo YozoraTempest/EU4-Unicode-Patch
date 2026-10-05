@@ -215,7 +215,14 @@ Atlas::Paragraph& paragraph_layout(Atlas& atlas,void* font,std::string_view text
         const auto glyph=scalar<=255?static_cast<const NativeGlyph*>(table[scalar]):
             static_cast<const NativeGlyph*>(find_unicode_glyph(table,scalar));
         return glyph?static_cast<float>(glyph->advance):-1.f;
-    }}:ParagraphText::BitmapMeasure{});
+    }}:ParagraphText::BitmapMeasure{},[font,scale](std::string_view command) {
+        // The guarded native renderer advances numbered symbols by eight
+        // client pixels. Currency symbols use the font's own metric.
+        if(command.front()=='{') return 8.f/scale;
+        const auto table=*static_cast<void***>(font);
+        if(!table||!table[0xf0/8]) throw std::domain_error("Native symbol measurement is unavailable");
+        return static_cast<float>(reinterpret_cast<int(*)(void*)>(table[0xf0/8])(font))/scale;
+    });
     std::vector<float> icons;for(const auto& icon:content->icons()) icons.push_back(icon.advance);
     const auto key=std::make_tuple(wrap,formatted,width,scale,std::string(text),content->colors(),std::move(icons));
     const auto found=atlas.paragraphs.find(key);
