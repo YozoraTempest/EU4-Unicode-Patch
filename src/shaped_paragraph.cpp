@@ -1,5 +1,6 @@
 #include "shaped_paragraph.hpp"
 #include "unicode_text.hpp"
+#include "unicode_services.hpp"
 #include "formatted_paragraph.hpp"
 #include <icu.h>
 #include <algorithm>
@@ -170,8 +171,8 @@ std::vector<SelectionRegion> ShapedParagraph::selection(std::size_t begin,std::s
         if(from>=to) continue;
         for(auto box:block.layout->selection(from-block.start,to-block.start)) {
             const auto start=content_->source_byte(box.text_start+block.start);
-            const auto end=content_->source_byte(box.text_start+box.text_length+block.start);
-            box.text_start=start;box.text_length=end-start;box.y+=block.top;result.push_back(box);
+            const auto finish=content_->source_byte(box.text_start+box.text_length+block.start);
+            box.text_start=start;box.text_length=finish-start;box.y+=block.top;result.push_back(box);
         }
     }
     return result;
