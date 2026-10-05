@@ -34,9 +34,9 @@ EU4UnicodePatch.README.txt
 
 汉化
 本包提供编码、字体和输入支持，不附带完整中文翻译。
-汉化本地化必须是普通 UTF-8；旧双字节转义汉化需要先迁移。
+汉化本地化支持 UTF-8 和 UTF-8 BOM；旧双字节转义汉化需要先迁移。
 模组字体按游戏加载顺序保留，支持原版同名覆盖和自定义路径。
-缺字动态生成目前用于补丁自身图集。
+保留模组原有字形和字宽，缺字生成在补充图集页面。
 
 更新
 退出游戏后用新玩家包覆盖同一游戏目录。存档与用户设置保留。旧版留下的基础图集不再使用，字体缓存会自动生成。
@@ -51,7 +51,8 @@ gfx/fonts/eu4-unicode/、EU4UnicodePatch.README.txt 和 EU4UnicodePatch.FONTS.tx
 启用标志：UTF-8 import, UI, format, map and bitmap iterators enabled.
 Refused 表示版本或冲突检查未通过；缺字或图集已满也记录在日志中。
 
-UI 与地图图集按需分页，均有内存上限；复杂文字光标和选区适配限于单行编辑框。
+支持单行、多行编辑和输入法预编辑；Ctrl+Z 撤销，Ctrl+Y 重做。
+图集和排版缓存有内存上限；是否允许输入换行由游戏或模组控件决定。
 下载与详细说明：https://github.com/YozoraTempest/EU4-Unicode-Patch
 许可证：plugins/eu4_unicode_patch/LICENSE.txt
 
