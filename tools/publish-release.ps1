@@ -61,7 +61,7 @@ $notes=$channelNote+$updates+@"
 
 安装：退出游戏，将主包全部内容解压到 eu4.exe 所在目录并覆盖。需要补字时再安装可选字体包；补丁优先使用系统字体。
 
-限制：UI 与地图图集均有内存上限；模组自带位图字体使用原字库；复杂文字整段排版尚未接入。
+限制：UI 与地图图集均有内存上限；模组自带位图字体使用原字库；复杂文字光标和选区适配限于单行编辑框。
 
 提交：[$($info.SourceCommit.Substring(0,7))](https://github.com/$repo/commit/$($info.SourceCommit))
 
