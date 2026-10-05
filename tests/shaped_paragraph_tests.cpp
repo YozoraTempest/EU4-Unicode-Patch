@@ -74,6 +74,30 @@ int main() {
     float right=0;
     for(const auto& tile:rasterize_paragraph(arabic,100,100)) right=(std::max)(right,tile.x+tile.bitmap.width);
     check(right<arabic.metrics().width+24,"RTL ink stays at the physical left origin instead of the far layout edge");
+    check(arabic.caret(0).x>arabic.caret(arabic.text().size(),true).x,
+        "Arabic logical start and end have right and left physical caret positions");
+    const auto arabic_boundaries=grapheme_boundaries(arabic.text());
+    auto stop=arabic.caret(arabic.text().size(),true);
+    int moves=0;
+    for(;;) {
+        const auto next=arabic.move_caret(stop.byte_offset,stop.trailing,true);
+        if(next.x<=stop.x+.1f) break;
+        check(std::binary_search(arabic_boundaries.begin(),arabic_boundaries.end(),next.byte_offset),
+            "visual navigation returns complete UTF-8 grapheme positions");
+        stop=next;check(++moves<32,"visual navigation reaches an edge without cycling");
+    }
+    check(moves>0&&stop.x>arabic.metrics().width-1,"right movement traverses an RTL line in visual order");
+    const std::string mixed=u8"English العربية 123 हिन्दी";
+    ShapedParagraph editor(mixed,24,600,false);
+    const auto regions=editor.selection(0,mixed.size());
+    check(regions.size()>1,"bidirectional selection returns separate visual regions");
+    for(const auto& region:regions)
+        check(region.width>0&&valid_utf8(std::string_view(mixed).substr(region.text_start,region.text_length)),
+            "selection boxes retain complete UTF-8 source ranges and positive geometry");
+    check(editor.selection(0,0).empty(),"empty selection emits no background geometry");
+    bool invalid_caret=false;
+    try { arabic.caret(1); } catch(const std::invalid_argument&) { invalid_caret=true; }
+    check(invalid_caret,"caret positioning rejects UTF-8 continuation bytes");
     ShapedParagraph narrow(u8"العربية العربية العربية",24,85,true);
     ShapedParagraph unwrapped(u8"العربية العربية العربية",24,85,false);
     check(narrow.metrics().lines>1&&unwrapped.metrics().lines==1,"wrapping is controlled by the paragraph layout");

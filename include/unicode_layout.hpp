@@ -84,7 +84,17 @@ struct LayoutLine {
     std::size_t text_start,text_length,newline_length;
     float width,top,height,baseline;
 };
-struct HitPosition { std::size_t byte_offset; bool inside; };
+struct HitPosition { std::size_t byte_offset; bool inside; bool trailing=false; };
+struct CaretPosition {
+    std::size_t byte_offset;
+    float x,y,height;
+    bool trailing=false;
+};
+struct SelectionRegion {
+    std::size_t text_start,text_length;
+    float x,y,width,height;
+    std::uint32_t bidi_level;
+};
 struct RasterImage {
     std::uint32_t width,height;
     float baseline;
@@ -108,6 +118,8 @@ public:
     std::vector<GlyphRun> glyph_runs() const;
     LayoutDrawing drawing() const;
     HitPosition hit_test(float x,float y) const;
+    CaretPosition caret(std::size_t byte_offset,bool trailing=false) const;
+    std::vector<SelectionRegion> selection(std::size_t begin,std::size_t end) const;
     // Application effects and inline objects are emitted by drawing(); the
     // standalone PNG renderer handles ordinary text layouts.
     RasterImage rasterize() const;

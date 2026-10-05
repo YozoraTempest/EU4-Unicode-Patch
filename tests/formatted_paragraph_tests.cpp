@@ -66,6 +66,13 @@ int main() {
         check(glyphs(reference)==glyphs(styled),"drawing colors preserve contextual glyph selection and offsets");
         check(std::abs(reference.metrics().width-styled.metrics().width)<.01f,
             "drawing colors do not change paragraph advances");
+        for(const auto byte:grapheme_boundaries(pair.first)) {
+            const auto source=formatted->source_byte(byte);
+            check(formatted->visible_byte(source)==byte,"formatted caret source mapping is reversible at grapheme boundaries");
+            check(std::abs(reference.caret(byte).x-styled.caret(source).x)<.01f,
+                "color commands preserve physical caret positions");
+        }
+        check(!styled.selection(0,pair.second.size()).empty(),"formatted selection maps back to visible text geometry");
         const FormattedText boundaries(pair.second);
         for(float x=0;x<420;x+=7) {
             const auto hit=styled.hit_test(x,10);

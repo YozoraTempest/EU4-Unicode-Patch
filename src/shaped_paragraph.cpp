@@ -4,6 +4,7 @@
 #include <icu.h>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace eu4unicode {
@@ -113,7 +114,7 @@ ShapedParagraph::ShapedParagraph(std::string_view text,int size,float width,bool
             objects_.push_back(object);
         }
         lines_.insert(lines_.end(),lines.begin(),lines.end());
-        blocks_.push_back({start,metrics_.height,metrics.height,std::move(layout)});
+        blocks_.push_back({start,content_end-start,metrics_.height,metrics.height,std::move(layout)});
         metrics_.width=(std::max)(metrics_.width,metrics.width);
         metrics_.height+=metrics.height;
         if(!newline) break;
@@ -132,6 +133,48 @@ HitPosition ShapedParagraph::hit_test(float x,float y) const {
 }
 bool ShapedParagraph::missing_glyphs() const noexcept {
     return missing_;
+}
+CaretPosition ShapedParagraph::caret(std::size_t offset,bool trailing) const {
+    const auto visible=content_->visible_byte(offset);
+    auto found=std::upper_bound(blocks_.begin(),blocks_.end(),visible,
+        [](std::size_t value,const Block& block){return value<block.start;});
+    const auto& block=found==blocks_.begin()?blocks_.front():*std::prev(found);
+    const auto local=(std::min)(visible-block.start,block.length);
+    auto result=block.layout->caret(local,trailing);
+    result.byte_offset=offset;result.y+=block.top;return result;
+}
+CaretPosition ShapedParagraph::move_caret(std::size_t offset,bool trailing,bool right) const {
+    const auto current=caret(offset,trailing);
+    auto result=current;
+    float distance=(std::numeric_limits<float>::max)();
+    std::call_once(caret_stops_once_,[this] {
+        std::vector<CaretPosition> stops;
+        for(const auto boundary:grapheme_boundaries(content_->visible())) for(const auto affinity:{false,true})
+            stops.push_back(caret(content_->source_byte(boundary),affinity));
+        caret_stops_=std::move(stops);
+    });
+    for(const auto& candidate:caret_stops_) {
+        if(std::abs(candidate.y-current.y)>.1f) continue;
+        const auto delta=right?candidate.x-current.x:current.x-candidate.x;
+        if(delta>.1f&&delta<distance) { distance=delta;result=candidate; }
+    }
+    return result;
+}
+std::vector<SelectionRegion> ShapedParagraph::selection(std::size_t begin,std::size_t end) const {
+    if(begin>end||end>text_.size()) throw std::out_of_range("Paragraph selection exceeds text");
+    const auto first=content_->visible_byte(begin),last=content_->visible_byte(end);
+    std::vector<SelectionRegion> result;
+    for(const auto& block:blocks_) {
+        const auto finish=block.start+block.length;
+        const auto from=(std::max)(first,block.start),to=(std::min)(last,finish);
+        if(from>=to) continue;
+        for(auto box:block.layout->selection(from-block.start,to-block.start)) {
+            const auto start=content_->source_byte(box.text_start+block.start);
+            const auto end=content_->source_byte(box.text_start+box.text_length+block.start);
+            box.text_start=start;box.text_length=end-start;box.y+=block.top;result.push_back(box);
+        }
+    }
+    return result;
 }
 std::vector<ParagraphTile> rasterize_paragraph(const ShapedParagraph& paragraph,std::uint32_t width,std::uint32_t height) {
     if(!width||!height||width>16384||height>16384) throw std::invalid_argument("Invalid paragraph tile dimensions");

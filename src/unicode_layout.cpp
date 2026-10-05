@@ -242,12 +242,14 @@ struct TextLayout::Impl {
     std::string text;
     std::wstring wide;
     std::vector<std::size_t> byte_positions;
+    std::vector<std::size_t> grapheme_positions;
     ComPtr<IDWriteFactory2> factory;
     ComPtr<IDWriteTextLayout2> layout;
     std::shared_ptr<const TextFonts> fonts;
     bool application_drawing=false;
     Impl(std::string_view value,float size,float width,float height,std::wstring_view family,
-         std::shared_ptr<const TextFonts> custom,TextLayoutOptions options):text(value),wide(to_wide(value)),fonts(std::move(custom)) {
+         std::shared_ptr<const TextFonts> custom,TextLayoutOptions options):text(value),wide(to_wide(value)),
+         grapheme_positions(grapheme_boundaries(value)),fonts(std::move(custom)) {
         if(!std::isfinite(size)||!std::isfinite(width)||!std::isfinite(height)||size<=0||width<=0||height<=0)
             throw std::invalid_argument("Layout dimensions must be positive finite values");
         if(!std::isfinite(options.line_height)||options.line_height<0)
@@ -359,13 +361,52 @@ HitPosition TextLayout::hit_test(float x,float y) const {
     checked(impl_->layout->HitTestPoint(x,y,&trailing,&inside,&hit));
     const auto index=hit.textPosition+(trailing?hit.length:0);
     auto offset=impl_->byte_positions.at(index);
-    const auto boundaries=grapheme_boundaries(impl_->text);
+    const auto& boundaries=impl_->grapheme_positions;
     auto position=std::lower_bound(boundaries.begin(),boundaries.end(),offset);
     if(position!=boundaries.end()&&*position!=offset) {
         if(trailing) offset=*position;
         else if(position!=boundaries.begin()) offset=*--position;
     }
-    return {offset,inside!=FALSE};
+    return {offset,inside!=FALSE,trailing!=FALSE};
+}
+CaretPosition TextLayout::caret(std::size_t offset,bool trailing) const {
+    const auto& boundaries=impl_->grapheme_positions;
+    auto boundary=std::lower_bound(boundaries.begin(),boundaries.end(),offset);
+    if(boundary==boundaries.end()||*boundary!=offset)
+        throw std::invalid_argument("Caret position must be a UTF-8 grapheme boundary");
+    auto position=offset;
+    if(trailing&&boundary!=boundaries.begin()) position=*std::prev(boundary);
+    else trailing=false;
+    const auto found=std::lower_bound(impl_->byte_positions.begin(),impl_->byte_positions.end(),position);
+    FLOAT x=0,y=0;DWRITE_HIT_TEST_METRICS hit{};
+    checked(impl_->layout->HitTestTextPosition(static_cast<UINT32>(found-impl_->byte_positions.begin()),
+        trailing?TRUE:FALSE,&x,&y,&hit));
+    return {offset,x,y,hit.height,trailing};
+}
+std::vector<SelectionRegion> TextLayout::selection(std::size_t begin,std::size_t end) const {
+    if(begin>end||end>impl_->text.size()) throw std::out_of_range("Selection exceeds UTF-8 text");
+    if(begin==end) return {};
+    const auto& boundaries=impl_->grapheme_positions;
+    if(!std::binary_search(boundaries.begin(),boundaries.end(),begin)||
+       !std::binary_search(boundaries.begin(),boundaries.end(),end))
+        throw std::invalid_argument("Selection must contain complete graphemes");
+    const auto first=std::lower_bound(impl_->byte_positions.begin(),impl_->byte_positions.end(),begin);
+    const auto last=std::lower_bound(impl_->byte_positions.begin(),impl_->byte_positions.end(),end);
+    const auto position=static_cast<UINT32>(first-impl_->byte_positions.begin());
+    const auto length=static_cast<UINT32>(last-first);
+    UINT32 count=0;
+    const auto status=impl_->layout->HitTestTextRange(position,length,0,0,nullptr,0,&count);
+    if(status!=E_NOT_SUFFICIENT_BUFFER) checked(status);
+    std::vector<DWRITE_HIT_TEST_METRICS> boxes(count);
+    if(count) checked(impl_->layout->HitTestTextRange(position,length,0,0,boxes.data(),count,&count));
+    std::vector<SelectionRegion> result;
+    for(UINT32 index=0;index<count;++index) {
+        const auto& box=boxes[index];
+        const auto start=impl_->byte_positions.at(box.textPosition);
+        const auto finish=impl_->byte_positions.at(box.textPosition+box.length);
+        if(box.width>0) result.push_back({start,finish-start,box.left,box.top,box.width,box.height,box.bidiLevel});
+    }
+    return result;
 }
 GlyphBitmap rasterize_glyph_run(const GlyphRun& run) {
     if(!run.face||!std::isfinite(run.em_size)||run.em_size<=0||

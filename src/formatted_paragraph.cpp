@@ -89,6 +89,14 @@ ParagraphText::ParagraphText(std::string_view source,bool formatted,IconMeasure 
     }
 }
 std::size_t ParagraphText::source_byte(std::size_t visible_byte) const { return source_bytes_.at(visible_byte); }
+std::size_t ParagraphText::visible_byte(std::size_t source_byte) const {
+    if(source_byte>source_.size()) throw std::out_of_range("Paragraph source position exceeds text");
+    const auto found=std::lower_bound(source_bytes_.begin(),source_bytes_.end(),source_byte);
+    if(found==source_bytes_.end()||*found!=source_byte)
+        throw std::invalid_argument("Paragraph source position must be a text boundary");
+    const auto byte=static_cast<std::size_t>(found-source_bytes_.begin());
+    return byte==visible_.size()?byte:native_scalar_start(visible_,byte);
+}
 std::string paragraph_color_transition(std::string_view previous,std::string_view next) {
     std::size_t common=0;
     while(common<previous.size()&&common<next.size()&&previous[common]==next[common]) ++common;

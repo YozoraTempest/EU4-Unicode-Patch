@@ -21,6 +21,7 @@ public:
     const std::vector<std::string>& colors() const noexcept { return colors_; }
     const std::vector<ParagraphIcon>& icons() const noexcept { return icons_; }
     std::size_t source_byte(std::size_t visible_byte) const;
+    std::size_t visible_byte(std::size_t source_byte) const;
 private:
     std::string source_,visible_;
     std::vector<std::size_t> source_bytes_;

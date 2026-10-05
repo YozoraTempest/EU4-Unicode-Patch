@@ -197,7 +197,9 @@ struct InputRect { int x,y,w,h; };
 struct EditorImeRectState { void* window=nullptr; void* owner=nullptr; InputRect rect{}; };
 thread_local EditorImeRectState editor_ime_rect_state{};
 thread_local unsigned editor_focus_depth=0;
+void clear_editor_affinity() noexcept;
 void focus_editor_ime_rect(void* outer) {
+    clear_editor_affinity();
     editor_ime_rect_state={};
     struct FocusScope {
         FocusScope() { ++editor_focus_depth; }
@@ -326,6 +328,56 @@ bool single_line_editor(void* widget,std::string_view& value) {
     value={text->data(),static_cast<std::size_t>(text->size)};
     return value.find('\n')==std::string_view::npos&&eu4unicode::valid_utf8(value);
 }
+struct EditorAffinity {
+    void* owner=nullptr;
+    std::string text;
+    std::size_t offset=0;
+    bool trailing=false;
+};
+thread_local EditorAffinity editor_affinity;
+void clear_editor_affinity() noexcept { editor_affinity={}; }
+std::shared_ptr<const eu4unicode::ShapedParagraph> editor_paragraph(void* widget,std::string_view value) {
+    if(!eu4unicode::needs_paragraph_shaping(value)) return {};
+    const auto font=*reinterpret_cast<void* const*>(static_cast<const std::byte*>(widget)+0x98);
+    return eu4unicode::font_paragraph_layout(font,value,32767,false,false);
+}
+bool editor_trailing(void* widget,std::string_view value,std::size_t offset) {
+    return editor_affinity.owner==widget&&editor_affinity.text==value&&
+        editor_affinity.offset==offset&&editor_affinity.trailing;
+}
+void remember_editor_affinity(void* widget,std::string_view value,std::size_t offset,bool trailing) {
+    editor_affinity={widget,std::string(value),offset,trailing};
+}
+struct EditorPixelPoint { std::uint16_t x,y; };
+using EditorPixelPosition=EditorPixelPoint*(*)(void*,EditorPixelPoint*);
+EditorPixelPosition original_editor_caret=nullptr,original_editor_anchor=nullptr;
+EditorPixelPoint* shaped_editor_position(void* widget,EditorPixelPoint* result,bool anchor) {
+    const auto original=anchor?original_editor_anchor:original_editor_caret;
+    if(anchor&&*reinterpret_cast<const std::uint16_t*>(static_cast<const std::byte*>(widget)+0x94))
+        return original(widget,result);
+    std::string_view value;
+    try {
+        if(single_line_editor(widget,value)) if(const auto paragraph=editor_paragraph(widget,value)) {
+            const auto base=static_cast<const std::byte*>(widget);
+            const auto offset=*reinterpret_cast<const std::uint16_t*>(base+(anchor?0x92:0x54));
+            if(offset<=value.size()) {
+                const auto font=*reinterpret_cast<const std::byte* const*>(base+0x98);
+                const auto scale=*reinterpret_cast<const float*>(font+0x968);
+                const auto caret=paragraph->caret(offset,!anchor&&editor_trailing(widget,value,offset));
+                const auto x=std::round(caret.x*scale)+*reinterpret_cast<const int*>(font+0x38)+(anchor?3:0);
+                const auto y=std::round(caret.y*scale)+*reinterpret_cast<const int*>(font+0x3c);
+                if(std::isfinite(x)&&std::isfinite(y)&&x<=65535&&y<=65535) {
+                    result->x=static_cast<std::uint16_t>((std::max)(0.f,x));
+                    result->y=static_cast<std::uint16_t>((std::max)(0.f,y));
+                    return result;
+                }
+            }
+        }
+    } catch(...) { log("Unicode editor caret positioning failed; native position retained."); }
+    return original(widget,result);
+}
+EditorPixelPoint* editor_caret_position(void* widget,EditorPixelPoint* result) { return shaped_editor_position(widget,result,false); }
+EditorPixelPoint* editor_anchor_position(void* widget,EditorPixelPoint* result) { return shaped_editor_position(widget,result,true); }
 eu4unicode::PrefixMeasure native_editor_measure(void* widget,std::string_view text) {
     const auto base=static_cast<const std::byte*>(widget);
     const auto font=*reinterpret_cast<void* const*>(base+0x98);
@@ -344,10 +396,17 @@ void editor_point(void* widget,const EngineString* row,const EditorPoint* point)
         original_editor_point(widget,row,point); return;
     }
     try {
-        const auto hit=eu4unicode::nearest_grapheme_boundary(value,point->x,native_editor_measure(widget,value));
+        std::size_t hit=0;bool trailing=false;
+        if(const auto paragraph=editor_paragraph(widget,value)) {
+            const auto font=*reinterpret_cast<const std::byte* const*>(static_cast<const std::byte*>(widget)+0x98);
+            const auto scale=*reinterpret_cast<const float*>(font+0x968);
+            const auto position=paragraph->hit_test(point->x/scale,point->y/scale);
+            hit=position.byte_offset;trailing=position.trailing;
+        } else hit=eu4unicode::nearest_grapheme_boundary(value,point->x,native_editor_measure(widget,value));
         auto base=static_cast<std::byte*>(widget);
         *reinterpret_cast<std::uint16_t*>(base+0x54)=static_cast<std::uint16_t>(hit);
         *reinterpret_cast<std::uint16_t*>(base+0x56)=0;
+        remember_editor_affinity(widget,value,hit,trailing);
     } catch(...) { log("Unicode editor hit testing failed; caret preserved."); }
 }
 int editor_width_fit(void* widget,const EngineString* text) {
@@ -383,6 +442,19 @@ void editor_arrow(void* widget,bool right) {
     if(single_line_editor(widget,value)) {
         auto column=reinterpret_cast<std::uint16_t*>(static_cast<std::byte*>(widget)+0x54);
         try {
+            if(const auto paragraph=editor_paragraph(widget,value)) {
+                const auto target=paragraph->move_caret(*column,editor_trailing(widget,value,*column),right);
+                *column=static_cast<std::uint16_t>(target.byte_offset);
+                auto base=static_cast<std::byte*>(widget);
+                *reinterpret_cast<std::uint32_t*>(base+0x50)=*column;
+                base[0x90]=std::byte{0};
+                auto selected=reinterpret_cast<EngineString*>(base+0x70);
+                const auto data=selected->capacity<16?selected->storage.inline_bytes:const_cast<char*>(selected->storage.pointer);
+                selected->size=0;data[0]=0;
+                remember_editor_affinity(widget,value,target.byte_offset,target.trailing);
+                reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
+                return;
+            }
             const auto target=eu4unicode::plan_edit(value,*column,
                 right?eu4unicode::EditKey::right:eu4unicode::EditKey::left).caret;
             // Let the native one-byte mover reach the final complete boundary.
@@ -1065,6 +1137,8 @@ bool initialize(HMODULE module) {
         ,{0x15385a0,"48895c2408574883ec40440fb74156"}
         ,{0x153b170,"48895c240848896c24104889742418574883ec40"}
         ,{0x15361f0,"48895c2408488974241048897c24204c89442418"}
+        ,{0x1536060,"48895c240848896c2410488974241848897c2420"}
+        ,{0x1535eb0,"48895c240848896c2410488974241848897c2420"}
         ,{0x1536340,"448b45d0ff50603906440f4ff3488b55"}
         ,{0x1537210,"48895c240848896c2410488974241848897c2420"}
         ,{0x1539820,"48895c241848896c242057415441574883ec204c"}
@@ -1407,6 +1481,10 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_selection))!=MH_OK ||
            MH_CreateHook(image+0x15361f0,reinterpret_cast<void*>(editor_point),
              reinterpret_cast<void**>(&original_editor_point))!=MH_OK ||
+           MH_CreateHook(image+0x1536060,reinterpret_cast<void*>(editor_caret_position),
+             reinterpret_cast<void**>(&original_editor_caret))!=MH_OK ||
+           MH_CreateHook(image+0x1535eb0,reinterpret_cast<void*>(editor_anchor_position),
+             reinterpret_cast<void**>(&original_editor_anchor))!=MH_OK ||
            MH_CreateHook(image+0x1537210,reinterpret_cast<void*>(editor_width_fit),
              reinterpret_cast<void**>(&original_editor_width_fit))!=MH_OK ||
            MH_CreateHook(image+0x1539820,reinterpret_cast<void*>(editor_word_break),

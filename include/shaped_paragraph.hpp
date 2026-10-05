@@ -1,5 +1,6 @@
 #pragma once
 #include "unicode_layout.hpp"
+#include <mutex>
 
 namespace eu4unicode {
 class ParagraphText;
@@ -24,10 +25,13 @@ public:
     const std::vector<InlinePlacement>& objects() const noexcept { return objects_; }
     const ParagraphText& content() const noexcept { return *content_; }
     HitPosition hit_test(float x,float y) const;
+    CaretPosition caret(std::size_t byte_offset,bool trailing=false) const;
+    CaretPosition move_caret(std::size_t byte_offset,bool trailing,bool right) const;
+    std::vector<SelectionRegion> selection(std::size_t begin,std::size_t end) const;
     bool missing_glyphs() const noexcept;
 private:
     struct Block {
-        std::size_t start;
+        std::size_t start,length;
         float top,height;
         std::unique_ptr<TextLayout> layout;
     };
@@ -39,6 +43,8 @@ private:
     std::vector<Block> blocks_;
     std::shared_ptr<const ParagraphText> content_;
     bool missing_=false;
+    mutable std::once_flag caret_stops_once_;
+    mutable std::vector<CaretPosition> caret_stops_;
 };
 // Tile after shaping, retaining the exact selected face, glyph positions and
 // fractional raster phase. Texture page boundaries never become text breaks.
