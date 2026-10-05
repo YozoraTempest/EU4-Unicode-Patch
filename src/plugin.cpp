@@ -13,6 +13,7 @@
 #include "native_script_bom.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
+#include "native_editor_selection.hpp"
 #include "native_font_atlas.hpp"
 #include "native_font_draw.hpp"
 #include "font_assets.hpp"
@@ -198,6 +199,7 @@ struct EditorImeRectState { void* window=nullptr; void* owner=nullptr; InputRect
 thread_local EditorImeRectState editor_ime_rect_state{};
 thread_local unsigned editor_focus_depth=0;
 void clear_editor_affinity() noexcept;
+void paint_editor_selection(void* outer) noexcept;
 void focus_editor_ime_rect(void* outer) {
     clear_editor_affinity();
     editor_ime_rect_state={};
@@ -209,6 +211,7 @@ void focus_editor_ime_rect(void* outer) {
 }
 void paint_editor_ime_rect(void* outer) {
     original_editor_paint(outer);
+    paint_editor_selection(outer);
     // Focus performs an immediate paint before the next UI frame has supplied
     // the editor's current parent transform. Publish only normal frame geometry.
     if(editor_focus_depth) return;
@@ -378,6 +381,63 @@ EditorPixelPoint* shaped_editor_position(void* widget,EditorPixelPoint* result,b
 }
 EditorPixelPoint* editor_caret_position(void* widget,EditorPixelPoint* result) { return shaped_editor_position(widget,result,false); }
 EditorPixelPoint* editor_anchor_position(void* widget,EditorPixelPoint* result) { return shaped_editor_position(widget,result,true); }
+std::unique_ptr<eu4unicode::NativeEditorSelections> editor_selections;
+eu4unicode::NativeSpriteFactory original_editor_sprite_factory=nullptr;
+EditorAction original_editor_destroy=nullptr,original_editor_hide=nullptr;
+using EditorSetup=void(*)(void*,void*);
+EditorSetup original_editor_setup=nullptr;
+void* create_editor_sprite(void* manager,const EngineString* name,void* context,unsigned char flags,EngineString* output) {
+    const bool selection=reinterpret_cast<std::byte*>(_ReturnAddress())==image+0x1533a14;
+    auto sprite=original_editor_sprite_factory(manager,name,context,flags,output);
+    if(selection&&editor_selections) try { editor_selections->capture(sprite,manager,context,flags); }
+        catch(...) { log("Native selection resource capture failed."); }
+    return sprite;
+}
+void destroy_editor(void* outer) {
+    if(editor_selections) editor_selections->release(outer,*reinterpret_cast<void**>(static_cast<std::byte*>(outer)+0x1f8));
+    original_editor_destroy(outer);
+}
+void hide_editor(void* outer) {
+    if(editor_selections) editor_selections->hide(outer);
+    original_editor_hide(outer);
+}
+void setup_editor(void* outer,void* value) {
+    original_editor_setup(outer,value);
+    if(editor_selections) editor_selections->setup(outer,value);
+}
+void paint_editor_selection(void* outer) noexcept {
+    if(!editor_selections) return;
+    try {
+        const auto base=static_cast<std::byte*>(outer),widget=base+0xc8;
+        std::string_view value;
+        if(base[0xc5]==std::byte{0}||!*reinterpret_cast<void**>(base+0x148)||
+           base[0x262]!=std::byte{0}||*reinterpret_cast<std::uint64_t*>(base+0x2f0)||
+           widget[0x90]!=std::byte{1}||*reinterpret_cast<std::uint16_t*>(widget+0x94)||
+           !single_line_editor(widget,value)) { editor_selections->hide(outer);return; }
+        const auto paragraph=editor_paragraph(widget,value);
+        if(!paragraph) { editor_selections->hide(outer);return; }
+        const auto caret_offset=*reinterpret_cast<std::uint16_t*>(widget+0x54);
+        const auto anchor_offset=*reinterpret_cast<std::uint16_t*>(widget+0x92);
+        if(anchor_offset>value.size()) { editor_selections->hide(outer);return; }
+        const auto regions=paragraph->selection((std::min)(caret_offset,anchor_offset),(std::max)(caret_offset,anchor_offset));
+        const auto font=*reinterpret_cast<std::byte**>(widget+0x98);
+        const auto sprite=*reinterpret_cast<void**>(base+0x1f0);
+        if(!sprite) { editor_selections->hide(outer);return; }
+        const auto scale=*reinterpret_cast<float*>(font+0x968);
+        if(!std::isfinite(scale)||scale<=0) { editor_selections->hide(outer);return; }
+        struct Position { float x,y; } origin{};
+        reinterpret_cast<Position*(*)(void*,Position*)>((*static_cast<void***>(sprite))[0x178/8])(sprite,&origin);
+        EditorPixelPoint pixel{};shaped_editor_position(widget,&pixel,false);
+        origin.x-=pixel.x;origin.y-=pixel.y;
+        const auto height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void***>(font))[0x68/8])(font)/2;
+        std::vector<eu4unicode::NativeSelectionRect> boxes;boxes.reserve(regions.size());
+        for(const auto& region:regions) boxes.push_back({
+            static_cast<int>(std::round(origin.x+region.x*scale))+*reinterpret_cast<int*>(font+0x38)+3,
+            static_cast<int>(std::round(origin.y+region.y*scale))+*reinterpret_cast<int*>(font+0x3c)+height,
+            static_cast<int>(std::ceil(region.width*scale))+2,height+2});
+        editor_selections->update(outer,*reinterpret_cast<void**>(base+0x1f8),*reinterpret_cast<void**>(base+0x298),boxes);
+    } catch(...) { editor_selections->hide(outer);log("Native shaped selection update failed."); }
+}
 eu4unicode::PrefixMeasure native_editor_measure(void* widget,std::string_view text) {
     const auto base=static_cast<const std::byte*>(widget);
     const auto font=*reinterpret_cast<void* const*>(base+0x98);
@@ -1145,6 +1205,13 @@ bool initialize(HMODULE module) {
         ,{0x1539240,"40534883ec40488bd9c6819000000000e83bb21f00"}
         ,{0x1534250,"48895c242055565741564157488bec4883ec40"}
         ,{0x1535250,"40574883ec3080b96102000000488bf9"}
+        ,{0x14db940,"48895c241044884c24205556574156"}
+        ,{0x1533a0f,"e82c7ffaff"}
+        ,{0x1533d90,"48895c240848896c24104889742418"}
+        ,{0x15340a0,"40534883ec20c681c500000000"}
+        ,{0x1534100,"48895c2408574883ec2048899198020000"}
+        ,{0x14db6a0,"48895c240848897424184889542410"}
+        ,{0x95660,"40534883ec20488b5118488bd94883"}
         ,{0x17345f0,"48ff25a1bf8700"}
         ,{0x17349f0,"48ff2541c58700"}
         ,{0x1735940,"48ff25b9ac8700"}
@@ -1494,6 +1561,14 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_paint))!=MH_OK ||
            MH_CreateHook(image+0x1535250,reinterpret_cast<void*>(focus_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_focus))!=MH_OK ||
+           MH_CreateHook(image+0x14db940,reinterpret_cast<void*>(create_editor_sprite),
+             reinterpret_cast<void**>(&original_editor_sprite_factory))!=MH_OK ||
+           MH_CreateHook(image+0x1533d90,reinterpret_cast<void*>(destroy_editor),
+             reinterpret_cast<void**>(&original_editor_destroy))!=MH_OK ||
+           MH_CreateHook(image+0x15340a0,reinterpret_cast<void*>(hide_editor),
+             reinterpret_cast<void**>(&original_editor_hide))!=MH_OK ||
+           MH_CreateHook(image+0x1534100,reinterpret_cast<void*>(setup_editor),
+             reinterpret_cast<void**>(&original_editor_setup))!=MH_OK ||
            MH_CreateHook(image+0x95110,reinterpret_cast<void*>(assign_editor_prefix),
              reinterpret_cast<void**>(&original_assign_text))!=MH_OK ||
            MH_CreateHook(image+0xb19590,reinterpret_cast<void*>(filter_editor_text),
@@ -1504,6 +1579,9 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_insert))!=MH_OK) {
             log("Input hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
         }
+        editor_selections=std::make_unique<eu4unicode::NativeEditorSelections>(original_editor_sprite_factory,
+            reinterpret_cast<eu4unicode::NativeSpriteDestroy>(image+0x14db6a0),
+            reinterpret_cast<eu4unicode::NativeStringDestroy>(image+0x95660));
         log("Experimental UTF-8 input and single-line grapheme editing enabled.");
         log("Native Windows IME candidate UI and caret exclusion rectangle enabled.");
     }

@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <stdexcept>
+void verify_native_editor_selections();
 
 namespace {
 int calls=0,commits=0;
@@ -22,6 +23,7 @@ void require(bool condition) { if(!condition) throw std::runtime_error("IME mess
 }
 int main() {
     try {
+        verify_native_editor_selections();
         alignas(void*) std::array<std::byte,0x80> video{};
         for(const auto offset:{0x48,0x4c,0x50}) *reinterpret_cast<int*>(video.data()+offset)=1;
         eu4unicode::original_ime_message=native_handler;
