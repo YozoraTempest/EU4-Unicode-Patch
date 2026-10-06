@@ -1,4 +1,5 @@
 #include "native_editor_text.hpp"
+#include "unicode_services.hpp"
 #include "unicode_text.hpp"
 #include <algorithm>
 #include <cstring>
