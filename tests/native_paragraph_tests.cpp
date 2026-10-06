@@ -87,6 +87,37 @@ int main() {
     register_font_atlas(alias.data(),"gfx/fonts/zh-hans-18");
     check(dynamic_font(font.data()),"generated native UI font is bound without a graphics device");
     {
+        int mod_manager=0;
+        Font large(&mod_manager);large.put(0x978,6400);large.put(0x97c,8192);
+        large.anchor={1,1,8,8,0,0,23,0,0};
+        register_font_atlas(large.data(),"gfx/fonts/mt-bitmap-18");
+        auto missing=find_dynamic_glyph(large.table(),0x4e2d);
+        check(missing&&font_glyph_page(missing)==1,
+              "A 6400x8192 mod atlas can allocate its first missing character");
+        check(find_dynamic_glyph(large.table(),'A')==&large.anchor&&large.anchor.advance==23,
+              "Large mod atlas retains its existing bitmap glyph and advance");
+        const auto shaped=font_paragraph_geometry(large.data(),u8"A العربية हिन्दी",300,false,false);
+        check(shaped&&!shaped->glyphs.empty(),"Large mod atlas accepts contextual paragraph tiles");
+        const auto memory=font_texture_memory(large.table());
+        check(memory.original_rgba_bytes==200ull*1024*1024&&memory.supplemental_reserved_bytes==16ull*1024*1024&&
+              memory.supplemental_gpu_bytes==0&&memory.staging_bytes==0,
+              "Borrowed mod texture footprint is separate from CPU-only supplemental reservations");
+        release_font_atlas(large.table());release_unicode_font(large.table());
+        check(font_texture_memory(large.table()).supplemental_reserved_bytes==0,
+              "Released atlas retains supplemental memory reservations");
+        Font small(&mod_manager);small.put(0x978,128);small.put(0x97c,256);
+        register_font_atlas(small.data(),"gfx/fonts/small-bitmap-18");
+        const auto small_geometry=font_paragraph_geometry(small.data(),u8"العربية हिन्दी العربية हिन्दी",600,false,false);
+        check(small_geometry&&small_geometry->glyphs.size()>1,
+              "Small mod atlas splits contextual paragraphs into fitting tiles");
+        for(const auto glyph:small_geometry->glyphs)
+            check(glyph->width<=126&&glyph->height<=254&&glyph->x+glyph->width<128&&glyph->y+glyph->height<256,
+                  "Contextual tile extends beyond the supplemental page");
+        check(font_texture_memory(small.table()).supplemental_reserved_bytes>=128ull*256*4,
+              "Non-square supplemental pages use their actual byte size");
+        release_font_atlas(small.table());release_unicode_font(small.table());
+    }
+    {
         Font bitmap(nullptr);bitmap.anchor={1,1,8,8,0,0,19,0,0};
         register_font_atlas(bitmap.data(),"gfx/fonts/mod-bitmap-18");
         check(dynamic_font(bitmap.data())&&!dynamic_map_font(bitmap.data()),

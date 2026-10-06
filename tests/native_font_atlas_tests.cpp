@@ -170,7 +170,7 @@ int wmain(int argc,wchar_t** argv) {
             auto pages=eu4unicode::font_texture_pages(texture.Get());
             require(pages.size()>1&&readback(device.Get(),texture.Get(),anchor)==primary,
                 "Supplement upload modified the mod's original texture");
-            require(readback(device.Get(),static_cast<IDirect3DTexture9*>(pages[eu4unicode::font_glyph_page(missing)].Get()),*missing)==expected(0x5b54,16).alpha,
+            require(readback(device.Get(),static_cast<IDirect3DTexture9*>(pages[eu4unicode::font_glyph_page(missing)].texture.Get()),*missing)==expected(0x5b54,16).alpha,
                 "Mod supplemental GPU pixels differ from the selected font");
             const auto mixed=eu4unicode::font_paragraph_layout(f,u8"A中 العربية हिन्दी",600,false,false);
             require(mixed&&mixed->objects().size()==2&&mixed->content().icons()[0].advance==19&&mixed->content().icons()[1].advance==23,
@@ -181,7 +181,7 @@ int wmain(int argc,wchar_t** argv) {
             pages.clear();wrapper.texture=nullptr;texture.Reset();checked(device->Reset(&parameters));
             checked(device->CreateTexture(2048,4096,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));wrapper.texture=texture.Get();
             eu4unicode::synchronize_font_texture(&wrapper,1);pages=eu4unicode::font_texture_pages(texture.Get());
-            require(readback(device.Get(),static_cast<IDirect3DTexture9*>(pages[eu4unicode::font_glyph_page(missing)].Get()),*missing)==expected(0x5b54,16).alpha,
+            require(readback(device.Get(),static_cast<IDirect3DTexture9*>(pages[eu4unicode::font_glyph_page(missing)].texture.Get()),*missing)==expected(0x5b54,16).alpha,
                 "Device reset lost the mod supplement page");
             pages.clear();eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
             std::cout<<"Mod bitmap glyphs and texture retained; supplemental CJK/Latin pixels, mixed shaping and reset passed.\n";

@@ -7,6 +7,7 @@
 #include <wrl/client.h>
 #include "glyph_registry.hpp"
 #include "native_paragraph.hpp"
+#include "font_draw_batches.hpp"
 struct IDirect3DTexture9;
 struct IDirect3DBaseTexture9;
 
@@ -25,6 +26,18 @@ bool dynamic_font(void* font) noexcept;
 std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void* font,std::string_view text,float width,bool wrap,bool formatted=true);
 std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::string_view text,float width,bool wrap,bool formatted=true);
 std::uint32_t font_glyph_page(const NativeGlyph* glyph) noexcept;
-using FontTexturePages=std::vector<Microsoft::WRL::ComPtr<IDirect3DTexture9>>;
+struct FontTexturePage {
+    Microsoft::WRL::ComPtr<IDirect3DTexture9> texture;
+    FontPageSize size;
+};
+using FontTexturePages=std::vector<FontTexturePage>;
+struct FontTextureMemory {
+    // Reference footprint at RGBA8; the native texture is owned by the game.
+    std::uint64_t original_rgba_bytes=0;
+    std::uint64_t supplemental_reserved_bytes=0;
+    std::uint64_t supplemental_gpu_bytes=0;
+    std::uint64_t staging_bytes=0;
+};
+FontTextureMemory font_texture_memory(void* const* table);
 FontTexturePages font_texture_pages(IDirect3DBaseTexture9* first);
 }

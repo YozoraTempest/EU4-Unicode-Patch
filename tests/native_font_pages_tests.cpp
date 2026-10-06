@@ -121,8 +121,10 @@ void draw_glyphs(IDirect3DDevice9* device,void* font,IDirect3DTexture9* first,
         regions[i]={left,top,left+g.width,top+g.height};
         const auto x0=-1+2*(left-0.5f)/width,x1=-1+2*(left+g.width-0.5f)/width;
         const auto y0=1-2*(top-0.5f)/height,y1=1-2*(top+g.height-0.5f)/height;
-        const auto u0=g.x/2048.0f,u1=(g.x+g.width)/2048.0f;
-        const auto v0=g.y/4096.0f,v1=(g.y+g.height)/4096.0f;
+        const auto font_width=*reinterpret_cast<const int*>(static_cast<const std::byte*>(font)+0x978);
+        const auto font_height=*reinterpret_cast<const int*>(static_cast<const std::byte*>(font)+0x97c);
+        const auto u0=static_cast<float>(g.x)/font_width,u1=static_cast<float>(g.x+g.width)/font_width;
+        const auto v0=static_cast<float>(g.y)/font_height,v1=static_cast<float>(g.y+g.height)/font_height;
         const auto begin=vertices.size();
         vertices.insert(vertices.end(),{{x0,y0,0.5f,u0,v0},{x1,y0,0.5f,u1,v0},{x1,y1,0.5f,u1,v1},{x0,y1,0.5f,u0,v1}});
         eu4unicode::tag_font_vertices(vertices.data()+begin,4,i==1?eu4unicode::font_glyph_page(&b):0);
@@ -265,9 +267,12 @@ int wmain(int argc,wchar_t** argv) {
             eu4unicode::synchronize_font_texture(&wrapper,1);
             auto pages=eu4unicode::font_texture_pages(texture.Get());
             require(pages.size()>=2,"Additional GPU page missing");
+            require(pages.front().size.width==2048&&pages.front().size.height==4096&&
+                    pages[1].size.width==2048&&pages[1].size.height==2048,
+                    "Supplemental GPU pages inherited the original font dimensions");
             const auto second_reference=eu4unicode::rasterize_scalar(second_scalar,size).alpha;
-            require(read_glyph(device.Get(),pages[0].Get(),*first)==reference,"Growing the atlas changed the first page");
-            require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).Get(),*second)==second_reference,"Additional page upload differs from its raster");
+            require(read_glyph(device.Get(),pages[0].texture.Get(),*first)==reference,"Growing the atlas changed the first page");
+            require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).texture.Get(),*second)==second_reference,"Additional page upload differs from its raster");
             if(size==88) draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference);
             for(const auto draw:{DrawPath::popup,DrawPath::ui_upload,DrawPath::ui_create,DrawPath::ui_partial,DrawPath::ui_dynamic})
                 draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference,draw);
@@ -277,8 +282,8 @@ int wmain(int argc,wchar_t** argv) {
             checked(device->Reset(&parameters));
             checked(device->CreateTexture(2048,4096,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));wrapper.texture=texture.Get();
             eu4unicode::synchronize_font_texture(&wrapper,1);pages=eu4unicode::font_texture_pages(texture.Get());
-            require(read_glyph(device.Get(),pages[0].Get(),*first)==reference,"Reset lost the first page");
-            require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).Get(),*second)==second_reference,"Reset lost the additional page");
+            require(read_glyph(device.Get(),pages[0].texture.Get(),*first)==reference,"Reset lost the first page");
+            require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).texture.Get(),*second)==second_reference,"Reset lost the additional page");
             require(eu4unicode::find_dynamic_glyph(table,0x4e2d)==first&&eu4unicode::find_dynamic_glyph(table,second_scalar)==second,"Reset changed native glyph pointers");
             if(size==88) draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference);
             for(const auto draw:{DrawPath::popup,DrawPath::ui_upload,DrawPath::ui_create,DrawPath::ui_partial,DrawPath::ui_dynamic})
@@ -298,6 +303,63 @@ int wmain(int argc,wchar_t** argv) {
             pages.clear();wrapper.texture=nullptr;texture.Reset();
             checked(device->CreateTexture(2048,4096,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));wrapper.texture=texture.Get();
             std::cout<<"PASS size="<<size<<" glyphs="<<glyph_count<<" pages="<<count<<": exact pixels, UI upload/create, static/dynamic overwrite, managed cache reset, buffer/alias release.\n";
+        }
+        // Exercise borrowed mod atlases, including MT's 200 MiB RGBA footprint,
+        // through real indexed map and popup/UI draws with mixed texture sizes.
+        wrapper.texture=nullptr;texture.Reset();
+        for(const auto dimensions:std::vector<eu4unicode::FontPageSize>{{6400,8192},{512,256}}) {
+            *reinterpret_cast<int*>(font+0x978)=static_cast<int>(dimensions.width);
+            *reinterpret_cast<int*>(font+0x97c)=static_cast<int>(dimensions.height);
+            *reinterpret_cast<int*>(font+0x960)=88;
+            *reinterpret_cast<float*>(font+0x968)=1.f;
+            eu4unicode::configure_font_atlases(argv[1],{},log,"gfx/fonts/eu4-unicode/cache/",true);
+            eu4unicode::register_font_atlas(font,"gfx/fonts/mt-map");
+            require(eu4unicode::dynamic_map_font(font),"Custom map font was not registered");
+            checked(device->CreateTexture(dimensions.width,dimensions.height,1,D3DUSAGE_RENDERTARGET,
+                                          D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));
+            wrapper.texture=texture.Get();
+            auto clear_original=[&] {
+                ComPtr<IDirect3DSurface9> surface;checked(texture->GetSurfaceLevel(0,&surface));
+                checked(device->ColorFill(surface.Get(),nullptr,0xffffffff));
+            };
+            clear_original();anchor={8,8,8,8,0,0,23,0,0};
+            auto second=eu4unicode::find_dynamic_glyph(table,0x4e2d);
+            require(second&&eu4unicode::font_glyph_page(second)==1,
+                    "Large borrowed mod atlas rejected its first supplemental glyph");
+            eu4unicode::synchronize_font_texture(&wrapper,1);
+            auto pages=eu4unicode::font_texture_pages(texture.Get());
+            const auto supplement=eu4unicode::supplemental_font_page_size(dimensions);
+            require(pages.size()==2&&pages[1].size.width==supplement.width&&pages[1].size.height==supplement.height,
+                    "Custom map supplemental texture has incorrect dimensions");
+            const std::vector<std::uint8_t> primary(64,255);
+            const auto reference=eu4unicode::rasterize_scalar(0x4e2d,88).alpha;
+            auto verify=[&] {
+                require(eu4unicode::find_dynamic_glyph(table,'A')==&anchor&&anchor.advance==23,
+                        "Supplemental allocation replaced the mod glyph or advance");
+                require(read_glyph(device.Get(),texture.Get(),anchor)==primary,
+                        "Supplemental allocation modified original mod pixels");
+                const auto memory=eu4unicode::font_texture_memory(table);
+                require(memory.original_rgba_bytes==dimensions.rgba_bytes()&&
+                        memory.supplemental_reserved_bytes==supplement.rgba_bytes()&&
+                        memory.supplemental_gpu_bytes==supplement.rgba_bytes()&&memory.staging_bytes==supplement.rgba_bytes(),
+                        "Borrowed mod texture was charged to supplemental GPU/CPU allocations");
+                for(const auto path:{DrawPath::indexed,DrawPath::popup,DrawPath::ui_upload,DrawPath::ui_create,DrawPath::ui_partial,DrawPath::ui_dynamic})
+                    draw_glyphs(device.Get(),font,texture.Get(),anchor,*second,primary,reference,path);
+            };
+            verify();pages.clear();wrapper.texture=nullptr;texture.Reset();
+            checked(device->Reset(&parameters));
+            const auto reset_memory=eu4unicode::font_texture_memory(table);
+            require(reset_memory.supplemental_gpu_bytes==0&&reset_memory.staging_bytes==supplement.rgba_bytes(),
+                    "Device reset did not distinguish released GPU pages from retained CPU pixels");
+            checked(device->CreateTexture(dimensions.width,dimensions.height,1,D3DUSAGE_RENDERTARGET,
+                                          D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));
+            wrapper.texture=texture.Get();clear_original();
+            eu4unicode::synchronize_font_texture(&wrapper,1);verify();
+            eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
+            require(eu4unicode::font_texture_memory(table).supplemental_reserved_bytes==0,
+                    "Released custom font still reports supplemental allocations");
+            wrapper.texture=nullptr;texture.Reset();
+            std::cout<<"PASS custom map "<<dimensions.width<<'x'<<dimensions.height<<": original pixels/metrics, page UVs, memory accounting and reset.\n";
         }
         eu4unicode::reset_font_draw_device(device.Get());
         require(MH_Uninitialize()==MH_OK,"MinHook cleanup failed");
