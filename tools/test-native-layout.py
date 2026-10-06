@@ -64,6 +64,11 @@ def fn(name, result, *args):
     return C.CFUNCTYPE(result, *args)(symbol(name))
 
 pointer('image', base)
+patch_log = None
+if args.report:
+    import msvcrt
+    patch_log = args.report.with_suffix('.patch.log').open('w+b')
+    pointer('log_file', msvcrt.get_osfhandle(patch_log.fileno()))
 source = (root / 'src/plugin.cpp').read_text(encoding='utf-8')
 # Verify native site bytes before any test hook changes the mapped image.
 profile = (root / 'src/eu4_1375_profile.cpp').read_text(encoding='utf-8')

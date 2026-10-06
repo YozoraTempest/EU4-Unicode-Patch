@@ -60,6 +60,16 @@ void native_edit_caret(void* widget,std::size_t offset,bool clear_selection) {
     }
     reset_geometry(widget);
 }
+void native_edit_align_commit(void* widget) {
+    const auto view=native_edit_view(widget);
+    const EditPosition current{word(widget,0x56),word(widget,0x54)};
+    const auto caret=view.rows.commit_offset(current);
+    const auto boundaries=grapheme_boundaries(view.text);
+    const auto aligned=*std::lower_bound(boundaries.begin(),boundaries.end(),caret);
+    const auto position=view.rows.position(aligned);
+    if(aligned!=caret||position.row!=current.row||position.column!=current.column)
+        native_edit_caret(widget,aligned);
+}
 void native_edit_notify(void* widget) {
     auto base=static_cast<std::byte*>(widget);
     // Update the edit geometry before notifying owners. A notification may

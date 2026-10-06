@@ -683,12 +683,12 @@ void insert_editor_commit(void* widget,const EngineString* text) {
     original_editor_insert(widget,text);
     if(transaction.entry&&!transaction.entry->alive) return;
     try {
-        const auto view=eu4unicode::native_edit_view(widget);
-        const auto base=static_cast<std::byte*>(widget);
-        const auto caret=view.rows.offset({*reinterpret_cast<std::uint16_t*>(base+0x56),*reinterpret_cast<std::uint16_t*>(base+0x54)});
-        const auto boundaries=eu4unicode::grapheme_boundaries(view.text);
-        const auto aligned=*std::lower_bound(boundaries.begin(),boundaries.end(),caret);
-        if(aligned!=caret) eu4unicode::native_edit_caret(widget,aligned);
+        eu4unicode::native_edit_align_commit(widget);
+    } catch(const std::exception& error) {
+        char message[512];
+        std::snprintf(message,sizeof(message),"Unicode commit caret alignment failed (caller RVA 0x%llx): %s",
+            static_cast<unsigned long long>(caller),error.what());
+        log(message);
     } catch(...) { log("Unicode commit caret alignment failed."); }
 }
 void paste_editor_clipboard(void* widget) {

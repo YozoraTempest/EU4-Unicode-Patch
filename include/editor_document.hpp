@@ -15,6 +15,9 @@ public:
     EditRows(std::string_view source,const std::vector<EditRowInput>& rows);
     const std::vector<EditRow>& rows() const noexcept { return rows_; }
     std::size_t offset(EditPosition position) const;
+    // Native prepend commits store the requested byte count as a column,
+    // including wrapped lines and bytes removed by the document limit.
+    std::size_t commit_offset(EditPosition position) const;
     EditPosition position(std::size_t offset) const;
 private:
     std::vector<EditRow> rows_;

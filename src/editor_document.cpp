@@ -40,6 +40,10 @@ std::size_t EditRows::offset(EditPosition position) const {
     if(position.column>row.length) throw std::out_of_range("Editor column exceeds its row");
     return row.start+position.column;
 }
+std::size_t EditRows::commit_offset(EditPosition position) const {
+    const auto& row=rows_.at(position.row);
+    return row.start+(std::min)(position.column,bytes_-row.start);
+}
 EditPosition EditRows::position(std::size_t offset) const {
     if(offset>bytes_) throw std::out_of_range("Editor position exceeds document");
     const auto found=std::upper_bound(rows_.begin(),rows_.end(),offset,

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 void check(bool condition,const char* message) {
@@ -103,6 +104,24 @@ int main() {
     const EditRows trailing("A\n\n",{{"A\n",false},{"\n",false}});
     check(trailing.rows().size()==3&&trailing.position(3).row==2&&trailing.offset({2,0})==3,
         "a final hard newline has an empty caret row even when the native cache omits it");
+    const EditRows committed(u8"中文\nالعربية\r\nहिन्दी\nZ",
+        {{u8"中文\n",false},{u8"العربية\r\n",false},{u8"हिन्दी\n",false},{"Z",false}});
+    const auto commit_bytes=std::string_view(u8"中文\nالعربية\r\nहिन्दी\n").size();
+    const auto commit_position=committed.position(committed.commit_offset({0,commit_bytes}));
+    check(commit_position.row==3&&commit_position.column==0,
+        "native prepend byte counts map across hard CR/LF lines to the insertion end");
+    const auto soft_position=spaces.position(spaces.commit_offset({0,15}));
+    check(soft_position.row==2&&soft_position.column==0,
+        "native prepend byte counts map across consumed soft-wrap spaces");
+    const EditRows limited(u8"中",{{u8"中",false}});
+    check(limited.commit_offset({0,6})==3&&limited.position(3).column==3,
+        "native requested commit length clamps to the actual truncated document");
+    check(limited.commit_offset({0,(std::numeric_limits<std::size_t>::max)()})==3,
+        "oversized commit columns cannot overflow document offsets");
+    rejected=false;try { limited.offset({0,6}); } catch(const std::out_of_range&) { rejected=true; }
+    check(rejected,"ordinary row positions still reject columns beyond their row");
+    rejected=false;try { limited.commit_offset({1,0}); } catch(const std::out_of_range&) { rejected=true; }
+    check(rejected,"commit normalization still rejects unknown rows");
     rejected=false;
     try { EditRows bad(u8"e\u0301",{{"e\n",true},{u8"\u0301",false}}); } catch(const std::invalid_argument&) { rejected=true; }
     check(rejected,"native soft wraps cannot detach combining marks");
