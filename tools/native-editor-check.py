@@ -190,7 +190,9 @@ def verify(base, fn, hook, engine_string, font_source, callbacks, crt):
          '中文\nالعربية\r\nहिन्दी\n', len('中文\nالعربية\r\nहिन्दी\n'.encode())),
         ('Z', 0, '𠮷', 110, 4, '𠮷', 4),
         ('Z', 0, 'e\u0301', 110, 2, '', 0),
-        ('AZ', 1, '中文', 110, 2, 'AZ', 1),
+        # At a full byte limit, the native middle-insert action advances to
+        # the document end even though the text is unchanged.
+        ('AZ', 1, '中文', 110, 2, 'AZ', 2),
         ('Z', 0, '', 110, 32000, 'Z', 0),
     ):
         widget = create_editor(sample, width, byte_limit=limit)

@@ -461,6 +461,13 @@ assets = args.assets_directory.resolve() if args.assets_directory else game.pare
 map_results = map_check['verify'](base, fn, hook, engine_string, assets, pointer, symbol, executable_code)
 editor_check = __import__('runpy').run_path(str(root / 'tools/native-editor-check.py'))
 editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks, crt)
+patch_messages = ''
+if patch_log:
+    pointer('log_file', C.c_void_p(-1).value)
+    patch_log.seek(0)
+    patch_messages = patch_log.read().decode('utf-8')
+    patch_log.close()
+    assert 'Unicode commit caret alignment failed' not in patch_messages, patch_messages
 report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_hash,
           'game_exe_sha256': game_hash, 'site_guards': len(guards),
           'native_width': results, 'native_layout': layout_results,
@@ -468,7 +475,7 @@ report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_
           'ui_page_emission':ui_page_results,'ui_geometry_scopes':ui_scope_results,
           'button_format_arguments':button_format_results,
           'native_selection_sprites':selection_results,'native_map_fit':map_results,
-          'native_multiline_editor':editor_results}
+          'native_multiline_editor':editor_results,'native_patch_messages':patch_messages}
 if args.report:
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f"PASS: {len(results)} native width cases, {len(layout_results)} native layouts, "
