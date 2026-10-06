@@ -4,7 +4,7 @@ import json
 import struct
 
 
-def verify(base, fn, hook, engine_string, font_source, callbacks, crt):
+def verify(base, fn, hook, engine_string, font_source, callbacks, crt, address_hook, executable_code):
     fn('configure_native_editor_text', None, C.c_void_p)(base)
     fn('configure_editor_presentation', None, C.c_void_p)(base)
     for rva, name, original in (
@@ -249,6 +249,30 @@ def verify(base, fn, hook, engine_string, font_source, callbacks, crt):
         print('Native insert results: ' + json.dumps(commits, ensure_ascii=True), flush=True)
     assert all(case['passed'] for case in commits), commits
     results.append({'native_commits': commits})
+    # Enter through the real tooltip insertion call site, with a test-only
+    # continuation. This preserves the production return address without
+    # running the tooltip owner's game-state dependencies.
+    address_hook(0x1415f38, executable_code(b'\x48\x83\xc4\x28\xc3'))
+    bridge = executable_code(b'\x48\x83\xec\x28\x48\xb8' +
+                             struct.pack('<Q', base + 0x1415f33) + b'\xff\xe0')
+    tooltip_insert = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p)(bridge)
+    formatted = []
+    for payload in (b'\xa7Y' + '中文'.encode() + b'\xa7!',
+                    b'\xa7G' + 'English العربية'.encode() + b'\xa7!\n\xa3adm\xa3',
+                    '§Y中文§!'.encode()):
+        widget = create_editor('', 110)
+        C.c_uint8.from_address(widget + 0xe4).value = 1
+        incoming = engine_string(payload)
+        tooltip_insert(widget, C.addressof(incoming))
+        destroy(C.addressof(incoming))
+        assert current(widget) == payload, payload
+        # A temporary formatting operation must not create user undo history.
+        if payload == '§Y中文§!'.encode():
+            dispatch(widget, ord('z'), 1)
+            assert current(widget) == payload, payload
+        formatted.append({'input_hex': payload.hex(), 'preserved': True})
+        release_editor(widget)
+    results.append({'native_tooltip_inserts': formatted})
     assert notifications
     fn('release_font_atlas', None, C.c_void_p)(font_address + 0x120)
     fn('release_unicode_font', None, C.c_void_p)(font_address + 0x120)

@@ -127,6 +127,7 @@ const ImageProfile& eu4_1375_profile() {
             {0x1536c32,"e859295eff","native text/font code"},
             {0x15354e0,"48895c240848896c2410488974241848897c24204156","consume_editor_commit"},
             {0x1536b80,"488bc44889580848897010488978184c896020","insert_editor_commit"},
+            {0x1415f33,"e8480c12004d8b6508","temporary tooltip editor insertion"},
             {0x14e9cac,"488b01488d5310ff5008","native text/font code"},
             {0x153560a,"488d542420ff90a0000000","native text/font code"},
             {0x836f33,"0f1003488bd00f11000f104b100f1148100f1043200f1140200f104b300f1148300f1043400f114040f20f104b50f20f114850","native text/font code"},

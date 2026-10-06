@@ -674,9 +674,12 @@ EditorInsert original_editor_insert=nullptr;
 struct ActiveCommit { void* widget; const EngineString* text; };
 thread_local ActiveCommit active_commit{};
 void insert_editor_commit(void* widget,const EngineString* text) {
-    EditorTransaction transaction(widget);
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
         reinterpret_cast<std::uintptr_t>(image);
+    // Tooltip layout uses a temporary editor to wrap native formatted text.
+    // It has no interactive caret or undo history, and permits CP1252 commands.
+    if(caller==0x1415f38) { original_editor_insert(widget,text);return; }
+    EditorTransaction transaction(widget);
     if(caller==0x1535615&&active_commit.widget==widget&&active_commit.text)
         text=active_commit.text;
     if(static_cast<std::byte*>(widget)[0x90]!=std::byte{0}) editor_selection(widget);

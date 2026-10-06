@@ -460,7 +460,8 @@ map_check = __import__('runpy').run_path(str(root / 'tools/native-map-check.py')
 assets = args.assets_directory.resolve() if args.assets_directory else game.parent
 map_results = map_check['verify'](base, fn, hook, engine_string, assets, pointer, symbol, executable_code)
 editor_check = __import__('runpy').run_path(str(root / 'tools/native-editor-check.py'))
-editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks, crt)
+editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks, crt,
+                                       address_hook, executable_code)
 patch_messages = ''
 if patch_log:
     pointer('log_file', C.c_void_p(-1).value)
