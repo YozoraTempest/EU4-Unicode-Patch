@@ -52,6 +52,11 @@ bool logged_geometry=false,logged_upload=false,logged_contract=false;
 void checked(HRESULT status) {
     if(FAILED(status)) throw std::runtime_error("Paged font drawing failed: "+std::to_string(static_cast<unsigned long>(status)));
 }
+std::vector<FontPageSize> page_sizes(const FontTexturePages& pages) {
+    std::vector<FontPageSize> result;result.reserve(pages.size());
+    for(const auto& page:pages) result.push_back(page.size);
+    return result;
+}
 void forget_buffer(IDirect3DVertexBuffer9* buffer) {
     const auto found=uploads.find(buffer);
     if(found==uploads.end()) return;
@@ -192,7 +197,7 @@ HRESULT STDMETHODCALLTYPE draw_indexed_font(IDirect3DDevice9* device,D3DPRIMITIV
         std::memcpy(physical.data(),data,vertices*sizeof(MapFontVertex));
         if(std::none_of(physical.begin(),physical.end(),[](const auto& vertex){return vertex.u>=2;}))
             return original_indexed_draw(device,type,base,minimum,vertices,start,primitives);
-        const auto batches=split_font_quads(physical,pages.size());
+        const auto batches=split_font_quads(physical,page_sizes(pages));
         auto& scratch=draw_buffers[device];
         const auto bytes=vertices*static_cast<UINT>(sizeof(MapFontVertex));
         if(scratch.capacity<bytes) {
@@ -208,7 +213,7 @@ HRESULT STDMETHODCALLTYPE draw_indexed_font(IDirect3DDevice9* device,D3DPRIMITIV
         state.changed=true;
         checked(device->SetStreamSource(0,scratch.buffer.Get(),0,sizeof(MapFontVertex)));
         for(const auto& batch:batches) {
-            checked(device->SetTexture(0,pages.at(batch.page).Get()));
+            checked(device->SetTexture(0,pages.at(batch.page).texture.Get()));
             checked(original_indexed_draw(device,type,0,static_cast<UINT>(batch.first_quad*4),
                 static_cast<UINT>(batch.quad_count*4),static_cast<UINT>(batch.first_quad*6),static_cast<UINT>(batch.quad_count*2)));
         }
@@ -246,7 +251,7 @@ HRESULT STDMETHODCALLTYPE draw_popup_font(IDirect3DDevice9* device,D3DPRIMITIVET
         std::memcpy(physical.data(),data,bytes);
         if(std::none_of(physical.begin(),physical.end(),[](const auto& vertex){return vertex.u>=2;}))
             return original_primitive_draw(device,type,start,primitives);
-        const auto batches=split_popup_glyphs(physical,pages.size());
+        const auto batches=split_popup_glyphs(physical,page_sizes(pages));
         auto& scratch=draw_buffers[device];
         if(scratch.capacity<bytes) {
             scratch.buffer.Reset();scratch.capacity=0;
@@ -259,7 +264,7 @@ HRESULT STDMETHODCALLTYPE draw_popup_font(IDirect3DDevice9* device,D3DPRIMITIVET
         state.changed=true;
         checked(device->SetStreamSource(0,scratch.buffer.Get(),0,sizeof(PopupFontVertex)));
         for(const auto& batch:batches) {
-            checked(device->SetTexture(0,pages.at(batch.page).Get()));
+            checked(device->SetTexture(0,pages.at(batch.page).texture.Get()));
             checked(original_primitive_draw(device,type,static_cast<UINT>(batch.first_quad*6),static_cast<UINT>(batch.quad_count*2)));
         }
         return D3D_OK;

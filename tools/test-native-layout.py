@@ -19,6 +19,7 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--executable', required=True, type=Path)
 parser.add_argument('--build-directory', default='build', type=Path)
+parser.add_argument('--assets-directory', type=Path, help='Game resources when the EXE is stored separately')
 parser.add_argument('--report', type=Path)
 args = parser.parse_args()
 if os.name != 'nt' or C.sizeof(C.c_void_p) != 8:
@@ -28,8 +29,8 @@ if not __debug__:
 build = (root / args.build_directory).resolve()
 game = args.executable.resolve()
 game_hash = hashlib.sha256(game.read_bytes()).hexdigest()
-if game_hash != '9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a':
-    parser.error('Unsupported game executable SHA-256')
+import subprocess
+subprocess.run([str(build / 'executable_check.exe'), str(game)], check=True)
 dll_path = build / 'eu4_unicode_patch.dll'
 dll_hash = hashlib.sha256(dll_path.read_bytes()).hexdigest()
 build_info = json.loads((build / 'build-info.json').read_text(encoding='utf-8-sig'))
@@ -63,9 +64,15 @@ def fn(name, result, *args):
     return C.CFUNCTYPE(result, *args)(symbol(name))
 
 pointer('image', base)
+patch_log = None
+if args.report:
+    import msvcrt
+    patch_log = args.report.with_suffix('.patch.log').open('w+b')
+    pointer('log_file', msvcrt.get_osfhandle(patch_log.fileno()))
 source = (root / 'src/plugin.cpp').read_text(encoding='utf-8')
 # Verify native site bytes before any test hook changes the mapped image.
-guards = re.findall(r'\{(0x[0-9a-f]+),"([0-9a-f]+)"\}', source)
+profile = (root / 'src/eu4_1375_profile.cpp').read_text(encoding='utf-8')
+guards = re.findall(r'\{(0x[0-9a-f]+),"([0-9a-f]+)"', profile)
 assert guards, 'No native site guards found'
 for rva, pattern in guards:
     expected = bytes.fromhex(pattern)
@@ -450,14 +457,26 @@ for width,height,truncate,formatted in [(220,0,False,True),(220,55,False,False),
 selection_check = __import__('runpy').run_path(str(root / 'tools/native-selection-check.py'))
 selection_results = selection_check['verify'](base, symbols, address_hook, callbacks, crt)
 map_check = __import__('runpy').run_path(str(root / 'tools/native-map-check.py'))
-map_results = map_check['verify'](base, fn, hook, engine_string, game.parent, pointer, symbol, executable_code)
+assets = args.assets_directory.resolve() if args.assets_directory else game.parent
+map_results = map_check['verify'](base, fn, hook, engine_string, assets, pointer, symbol, executable_code)
+editor_check = __import__('runpy').run_path(str(root / 'tools/native-editor-check.py'))
+editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks, crt,
+                                       address_hook, executable_code)
+patch_messages = ''
+if patch_log:
+    pointer('log_file', C.c_void_p(-1).value)
+    patch_log.seek(0)
+    patch_messages = patch_log.read().decode('utf-8')
+    patch_log.close()
+    assert 'Unicode commit caret alignment failed' not in patch_messages, patch_messages
 report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_hash,
           'game_exe_sha256': game_hash, 'site_guards': len(guards),
           'native_width': results, 'native_layout': layout_results,
           'substring_callers': [hex(x) for x in sorted(substring_callers)],
           'ui_page_emission':ui_page_results,'ui_geometry_scopes':ui_scope_results,
           'button_format_arguments':button_format_results,
-          'native_selection_sprites':selection_results,'native_map_fit':map_results}
+          'native_selection_sprites':selection_results,'native_map_fit':map_results,
+          'native_multiline_editor':editor_results,'native_patch_messages':patch_messages}
 if args.report:
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f"PASS: {len(results)} native width cases, {len(layout_results)} native layouts, "
@@ -467,3 +486,4 @@ print(f"PASS: {len(ui_scope_results)} native UI geometry scope cases preserve en
 print(f"PASS: {len(button_format_results)} native button format arguments remain independent of height and truncation.",flush=True)
 print("PASS: native selection factory, expired render parents, relinking and manager release.",flush=True)
 print(f"PASS: {len(map_results)} shaped map labels retain native fitting dimensions and scoped glyphs.",flush=True)
+print(f"PASS: {len(editor_results)} native multiline editors preserve rows, complete deletion and undo/redo.",flush=True)

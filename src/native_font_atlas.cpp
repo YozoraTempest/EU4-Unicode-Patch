@@ -11,6 +11,7 @@
 #include <MinHook.h>
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -28,6 +29,7 @@ NativeTextureLookup original_texture_lookup=nullptr;
 namespace {
 using Microsoft::WRL::ComPtr;
 struct Page {
+    FontPageSize size{};
     int x=1,y=1,row=0;
     ComPtr<IDirect3DTexture9> staging;
     // Borrowed comparison tokens: never retain a default-pool resource, which
@@ -41,7 +43,9 @@ struct Atlas {
     void* manager=nullptr;
     int id=-1,size=0,width=0,height=0;
     std::filesystem::path dds;
-    bool black=false;
+    bool black=false,external=false,map=false;
+    FontPageSize supplemental_size{};
+    std::uint64_t supplemental_reserved_bytes=0;
     struct Glyph { NativeGlyph metrics;std::uint32_t page; };
     std::vector<std::unique_ptr<Page>> pages;
     std::unordered_map<std::uint32_t,Glyph> glyphs;
@@ -60,7 +64,6 @@ struct Atlas {
 };
 struct GlyphPage { const void* anchor;std::uint32_t page; };
 std::unordered_map<const NativeGlyph*,GlyphPage> glyph_pages;
-constexpr std::uint64_t atlas_texture_budget=256ull*1024*1024;
 std::filesystem::path fixture_path,font_path;
 std::string atlas_prefix;
 FontLog logger=nullptr;
@@ -126,21 +129,21 @@ ScalarGlyph atlas_glyph(std::uint32_t scalar,int size) {
     return rasterize_scalar(scalar,size,text_fonts);
 }
 Atlas::Glyph queue_glyph(Atlas& a,ScalarGlyph glyph) {
-    if(glyph.metrics.width<=0||glyph.metrics.height<=0||glyph.metrics.width+2>a.width||
-       glyph.metrics.height+2>a.height||glyph.alpha.size()!=static_cast<std::size_t>(glyph.metrics.width)*glyph.metrics.height)
+    if(glyph.metrics.width<=0||glyph.metrics.height<=0||glyph.metrics.width+2>a.supplemental_size.width||
+       glyph.metrics.height+2>a.supplemental_size.height||glyph.alpha.size()!=static_cast<std::size_t>(glyph.metrics.width)*glyph.metrics.height)
         throw std::length_error("Native font glyph exceeds page dimensions");
     std::uint32_t page_index=0;int x=0,y=0,row=0;
     for(;page_index<a.pages.size();++page_index) {
         const auto& page=*a.pages[page_index];x=page.x;y=page.y;row=page.row;
-        if(x+glyph.metrics.width+1>a.width) { x=1;y+=row+1;row=0; }
-        if(y+glyph.metrics.height+1<=a.height) break;
+        if(x+glyph.metrics.width+1>page.size.width) { x=1;y+=row+1;row=0; }
+        if(y+glyph.metrics.height+1<=page.size.height) break;
     }
     if(page_index==a.pages.size()) {
-        const auto page_bytes=static_cast<std::uint64_t>(a.width)*a.height*4;
-        if((a.pages.size()+1)*page_bytes>atlas_texture_budget)
-            throw std::length_error("Native font texture memory budget exhausted");
-        a.pages.push_back(std::make_unique<Page>());x=1;y=1;row=0;
-        if(logger) { char message[100];std::snprintf(message,sizeof(message),"Dynamic font page allocated: size=%d page=%u bytes=%llu",a.size,page_index,static_cast<unsigned long long>(page_bytes));logger(message); }
+        const auto page_bytes=a.supplemental_size.rgba_bytes();
+        check_font_page_budget(a.supplemental_reserved_bytes,a.external?0:a.pages.front()->size.rgba_bytes(),a.supplemental_size);
+        auto page=std::make_unique<Page>();page->size=a.supplemental_size;
+        a.pages.push_back(std::move(page));a.supplemental_reserved_bytes+=page_bytes;x=1;y=1;row=0;
+        if(logger) { char message[160];std::snprintf(message,sizeof(message),"Dynamic font page allocated: size=%d page=%u width=%u height=%u bytes=%llu",a.size,page_index,a.supplemental_size.width,a.supplemental_size.height,static_cast<unsigned long long>(page_bytes));logger(message); }
     }
     auto& page=*a.pages[page_index];
     glyph.metrics.x=static_cast<std::int16_t>(x);glyph.metrics.y=static_cast<std::int16_t>(y);
@@ -205,6 +208,23 @@ Atlas::Paragraph& paragraph_layout(Atlas& atlas,void* font,std::string_view text
     },[font](unsigned char code) {
         if(!native_paragraph_color) throw std::domain_error("Native color lookup is unavailable");
         std::uint32_t color=0;return native_paragraph_color(font,code,&color);
+    },[font,scale](std::string_view) {
+        const auto table=*static_cast<void***>(font);
+        if(!table||!table[0xf8/8]) throw std::domain_error("Native flag measurement is unavailable");
+        const auto pixels=reinterpret_cast<int(*)(void*)>(table[0xf8/8])(font);
+        return static_cast<float>(pixels)/scale;
+    },atlas.external&&!atlas.map?ParagraphText::BitmapMeasure{[font](std::uint32_t scalar) {
+        const auto table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(font)+0x120);
+        const auto glyph=scalar<=255?static_cast<const NativeGlyph*>(table[scalar]):
+            static_cast<const NativeGlyph*>(find_unicode_glyph(table,scalar));
+        return glyph?static_cast<float>(glyph->advance):-1.f;
+    }}:ParagraphText::BitmapMeasure{},[font,scale](std::string_view command) {
+        // The guarded native renderer advances numbered symbols by eight
+        // client pixels. Currency symbols use the font's own metric.
+        if(command.front()=='{') return 8.f/scale;
+        const auto table=*static_cast<void***>(font);
+        if(!table||!table[0xf0/8]) throw std::domain_error("Native symbol measurement is unavailable");
+        return static_cast<float>(reinterpret_cast<int(*)(void*)>(table[0xf0/8])(font))/scale;
     });
     std::vector<float> icons;for(const auto& icon:content->icons()) icons.push_back(icon.advance);
     const auto key=std::make_tuple(wrap,formatted,width,scale,std::string(text),content->colors(),std::move(icons));
@@ -284,13 +304,13 @@ void prepare_staging(Atlas& a,Page& page,IDirect3DTexture9* texture,bool initial
         if(device.Get()==previous.Get()) return;
         // Transfer existing pixels to the new device's system-memory resource.
         ComPtr<IDirect3DTexture9> replacement;
-        checked(device->CreateTexture(a.width,a.height,1,0,D3DFMT_A8R8G8B8,D3DPOOL_SYSTEMMEM,&replacement,nullptr));
+        checked(device->CreateTexture(page.size.width,page.size.height,1,0,D3DFMT_A8R8G8B8,D3DPOOL_SYSTEMMEM,&replacement,nullptr));
         D3DLOCKED_RECT old_lock{},new_lock{};
         checked(page.staging->LockRect(0,&old_lock,nullptr,D3DLOCK_READONLY));
         const auto status=replacement->LockRect(0,&new_lock,nullptr,0);
         if(FAILED(status)) { page.staging->UnlockRect(0); checked(status); }
-        for(int row=0;row<a.height;++row)
-            std::memcpy(static_cast<char*>(new_lock.pBits)+row*new_lock.Pitch,static_cast<char*>(old_lock.pBits)+row*old_lock.Pitch,a.width*4);
+        for(std::uint32_t row=0;row<page.size.height;++row)
+            std::memcpy(static_cast<char*>(new_lock.pBits)+row*new_lock.Pitch,static_cast<char*>(old_lock.pBits)+row*old_lock.Pitch,page.size.width*4);
         page.staging->UnlockRect(0); checked(replacement->UnlockRect(0));
         page.staging=std::move(replacement);page.uploaded=nullptr;return;
     }
@@ -305,12 +325,12 @@ void prepare_staging(Atlas& a,Page& page,IDirect3DTexture9* texture,bool initial
             throw std::runtime_error("Generated font DDS format mismatch");
     }
     ComPtr<IDirect3DTexture9> staging;
-    checked(device->CreateTexture(a.width,a.height,1,0,D3DFMT_A8R8G8B8,D3DPOOL_SYSTEMMEM,&staging,nullptr));
+    checked(device->CreateTexture(page.size.width,page.size.height,1,0,D3DFMT_A8R8G8B8,D3DPOOL_SYSTEMMEM,&staging,nullptr));
     D3DLOCKED_RECT pixels{};checked(staging->LockRect(0,&pixels,nullptr,0));
-    for(int row=0;row<a.height;++row) {
+    for(std::uint32_t row=0;row<page.size.height;++row) {
         auto target=static_cast<std::uint32_t*>(static_cast<void*>(static_cast<char*>(pixels.pBits)+row*pixels.Pitch));
-        if(initial) source.read(reinterpret_cast<char*>(target),a.width*4);
-        else std::fill_n(target,a.width,a.black?0u:0xffffffu);
+        if(initial) source.read(reinterpret_cast<char*>(target),page.size.width*4);
+        else std::fill_n(target,page.size.width,a.black?0u:0xffffffu);
     }
     checked(staging->UnlockRect(0));
     if(initial&&(!source||source.peek()!=EOF)) throw std::runtime_error("Generated font DDS length mismatch");
@@ -319,7 +339,7 @@ void prepare_staging(Atlas& a,Page& page,IDirect3DTexture9* texture,bool initial
 void sync_page(Atlas& a,Page& page,IDirect3DTexture9* texture,bool initial) {
     if(!texture||(!page.staging&&page.pending.empty())||(texture==page.uploaded&&page.pending.empty())) return;
     D3DSURFACE_DESC desc{};checked(texture->GetLevelDesc(0,&desc));
-    if(desc.Width!=static_cast<UINT>(a.width)||desc.Height!=static_cast<UINT>(a.height)||desc.Format!=D3DFMT_A8R8G8B8||desc.Pool!=D3DPOOL_DEFAULT)
+    if(desc.Width!=page.size.width||desc.Height!=page.size.height||desc.Format!=D3DFMT_A8R8G8B8||desc.Pool!=D3DPOOL_DEFAULT)
         throw std::runtime_error("Native font GPU texture contract mismatch");
     prepare_staging(a,page,texture,initial);
     if(texture!=page.uploaded) checked(page.staging->AddDirtyRect(nullptr));
@@ -339,19 +359,40 @@ void sync_page(Atlas& a,Page& page,IDirect3DTexture9* texture,bool initial) {
     if(logger&&!page.pending.empty()) { char message[100];std::snprintf(message,sizeof(message),"Dynamic font texture uploaded: size=%d glyphs=%zu",a.size,page.pending.size());logger(message); }
     page.pending.clear();
 }
+FontTextureMemory texture_memory(const Atlas& a) {
+    FontTextureMemory result{};
+    result.original_rgba_bytes=a.pages.front()->size.rgba_bytes();
+    result.supplemental_reserved_bytes=a.supplemental_reserved_bytes;
+    for(const auto& page:a.pages) {
+        if(page->texture) result.supplemental_gpu_bytes+=page->size.rgba_bytes();
+        if(page->staging) result.staging_bytes+=page->size.rgba_bytes();
+    }
+    return result;
+}
 void sync(Atlas& a,void* wrapper) {
     const auto texture=texture_of(wrapper);
     if(!texture) return;
     ComPtr<IDirect3DDevice9> device;checked(texture->GetDevice(&device));
+    const auto previous=texture_memory(a);
     for(std::size_t index=0;index<a.pages.size();++index) {
         auto& page=*a.pages[index];
+        if(!index&&a.external) { page.uploaded=texture;continue; }
         if(index&&!page.texture) {
-            checked(device->CreateTexture(a.width,a.height,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&page.texture,nullptr));
+            D3DCAPS9 caps{};checked(device->GetDeviceCaps(&caps));
+            if(page.size.width>caps.MaxTextureWidth||page.size.height>caps.MaxTextureHeight)
+                throw std::length_error("Supplemental font page exceeds device texture limits");
+            checked(device->CreateTexture(page.size.width,page.size.height,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&page.texture,nullptr));
         }
         sync_page(a,page,index?page.texture.Get():texture,index==0);
         // ASCII-only initial pages have no pending upload. They still identify
         // the engine texture when another page is requested later.
         if(!index) page.uploaded=texture;
+    }
+    const auto current=texture_memory(a);
+    if(logger&&(current.supplemental_gpu_bytes!=previous.supplemental_gpu_bytes||current.staging_bytes!=previous.staging_bytes)) {
+        char message[240];std::snprintf(message,sizeof(message),"Font texture memory: size=%d original_rgba_bytes=%llu supplemental_reserved_bytes=%llu supplemental_gpu_bytes=%llu staging_bytes=%llu",
+            a.size,static_cast<unsigned long long>(current.original_rgba_bytes),static_cast<unsigned long long>(current.supplemental_reserved_bytes),
+            static_cast<unsigned long long>(current.supplemental_gpu_bytes),static_cast<unsigned long long>(current.staging_bytes));logger(message);
     }
 }
 }
@@ -371,22 +412,36 @@ void register_font_atlas(void* object,std::string_view selected_path) noexcept {
         const auto path=selected_path.empty()?std::string_view(stored_path.data(),static_cast<std::size_t>(stored_path.size)):selected_path;
         const std::array<std::pair<const char*,int>,5> names{{{"zh-hans-14",14},{"zh-hans-16",16},{"zh-hans-18",18},{"zh-hans-24",24},{"zh-hans-map",88}}};
         int size=0;for(const auto& name:names) if(path==atlas_prefix+name.first) size=name.second;
-        if(!size) return;
+        const bool external=!size;
+        if(external) size=*reinterpret_cast<const int*>(f+0x960);
+        if(size<=0||size>512) return;
         auto table=reinterpret_cast<void**>(f+0x120);
         const auto key=identity(table);
         if(!table[0x41]||bindings.count(key)) return;
         const auto width=*reinterpret_cast<int*>(f+0x978),height=*reinterpret_cast<int*>(f+0x97c);
-        // Dynamic space is an explicit generated asset contract, never assumed in a
-        // workshop atlas. Existing small atlases keep their static behavior.
-        if(width!=2048||height!=4096) return;
+        if(width<=2||height<=2||width>16384||height>16384) return;
+        if(!external&&(width!=2048||height!=4096)) return;
         const auto context=*reinterpret_cast<std::byte**>(f+0x48);
         auto manager=*reinterpret_cast<void**>(context+0x480);
         const auto id=*reinterpret_cast<int*>(f+0x970);
-        for(const auto& bound:bindings) if(bound.second->manager==manager&&bound.second->id==id) {
+        for(const auto& bound:bindings) if(bound.second->manager==manager&&bound.second->id==id&&bound.second->size==size&&bound.second->external==external) {
             bindings.emplace(key,bound.second);return;
         }
         auto atlas=std::make_shared<Atlas>();
-        atlas->manager=manager;atlas->id=id;atlas->size=size;atlas->width=width;atlas->height=height;atlas->black=size==88;
+        atlas->manager=manager;atlas->id=id;atlas->size=size;atlas->width=width;atlas->height=height;atlas->external=external;
+        atlas->supplemental_size=supplemental_font_page_size({static_cast<std::uint32_t>(width),static_cast<std::uint32_t>(height)});
+        auto filename=std::filesystem::path(path).filename().string();
+        std::transform(filename.begin(),filename.end(),filename.begin(),[](unsigned char value){return static_cast<char>(std::tolower(value));});
+        atlas->map=(!external&&size==88)||filename.rfind("map",0)==0||filename=="tahoma_60"||
+            (filename.size()>=4&&(filename.compare(filename.size()-4,4,"_map")==0||filename.compare(filename.size()-4,4,"-map")==0));
+        atlas->black=atlas->map;
+        if(external) {
+            // The original atlas may be packed or supplied by a mod archive.
+            // Reserve its entire first page; never read or modify its pixels.
+            auto page=std::make_unique<Page>();page->size={static_cast<std::uint32_t>(width),static_cast<std::uint32_t>(height)};page->y=height;
+            atlas->pages.push_back(std::move(page));
+            bindings.emplace(key,std::move(atlas));return;
+        }
         atlas->dds=fixture_path/(std::string(path)+".dds");
         std::ifstream metrics(fixture_path/(std::string(path)+".fnt"));
         std::string line;int occupied=1;bool common=false;
@@ -399,13 +454,15 @@ void register_font_atlas(void* object,std::string_view selected_path) noexcept {
             if(line.rfind("char ",0)==0) occupied=(std::max)(occupied,property(line,"y")+property(line,"height")+1);
         }
         if(!common||occupied>=height) throw std::runtime_error("Font atlas has no dynamic region");
-        auto page=std::make_unique<Page>();page->y=occupied;
+        auto page=std::make_unique<Page>();page->size={static_cast<std::uint32_t>(width),static_cast<std::uint32_t>(height)};page->y=occupied;
         atlas->pages.push_back(std::move(page));
         bindings.emplace(key,std::move(atlas));
     } catch(const std::exception& error) { if(logger) logger(error.what()); }
 }
 NativeGlyph* find_dynamic_glyph(void* const* table,std::uint32_t scalar) noexcept {
-    if(!table||scalar<=255||scalar>0x10ffff||(scalar>=0xd800&&scalar<=0xdfff)) return nullptr;
+    if(!table||scalar<0x20||scalar>0x10ffff||(scalar>=0xd800&&scalar<=0xdfff)) return nullptr;
+    if(scalar<=255&&table[scalar]) return static_cast<NativeGlyph*>(table[scalar]);
+    if(auto existing=static_cast<NativeGlyph*>(find_unicode_glyph(table,scalar))) return existing;
     try {
         std::lock_guard<std::recursive_mutex> lock(mutex);
         auto binding=bindings.find(identity(table));if(binding==bindings.end()) return nullptr;
@@ -418,6 +475,9 @@ NativeGlyph* find_dynamic_glyph(void* const* table,std::uint32_t scalar) noexcep
             // binding, on its existing graphics/resource execution path.
             found=a.glyphs.emplace(scalar,queue_glyph(a,atlas_glyph(scalar,a.size))).first;
             if(logger) { const auto& glyph=found->second.metrics;char message[128];std::snprintf(message,sizeof(message),"Dynamic glyph U+%X queued: size=%d rect=%d,%d,%d,%d advance=%d",scalar,a.size,glyph.x,glyph.y,glyph.width,glyph.height,glyph.advance);logger(message); }
+        }
+        if(scalar<=255) {
+            auto record=&found->second.metrics;glyph_pages[record]={identity(table),found->second.page};return record;
         }
         auto record=allocate_unicode_glyph(table,scalar);
         if(!record) record=static_cast<NativeGlyph*>(find_unicode_glyph(table,scalar));
@@ -468,10 +528,10 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
         ScalarGlyph blank{};blank.metrics.width=blank.metrics.height=1;blank.alpha={0};
         blank.metrics.advance=static_cast<std::int16_t>(advance);append_glyph(std::move(blank));
     };
-    if(atlas.size==88) {
-        for(auto& glyph:map_cluster_glyphs(*entry.layout,atlas.width,atlas.height)) append_glyph(std::move(glyph));
+    if(atlas.map) {
+        for(auto& glyph:map_cluster_glyphs(*entry.layout,atlas.supplemental_size.width,atlas.supplemental_size.height)) append_glyph(std::move(glyph));
     } else {
-    auto tiles=rasterize_paragraph(*entry.layout,static_cast<std::uint32_t>(atlas.width-2),static_cast<std::uint32_t>(atlas.height-2));
+    auto tiles=rasterize_paragraph(*entry.layout,atlas.supplemental_size.width-2,atlas.supplemental_size.height-2);
     for(std::size_t line=0;line<entry.layout->lines().size();++line) {
         const auto& metrics=entry.layout->lines()[line];
         const auto first=glyphs.size(),line_start=transport.size();
@@ -556,7 +616,7 @@ bool dynamic_map_font(void* object) noexcept {
         std::lock_guard<std::recursive_mutex> lock(mutex);
         const auto table=reinterpret_cast<void* const*>(static_cast<const std::byte*>(object)+0x120);
         const auto found=bindings.find(identity(table));
-        return found!=bindings.end()&&found->second->size==88;
+        return found!=bindings.end()&&found->second->map;
     } catch(...) { return false; }
 }
 bool dynamic_font(void* object) noexcept {
@@ -573,18 +633,24 @@ std::uint32_t font_glyph_page(const NativeGlyph* glyph) noexcept {
         const auto found=glyph_pages.find(glyph);return found==glyph_pages.end()?0:found->second.page;
     } catch(...) { return 0; }
 }
+FontTextureMemory font_texture_memory(void* const* table) {
+    if(!table) return {};
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    const auto found=bindings.find(identity(table));
+    return found==bindings.end()?FontTextureMemory{}:texture_memory(*found->second);
+}
 FontTexturePages font_texture_pages(IDirect3DBaseTexture9* first) {
     if(!first) return {};
     std::lock_guard<std::recursive_mutex> lock(mutex);
     for(const auto& binding:bindings) {
         const auto& atlas=*binding.second;
         if(atlas.pages.front()->uploaded!=first) continue;
-        FontTexturePages result;result.emplace_back(atlas.pages.front()->uploaded);
+        FontTexturePages result;result.push_back({atlas.pages.front()->uploaded,atlas.pages.front()->size});
         for(std::size_t index=1;index<atlas.pages.size();++index) {
             const auto texture=atlas.pages[index]->texture.Get();
             if(!texture||atlas.pages[index]->uploaded!=texture||!atlas.pages[index]->pending.empty())
                 throw std::runtime_error("Native font page is not uploaded");
-            result.push_back(texture);
+            result.push_back({texture,atlas.pages[index]->size});
         }
         return result;
     }

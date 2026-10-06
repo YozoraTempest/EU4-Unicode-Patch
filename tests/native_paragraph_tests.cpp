@@ -22,6 +22,8 @@ using namespace eu4unicode;
 std::vector<std::string> paragraph_logs;
 void paragraph_log(const char* message) { paragraph_logs.emplace_back(message); }
 int icon_width(void*,const char* name) { return std::strcmp(name,"adm")==0?18:0; }
+int flag_width(void* font) { return static_cast<int>(22*(*reinterpret_cast<float*>(static_cast<std::byte*>(font)+0x968))); }
+int symbol_width(void* font) { return static_cast<int>(18*(*reinterpret_cast<float*>(static_cast<std::byte*>(font)+0x968))); }
 bool color_lookup(void*,unsigned char code,std::uint32_t* value) {
     *value=0xffffffff;return code=='Y'||code=='R'||code=='G'||code=='!';
 }
@@ -32,7 +34,8 @@ struct Font {
     std::array<void*,32> methods{};
     template<class T> void put(std::size_t offset,T value) { std::memcpy(object.data()+offset,&value,sizeof(value)); }
     Font(void* manager) {
-        methods[0xe8/8]=reinterpret_cast<void*>(icon_width);put(0,methods.data());
+        methods[0xe8/8]=reinterpret_cast<void*>(icon_width);methods[0xf8/8]=reinterpret_cast<void*>(flag_width);
+        methods[0xf0/8]=reinterpret_cast<void*>(symbol_width);put(0,methods.data());
         put(0x48,context.data());put(0x120+0x41*8,&anchor);put(0x960,18);put(0x968,1.f);
         put(0x970,7);put(0x978,2048);put(0x97c,4096);
         std::memcpy(context.data()+0x480,&manager,sizeof(manager));
@@ -58,6 +61,8 @@ int transport_width(void* font,const char* source,int length,bool formatted) {
         const auto unit=native_text_unit(text,offset,formatted);offset=unit.end;
         if(unit.kind==TextUnitKind::color) continue;
         if(unit.kind==TextUnitKind::icon) { width+=18;continue; }
+        if(unit.kind==TextUnitKind::flag) { width+=flag_width(font);continue; }
+        if(unit.kind==TextUnitKind::symbol) { width+=text[unit.begin]=='{'?8:symbol_width(font);continue; }
         if(unit.scalar=='\n') { maximum=(std::max)(maximum,width);width=0;continue; }
         const auto glyph=find_paragraph_glyph(table,unit.scalar);
         check(glyph!=nullptr,"formatted transport measurement uses the active paragraph glyphs");
@@ -81,6 +86,47 @@ int main() {
     register_font_atlas(font.data(),"gfx/fonts/zh-hans-18");
     register_font_atlas(alias.data(),"gfx/fonts/zh-hans-18");
     check(dynamic_font(font.data()),"generated native UI font is bound without a graphics device");
+    {
+        int mod_manager=0;
+        Font large(&mod_manager);large.put(0x978,6400);large.put(0x97c,8192);
+        large.anchor={1,1,8,8,0,0,23,0,0};
+        register_font_atlas(large.data(),"gfx/fonts/mt-bitmap-18");
+        auto missing=find_dynamic_glyph(large.table(),0x4e2d);
+        check(missing&&font_glyph_page(missing)==1,
+              "A 6400x8192 mod atlas can allocate its first missing character");
+        check(find_dynamic_glyph(large.table(),'A')==&large.anchor&&large.anchor.advance==23,
+              "Large mod atlas retains its existing bitmap glyph and advance");
+        const auto shaped=font_paragraph_geometry(large.data(),u8"A العربية हिन्दी",300,false,false);
+        check(shaped&&!shaped->glyphs.empty(),"Large mod atlas accepts contextual paragraph tiles");
+        const auto memory=font_texture_memory(large.table());
+        check(memory.original_rgba_bytes==200ull*1024*1024&&memory.supplemental_reserved_bytes==16ull*1024*1024&&
+              memory.supplemental_gpu_bytes==0&&memory.staging_bytes==0,
+              "Borrowed mod texture footprint is separate from CPU-only supplemental reservations");
+        release_font_atlas(large.table());release_unicode_font(large.table());
+        check(font_texture_memory(large.table()).supplemental_reserved_bytes==0,
+              "Released atlas retains supplemental memory reservations");
+        Font narrow_font(&mod_manager);narrow_font.put(0x978,128);narrow_font.put(0x97c,256);
+        register_font_atlas(narrow_font.data(),"gfx/fonts/small-bitmap-18");
+        const auto small_geometry=font_paragraph_geometry(narrow_font.data(),u8"العربية हिन्दी العربية हिन्दी",600,false,false);
+        check(small_geometry&&small_geometry->glyphs.size()>1,
+              "Small mod atlas splits contextual paragraphs into fitting tiles");
+        for(const auto glyph:small_geometry->glyphs)
+            check(glyph->width<=126&&glyph->height<=254&&glyph->x+glyph->width<128&&glyph->y+glyph->height<256,
+                  "Contextual tile extends beyond the supplemental page");
+        check(font_texture_memory(narrow_font.table()).supplemental_reserved_bytes>=128ull*256*4,
+              "Non-square supplemental pages use their actual byte size");
+        release_font_atlas(narrow_font.table());release_unicode_font(narrow_font.table());
+    }
+    {
+        Font bitmap(nullptr);bitmap.anchor={1,1,8,8,0,0,19,0,0};
+        register_font_atlas(bitmap.data(),"gfx/fonts/mod-bitmap-18");
+        check(dynamic_font(bitmap.data())&&!dynamic_map_font(bitmap.data()),
+            "bitmap in a mod font name does not classify the font as a map resource");
+        const auto layout=font_paragraph_layout(bitmap.data(),u8"A العربية",200,false,false);
+        check(layout&&layout->objects().size()==1&&layout->content().icons()[0].advance==19,
+            "ordinary glyphs retain the custom bitmap advance during complex shaping");
+        release_font_atlas(bitmap.table());release_unicode_font(bitmap.table());
+    }
     const std::string text=u8"العربية 123 English\nالعربية";
     const auto geometry=font_paragraph_geometry(font.data(),text,200,true);
     check(geometry&&geometry->layout->text()==text,"original paragraph accompanies its native geometry");
@@ -161,10 +207,19 @@ int main() {
         end_native_paragraph();
     }
     const std::string flagged=u8"العربية (@FRA) / @ENG";auto flagged_source=borrow(flagged);
+    check(begin_native_popup_paragraph(font.data(),&flagged_source,200)==&flagged_source,
+        "popup commands retain the renderer's native source contract");
+    check(measure_paragraph_text(font.data(),flagged.c_str(),-1,true)==-42&&
+          measure_paragraph_height(font.data(),&flagged_source,200,100,margin,true)==-43,
+        "a retained popup draw cannot use incompatible shaped metrics");
+    end_native_paragraph();
     button_arguments[0x20]=std::byte{0};button_arguments[0x38]=std::byte{1};
     const auto flagged_draw=begin_native_button_paragraph_arguments(font.data(),&flagged_source,button_arguments.data());
-    check(flagged_draw==&flagged_source,
-        "formatted country flags retain the original native flag renderer");
+    check(flagged_draw!=&flagged_source&&font_paragraph_layout(font.data(),flagged,200,true)->objects().size()==2,
+        "formatted country flags participate in shaped paragraph layout");
+    const std::string_view flag_transport(flagged_draw->data(),flagged_draw->size);
+    check(flag_transport.find("@FRA")!=std::string_view::npos&&flag_transport.find("@ENG")!=std::string_view::npos,
+        "shaped country flags retain their original native drawing commands");
     end_native_paragraph();
     for(int repeat=0;repeat<2;++repeat) {
         check(begin_native_paragraph(font.data(),&colored,box,0,false)!=&colored,"literal complex text receives shaping without parsing colors");

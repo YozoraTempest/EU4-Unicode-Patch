@@ -1,4 +1,5 @@
 #include "native_font_atlas.hpp"
+#include "formatted_paragraph.hpp"
 #include "scalar_glyph.hpp"
 #include <windows.h>
 #include <d3d9.h>
@@ -148,6 +149,42 @@ int wmain(int argc,wchar_t** argv) {
             }
             eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
             require(eu4unicode::unicode_glyph_usage().glyphs==0,"Optional-font coverage check leaked records");
+        }
+        {
+            const char* custom="gfx/fonts/mod-bitmap-16";
+            *reinterpret_cast<const char**>(f+0xe0)=custom;*reinterpret_cast<std::uint64_t*>(f+0xf0)=std::strlen(custom);
+            *reinterpret_cast<int*>(f+0x960)=16;*reinterpret_cast<float*>(f+0x968)=1.f;
+            anchor={1,1,8,8,0,0,19,0,0};
+            const auto primary=readback(device.Get(),texture.Get(),anchor);
+            eu4unicode::register_font_atlas(f);
+            require(eu4unicode::dynamic_font(f),"Mod bitmap font did not receive a supplement atlas");
+            auto retained=eu4unicode::allocate_unicode_glyph(table,0x4e2d);
+            require(retained!=nullptr,"Mod bitmap glyph allocation failed");*retained={10,10,8,8,0,0,23,0,0};
+            require(eu4unicode::find_dynamic_glyph(table,0x4e2d)==retained&&retained->advance==23,
+                "Supplement lookup replaced an existing mod glyph or its advance");
+            auto missing=eu4unicode::find_dynamic_glyph(table,0x5b54);
+            auto latin=eu4unicode::find_dynamic_glyph(table,0xe9);
+            require(missing&&latin&&eu4unicode::font_glyph_page(missing)>0&&eu4unicode::font_glyph_page(latin)>0,
+                "Missing CJK and Latin glyphs must use supplemental pages");
+            eu4unicode::synchronize_font_texture(&wrapper,1);
+            auto pages=eu4unicode::font_texture_pages(texture.Get());
+            require(pages.size()>1&&readback(device.Get(),texture.Get(),anchor)==primary,
+                "Supplement upload modified the mod's original texture");
+            require(readback(device.Get(),static_cast<IDirect3DTexture9*>(pages[eu4unicode::font_glyph_page(missing)].texture.Get()),*missing)==expected(0x5b54,16).alpha,
+                "Mod supplemental GPU pixels differ from the selected font");
+            const auto mixed=eu4unicode::font_paragraph_layout(f,u8"A中 العربية हिन्दी",600,false,false);
+            require(mixed&&mixed->objects().size()==2&&mixed->content().icons()[0].advance==19&&mixed->content().icons()[1].advance==23,
+                "Complex mixed layout did not preserve the mod's existing bitmap advances");
+            const auto geometry=eu4unicode::font_paragraph_geometry(f,u8"A中 العربية हिन्दी",600,false,false);
+            require(geometry&&geometry->draw_text.find(u8"中")!=std::string::npos,
+                "Mixed shaping lost the native mod bitmap glyph command");
+            pages.clear();wrapper.texture=nullptr;texture.Reset();checked(device->Reset(&parameters));
+            checked(device->CreateTexture(2048,4096,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));wrapper.texture=texture.Get();
+            eu4unicode::synchronize_font_texture(&wrapper,1);pages=eu4unicode::font_texture_pages(texture.Get());
+            require(readback(device.Get(),static_cast<IDirect3DTexture9*>(pages[eu4unicode::font_glyph_page(missing)].texture.Get()),*missing)==expected(0x5b54,16).alpha,
+                "Device reset lost the mod supplement page");
+            pages.clear();eu4unicode::release_font_atlas(table);eu4unicode::release_unicode_font(table);
+            std::cout<<"Mod bitmap glyphs and texture retained; supplemental CJK/Latin pixels, mixed shaping and reset passed.\n";
         }
         require(MH_Uninitialize()==MH_OK,"MinHook cleanup failed");
         std::cout<<"Native GPU upload, preserved region, supplementary glyph, device reset, stable pointer and font release passed.\n";

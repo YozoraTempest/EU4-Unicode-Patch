@@ -23,6 +23,14 @@ TextUnit native_text_unit(std::string_view text,std::size_t offset,bool formatte
     const auto end=offset+scalar.bytes;
     if(formatted&&scalar.value==0xa7&&end<text.size()&&static_cast<unsigned char>(text[end])<0x80)
         return {TextUnitKind::color,scalar.value,offset,end+1};
+    if(formatted&&scalar.value==0xa4)
+        return {TextUnitKind::symbol,0xfffc,offset,end+(end<text.size()&&text[end]>='0'&&text[end]<='9'?1:0)};
+    if(formatted&&scalar.value=='{'&&text.size()-end>=2&&text[end]>='0'&&text[end]<='9'&&text[end+1]>='0'&&text[end+1]<='9')
+        return {TextUnitKind::symbol,0xfffc,offset,end+2};
+    if(formatted&&scalar.value=='@'&&text.size()-end>=3&&
+       std::all_of(text.begin()+end,text.begin()+end+3,[](unsigned char value) {
+           return (value>='A'&&value<='Z')||(value>='0'&&value<='9');
+       })) return {TextUnitKind::flag,0xfffc,offset,end+3};
     if(formatted&&scalar.value==0xa3) {
         auto cursor=end;
         while(cursor<text.size()&&icon_byte(static_cast<unsigned char>(text[cursor]))) ++cursor;

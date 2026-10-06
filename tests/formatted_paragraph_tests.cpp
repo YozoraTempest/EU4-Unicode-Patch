@@ -84,6 +84,25 @@ int main() {
             check(tile.style<formatted->colors().size(),"shaped raster tiles retain their native drawing style");
     }
     ShapedParagraph styled(raw,24,95,true,{},content);
+    const std::string flagged=u8"§Yالعربية @FRA§! / हिन्दी @D01 £adm£";
+    auto flag_content=std::make_shared<ParagraphText>(flagged,true,
+        [](std::string_view){return 18.f;},ParagraphText::ColorLookup{},[](std::string_view tag) {
+            check(tag=="FRA"||tag=="D01","flag resolver receives the three-byte country tag");return 22.f;
+        });
+    ShapedParagraph flag_layout(flagged,24,100,true,{},flag_content);
+    check(flag_layout.objects().size()==3&&flag_layout.metrics().lines>1,
+        "country flags, native icons and contextual scripts share bidi layout and wrapping");
+    check(flag_content->icons()[0].command=="@FRA"&&flag_content->icons()[1].command=="@D01",
+        "native country commands survive shaping without replacing the flag renderer");
+    const std::string symbols=u8"العربية ¤1 / हिन्दी {12";
+    auto symbol_content=std::make_shared<ParagraphText>(symbols,true,ParagraphText::IconMeasure{},ParagraphText::ColorLookup{},
+        ParagraphText::IconMeasure{},ParagraphText::BitmapMeasure{},[](std::string_view command) {
+            check(command==u8"¤1"||command=="{12","symbol metric resolver receives the whole native command");
+            return command.front()=='{'?8.f:18.f;
+        });
+    ShapedParagraph symbol_layout(symbols,24,90,true,{},symbol_content);
+    check(symbol_layout.objects().size()==2&&symbol_content->icons()[0].command==u8"¤1"&&symbol_content->icons()[1].command=="{12",
+        "native symbol arguments survive contextual shaping and wrapping");
     check(styled.text()==raw&&styled.objects().size()==1&&styled.metrics().lines>1,
         "formatted paragraphs wrap with native icon objects and preserve the source");
     const auto& object=styled.objects().front();

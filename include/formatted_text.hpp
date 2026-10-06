@@ -7,7 +7,7 @@
 #include "unicode_text.hpp"
 
 namespace eu4unicode {
-enum class TextUnitKind { glyph, color, icon };
+enum class TextUnitKind { glyph, color, icon, flag, symbol };
 struct TextUnit {
     TextUnitKind kind;
     std::uint32_t scalar;

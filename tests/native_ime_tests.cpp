@@ -27,6 +27,14 @@ int main() {
         alignas(void*) std::array<std::byte,0x80> video{};
         for(const auto offset:{0x48,0x4c,0x50}) *reinterpret_cast<int*>(video.data()+offset)=1;
         eu4unicode::original_ime_message=native_handler;
+        LPARAM lifecycle=0;
+        require(eu4unicode::show_native_ime_candidates(nullptr,WM_IME_STARTCOMPOSITION,0,&lifecycle,video.data())==1);
+        require(eu4unicode::native_composition().active);
+        require(eu4unicode::show_native_ime_candidates(nullptr,WM_IME_ENDCOMPOSITION,0,&lifecycle,video.data())==1);
+        require(!eu4unicode::native_composition().active);
+        eu4unicode::show_native_ime_candidates(nullptr,WM_IME_STARTCOMPOSITION,0,&lifecycle,video.data());
+        eu4unicode::show_native_ime_candidates(nullptr,WM_KILLFOCUS,0,&lifecycle,video.data());
+        require(!eu4unicode::native_composition().active);
         for(const LPARAM incoming:{LPARAM{0},LPARAM{1},LPARAM{0xf},LPARAM{0xc000000f}}) {
             auto flags=incoming;const auto before=calls;
             require(eu4unicode::show_native_ime_candidates(nullptr,WM_IME_SETCONTEXT,1,&flags,video.data())==0);

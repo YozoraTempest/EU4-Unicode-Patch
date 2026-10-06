@@ -1,16 +1,19 @@
 #include <windows.h>
-#include <bcrypt.h>
+#include "executable_compatibility.hpp"
 #include <MinHook.h>
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
 #include "formatted_text.hpp"
 #include "unicode_editor.hpp"
+#include "native_editor_text.hpp"
+#include "native_editor_presentation.hpp"
 #include "native_text_event.hpp"
 #include "unicode_search.hpp"
 #include "unicode_pinyin.hpp"
 #include "native_search.hpp"
 #include "native_steam_presence.hpp"
 #include "native_script_bom.hpp"
+#include "native_legacy_import.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
 #include "native_editor_selection.hpp"
@@ -145,10 +148,6 @@ std::int64_t find_province_distance(const EngineString* name,const EngineString*
         return eu4unicode::province_search_distance(caller,name,query,original_search_distance);
     } catch(...) { log("Unicode province distance failed; candidate ranked last."); return INT32_MAX/2; }
 }
-struct LoadContext { int line; bool replace; char padding[11]; void* collection; };
-static_assert(offsetof(LoadContext,collection)==16);
-using RegisterText=void(*)(void*,const char*,const char*,int,int,bool);
-RegisterText register_text=nullptr;
 using RepeatText=char*(*)(EngineString*,std::uint64_t,unsigned char);
 RepeatText repeat_text=nullptr;
 using AppendText=void*(*)(EngineString*,const char*,std::uint64_t);
@@ -200,8 +199,11 @@ thread_local EditorImeRectState editor_ime_rect_state{};
 thread_local unsigned editor_focus_depth=0;
 void clear_editor_affinity() noexcept;
 void paint_editor_selection(void* outer) noexcept;
+eu4unicode::PrefixMeasure native_editor_measure(void* widget,std::string_view text);
+void forget_editor_history(void* widget) noexcept;
 void focus_editor_ime_rect(void* outer) {
     clear_editor_affinity();
+    eu4unicode::clear_native_composition();
     editor_ime_rect_state={};
     struct FocusScope {
         FocusScope() { ++editor_focus_depth; }
@@ -210,6 +212,7 @@ void focus_editor_ime_rect(void* outer) {
     original_editor_focus(outer);
 }
 void paint_editor_ime_rect(void* outer) {
+    eu4unicode::EditorPresentation presentation(outer);
     original_editor_paint(outer);
     paint_editor_selection(outer);
     // Focus performs an immediate paint before the next UI frame has supplied
@@ -311,7 +314,7 @@ void load_font_atlas(void* font) {
         (*reinterpret_cast<const float*>(context+0x32600)>=threshold&&large->size?0x100:0xe0));
     const auto path=std::string_view(selected->data(),static_cast<std::size_t>(selected->size));
     try {
-        if(native_font_source(path)) eu4unicode::register_font_atlas(font,path);
+        eu4unicode::register_font_atlas(font,path);
     } catch(const std::exception& error) { log(error.what()); }
 #else
     eu4unicode::register_font_atlas(font);
@@ -321,15 +324,6 @@ void destroy_font_table(void* const* table) {
     eu4unicode::release_font_atlas(table);
     eu4unicode::release_unicode_font(table);
     original_font_table_destroy(table);
-}
-bool single_line_editor(void* widget,std::string_view& value) {
-    const auto base=static_cast<const std::byte*>(widget);
-    const auto text=reinterpret_cast<const EngineString*>(base+0x30);
-    if(*reinterpret_cast<const std::uint16_t*>(base+0x56)||
-       *reinterpret_cast<const std::uint16_t*>(base+0x60)>1||text->size>32000||
-       *reinterpret_cast<const std::uint16_t*>(base+0x54)>text->size) return false;
-    value={text->data(),static_cast<std::size_t>(text->size)};
-    return value.find('\n')==std::string_view::npos&&eu4unicode::valid_utf8(value);
 }
 struct EditorAffinity {
     void* owner=nullptr;
@@ -344,6 +338,14 @@ std::shared_ptr<const eu4unicode::ShapedParagraph> editor_paragraph(void* widget
     const auto font=*reinterpret_cast<void* const*>(static_cast<const std::byte*>(widget)+0x98);
     return eu4unicode::font_paragraph_layout(font,value,32767,false,false);
 }
+EditorAction original_editor_text=nullptr;
+using EditorLines=void(*)(void*,int);
+EditorLines original_editor_lines=nullptr;
+void draw_editor_text(void* outer) { eu4unicode::EditorPresentation presentation(outer);original_editor_text(outer); }
+void draw_editor_lines(void* outer,int index) {
+    eu4unicode::EditorPresentation presentation(outer);
+    original_editor_lines(outer,index);
+}
 bool editor_trailing(void* widget,std::string_view value,std::size_t offset) {
     return editor_affinity.owner==widget&&editor_affinity.text==value&&
         editor_affinity.offset==offset&&editor_affinity.trailing;
@@ -356,19 +358,22 @@ using EditorPixelPosition=EditorPixelPoint*(*)(void*,EditorPixelPoint*);
 EditorPixelPosition original_editor_caret=nullptr,original_editor_anchor=nullptr;
 EditorPixelPoint* shaped_editor_position(void* widget,EditorPixelPoint* result,bool anchor) {
     const auto original=anchor?original_editor_anchor:original_editor_caret;
-    if(anchor&&*reinterpret_cast<const std::uint16_t*>(static_cast<const std::byte*>(widget)+0x94))
-        return original(widget,result);
-    std::string_view value;
     try {
-        if(single_line_editor(widget,value)) if(const auto paragraph=editor_paragraph(widget,value)) {
-            const auto base=static_cast<const std::byte*>(widget);
+        const auto view=eu4unicode::native_edit_view(widget);
+        const auto base=static_cast<const std::byte*>(widget);
+        const auto row=*reinterpret_cast<const std::uint16_t*>(base+(anchor?0x94:0x56));
+        const auto& line=view.rows.rows().at(row);
+        const auto value=view.text.substr(line.start,line.length);
+        if(const auto paragraph=editor_paragraph(widget,value)) {
             const auto offset=*reinterpret_cast<const std::uint16_t*>(base+(anchor?0x92:0x54));
             if(offset<=value.size()) {
                 const auto font=*reinterpret_cast<const std::byte* const*>(base+0x98);
                 const auto scale=*reinterpret_cast<const float*>(font+0x968);
-                const auto caret=paragraph->caret(offset,!anchor&&editor_trailing(widget,value,offset));
+                const auto caret=paragraph->caret(offset,!anchor&&editor_trailing(widget,view.text,line.start+offset));
                 const auto x=std::round(caret.x*scale)+*reinterpret_cast<const int*>(font+0x38)+(anchor?3:0);
-                const auto y=std::round(caret.y*scale)+*reinterpret_cast<const int*>(font+0x3c);
+                const auto line_height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void* const* const*>(font))[0x68/8])(const_cast<std::byte*>(font));
+                const auto y=std::round(caret.y*scale)+*reinterpret_cast<const int*>(font+0x3c)+
+                    (base[0xd9]!=std::byte{0}?row*line_height:0);
                 if(std::isfinite(x)&&std::isfinite(y)&&x<=65535&&y<=65535) {
                     result->x=static_cast<std::uint16_t>((std::max)(0.f,x));
                     result->y=static_cast<std::uint16_t>((std::max)(0.f,y));
@@ -394,6 +399,7 @@ void* create_editor_sprite(void* manager,const EngineString* name,void* context,
     return sprite;
 }
 void destroy_editor(void* outer) {
+    forget_editor_history(static_cast<std::byte*>(outer)+0xc8);
     if(editor_selections) editor_selections->release(outer,*reinterpret_cast<void**>(static_cast<std::byte*>(outer)+0x1f8));
     original_editor_destroy(outer);
 }
@@ -409,17 +415,17 @@ void paint_editor_selection(void* outer) noexcept {
     if(!editor_selections) return;
     try {
         const auto base=static_cast<std::byte*>(outer),widget=base+0xc8;
-        std::string_view value;
-        if(base[0xc5]==std::byte{0}||!*reinterpret_cast<void**>(base+0x148)||
-           base[0x262]!=std::byte{0}||*reinterpret_cast<std::uint64_t*>(base+0x2f0)||
-           widget[0x90]!=std::byte{1}||*reinterpret_cast<std::uint16_t*>(widget+0x94)||
-           !single_line_editor(widget,value)) { editor_selections->hide(outer);return; }
-        const auto paragraph=editor_paragraph(widget,value);
-        if(!paragraph) { editor_selections->hide(outer);return; }
-        const auto caret_offset=*reinterpret_cast<std::uint16_t*>(widget+0x54);
-        const auto anchor_offset=*reinterpret_cast<std::uint16_t*>(widget+0x92);
-        if(anchor_offset>value.size()) { editor_selections->hide(outer);return; }
-        const auto regions=paragraph->selection((std::min)(caret_offset,anchor_offset),(std::max)(caret_offset,anchor_offset));
+        const auto preview=eu4unicode::editor_preedit_preview(outer);
+        if(base[0xc5]==std::byte{0}||base[0x262]!=std::byte{0}||*reinterpret_cast<std::uint64_t*>(base+0x2f0)||
+           (!preview&&(widget[0x90]!=std::byte{1}||!*reinterpret_cast<std::uint64_t*>(base+0x148)))) {
+            editor_selections->hide(outer);return;
+        }
+        const auto view=eu4unicode::native_edit_view(widget);
+        if(!preview&&view.rows.rows().size()==1&&!eu4unicode::needs_paragraph_shaping(view.text)) { editor_selections->hide(outer);return; }
+        const auto caret_offset=view.rows.offset({*reinterpret_cast<std::uint16_t*>(widget+0x56),*reinterpret_cast<std::uint16_t*>(widget+0x54)});
+        const auto anchor_offset=preview?preview->begin:view.rows.offset({*reinterpret_cast<std::uint16_t*>(widget+0x94),*reinterpret_cast<std::uint16_t*>(widget+0x92)});
+        const auto begin=preview?preview->begin:(std::min)(caret_offset,anchor_offset);
+        const auto end=preview?preview->end:(std::max)(caret_offset,anchor_offset);
         const auto font=*reinterpret_cast<std::byte**>(widget+0x98);
         const auto sprite=*reinterpret_cast<void**>(base+0x1f0);
         if(!sprite) { editor_selections->hide(outer);return; }
@@ -429,12 +435,27 @@ void paint_editor_selection(void* outer) noexcept {
         if(!std::isfinite(origin.x)||!std::isfinite(origin.y)) { editor_selections->hide(outer);return; }
         EditorPixelPoint pixel{};shaped_editor_position(widget,&pixel,false);
         origin.x-=pixel.x;origin.y-=pixel.y;
-        const auto height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void***>(font))[0x68/8])(font)/2;
-        std::vector<eu4unicode::NativeSelectionRect> boxes;boxes.reserve(regions.size());
-        for(const auto& region:regions) boxes.push_back({
-            static_cast<int>(std::round(origin.x+region.x*scale))+*reinterpret_cast<int*>(font+0x38)+3,
-            static_cast<int>(std::round(origin.y+region.y*scale))+*reinterpret_cast<int*>(font+0x3c)+height,
-            static_cast<int>(std::ceil(region.width*scale))+2,height+2});
+        const auto line_height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void***>(font))[0x68/8])(font);
+        const auto height=line_height/2;
+        std::vector<eu4unicode::NativeSelectionRect> boxes;
+        for(std::size_t index=0;index<view.rows.rows().size();++index) {
+            const auto& row=view.rows.rows()[index];
+            const auto first=(std::max)(begin,row.start),last=(std::min)(end,row.start+row.length);
+            if(first>=last) continue;
+            const auto text=view.text.substr(row.start,row.length);
+            std::vector<eu4unicode::SelectionRegion> regions;
+            if(const auto paragraph=editor_paragraph(widget,text)) regions=paragraph->selection(first-row.start,last-row.start);
+            else {
+                const auto measure=native_editor_measure(widget,text);
+                const auto x=measure(first-row.start),finish=measure(last-row.start);
+                regions.push_back({first,last-first,static_cast<float>(x)/scale,0,static_cast<float>(finish-x)/scale,static_cast<float>(line_height)/scale,0});
+            }
+            const auto top=widget[0xd9]!=std::byte{0}?index*line_height:0;
+            for(const auto& region:regions) boxes.push_back({
+                static_cast<int>(std::round(origin.x+region.x*scale))+*reinterpret_cast<int*>(font+0x38)+(preview?0:3),
+                static_cast<int>(std::round(origin.y+region.y*scale+top))+*reinterpret_cast<int*>(font+0x3c)+(preview?line_height-2:height),
+                static_cast<int>(std::ceil(region.width*scale))+(preview?0:2),preview?1:height+2});
+        }
         editor_selections->update(outer,*reinterpret_cast<void**>(base+0x1f8),*reinterpret_cast<void**>(base+0x298),boxes);
     } catch(...) { editor_selections->hide(outer);log("Native shaped selection update failed."); }
 }
@@ -450,24 +471,27 @@ eu4unicode::PrefixMeasure native_editor_measure(void* widget,std::string_view te
     };
 }
 void editor_point(void* widget,const EngineString* row,const EditorPoint* point) {
-    std::string_view value;
-    const auto row_text=std::string_view(row->data(),static_cast<std::size_t>(row->size));
-    if(!single_line_editor(widget,value)||value!=row_text||value.empty()||point->x<0||point->y<0) {
+    if(point->x<0||point->y<0) {
         original_editor_point(widget,row,point); return;
     }
     try {
+        const auto view=eu4unicode::native_edit_view(widget);
+        const auto base=static_cast<std::byte*>(widget);
+        const auto font=*reinterpret_cast<const std::byte* const*>(base+0x98);
+        const auto height=reinterpret_cast<int(*)(void*)>((*reinterpret_cast<void* const* const*>(font))[0x68/8])(const_cast<std::byte*>(font));
+        if(height<=0) { original_editor_point(widget,row,point);return; }
+        const auto index=base[0xd9]!=std::byte{0}?(std::min)(static_cast<std::size_t>(point->y/height),view.rows.rows().size()-1):0;
+        const auto& line=view.rows.rows()[index];const auto value=view.text.substr(line.start,line.length);
         std::size_t hit=0;bool trailing=false;
         if(const auto paragraph=editor_paragraph(widget,value)) {
-            const auto font=*reinterpret_cast<const std::byte* const*>(static_cast<const std::byte*>(widget)+0x98);
             const auto scale=*reinterpret_cast<const float*>(font+0x968);
-            const auto position=paragraph->hit_test(point->x/scale,point->y/scale);
+            const auto position=paragraph->hit_test(point->x/scale,0);
             hit=position.byte_offset;trailing=position.trailing;
         } else hit=eu4unicode::nearest_grapheme_boundary(value,point->x,native_editor_measure(widget,value));
-        auto base=static_cast<std::byte*>(widget);
         *reinterpret_cast<std::uint16_t*>(base+0x54)=static_cast<std::uint16_t>(hit);
-        *reinterpret_cast<std::uint16_t*>(base+0x56)=0;
-        remember_editor_affinity(widget,value,hit,trailing);
-    } catch(...) { log("Unicode editor hit testing failed; caret preserved."); }
+        *reinterpret_cast<std::uint16_t*>(base+0x56)=static_cast<std::uint16_t>(index);
+        remember_editor_affinity(widget,view.text,line.start+hit,trailing);
+    } catch(...) { log("Unicode editor hit testing failed; native hit testing retained.");original_editor_point(widget,row,point); }
 }
 int editor_width_fit(void* widget,const EngineString* text) {
     const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
@@ -498,97 +522,150 @@ int editor_word_break(void* widget,const EngineString* text,int fit) {
 }
 void editor_arrow(void* widget,bool right) {
     const auto original=right?original_editor_right:original_editor_left;
-    std::string_view value;
-    if(single_line_editor(widget,value)) {
-        auto column=reinterpret_cast<std::uint16_t*>(static_cast<std::byte*>(widget)+0x54);
-        try {
+    try {
+            const auto view=eu4unicode::native_edit_view(widget);
+            auto base=static_cast<std::byte*>(widget);
+            auto column=reinterpret_cast<std::uint16_t*>(base+0x54);
+            const auto index=*reinterpret_cast<std::uint16_t*>(base+0x56);
+            const auto& row=view.rows.rows().at(index);
+            const auto value=view.text.substr(row.start,row.length);
+            const auto offset=view.rows.offset({index,*column});
             if(const auto paragraph=editor_paragraph(widget,value)) {
-                const auto target=paragraph->move_caret(*column,editor_trailing(widget,value,*column),right);
-                *column=static_cast<std::uint16_t>(target.byte_offset);
-                auto base=static_cast<std::byte*>(widget);
-                *reinterpret_cast<std::uint32_t*>(base+0x50)=*column;
-                base[0x90]=std::byte{0};
-                auto selected=reinterpret_cast<EngineString*>(base+0x70);
-                const auto data=selected->capacity<16?selected->storage.inline_bytes:const_cast<char*>(selected->storage.pointer);
-                selected->size=0;data[0]=0;
-                remember_editor_affinity(widget,value,target.byte_offset,target.trailing);
+                const auto target=paragraph->move_caret(*column,editor_trailing(widget,view.text,offset),right);
+                if(target.byte_offset==*column&&target.trailing==editor_trailing(widget,view.text,offset)&&view.rows.rows().size()>1&&
+                   ((right&&index+1<view.rows.rows().size())||(!right&&index))) {
+                    const auto next=right?index+1:index-1;const auto& line=view.rows.rows()[next];
+                    const auto content=view.text.substr(line.start,line.length);std::size_t hit=right?0:line.length;bool trailing=false;
+                    if(const auto layout=editor_paragraph(widget,content)) { const auto stop=layout->hit_test(right?-1.f:32767.f,0);hit=stop.byte_offset;trailing=stop.trailing; }
+                    eu4unicode::native_edit_caret(widget,line.start+hit);
+                    *reinterpret_cast<std::uint16_t*>(base+0x56)=static_cast<std::uint16_t>(next);*column=static_cast<std::uint16_t>(hit);
+                    remember_editor_affinity(widget,view.text,line.start+hit,trailing);
+                } else {
+                    eu4unicode::native_edit_caret(widget,row.start+target.byte_offset);
+                    *reinterpret_cast<std::uint16_t*>(base+0x56)=index;*column=static_cast<std::uint16_t>(target.byte_offset);
+                    remember_editor_affinity(widget,view.text,row.start+target.byte_offset,target.trailing);
+                }
                 reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
                 return;
             }
-            const auto target=eu4unicode::plan_edit(value,*column,
+            const auto target=eu4unicode::plan_edit(view.text,offset,
                 right?eu4unicode::EditKey::right:eu4unicode::EditKey::left).caret;
-            // Let the native one-byte mover reach the final complete boundary.
-            // It retains selection clearing, geometry and its ordinary callback.
-            if(right&&target>*column) *column=static_cast<std::uint16_t>(target-1);
-            else if(!right&&target<*column) *column=static_cast<std::uint16_t>(target+1);
-        } catch(...) { log("Unicode editor movement failed; key ignored."); return; }
-    }
-    original(widget);
+            eu4unicode::native_edit_caret(widget,target);
+            reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
+    } catch(...) { log("Unicode editor movement failed; native action retained.");original(widget); }
 }
 void editor_left(void* widget) { editor_arrow(widget,false); }
 void editor_right(void* widget) { editor_arrow(widget,true); }
 void editor_selection(void* widget) {
     auto base=static_cast<std::byte*>(widget);
-    std::string_view value;
-    if(single_line_editor(widget,value)&&!(*reinterpret_cast<std::uint16_t*>(base+0x94))) {
-        auto anchor=reinterpret_cast<std::uint16_t*>(base+0x92);
-        auto column=reinterpret_cast<std::uint16_t*>(base+0x54);
-        if(*anchor<=value.size()) {
-            try {
-                const auto selection=eu4unicode::align_selection(value,*anchor,*column);
-                *anchor=static_cast<std::uint16_t>(selection.anchor);
-                *column=static_cast<std::uint16_t>(selection.caret);
-                *reinterpret_cast<std::uint32_t*>(base+0x50)=*column;
-            } catch(...) { log("Unicode editor selection failed; selection update excluded."); return; }
-        }
-    }
+    try {
+        const auto view=eu4unicode::native_edit_view(widget);
+        const auto anchor=view.rows.offset({*reinterpret_cast<std::uint16_t*>(base+0x94),*reinterpret_cast<std::uint16_t*>(base+0x92)});
+        const auto caret=view.rows.offset({*reinterpret_cast<std::uint16_t*>(base+0x56),*reinterpret_cast<std::uint16_t*>(base+0x54)});
+        const auto selection=eu4unicode::align_selection(view.text,anchor,caret);
+        const auto first=view.rows.position(selection.anchor),last=view.rows.position(selection.caret);
+        *reinterpret_cast<std::uint16_t*>(base+0x92)=static_cast<std::uint16_t>(first.column);
+        *reinterpret_cast<std::uint16_t*>(base+0x94)=static_cast<std::uint16_t>(first.row);
+        *reinterpret_cast<std::uint16_t*>(base+0x54)=static_cast<std::uint16_t>(last.column);
+        *reinterpret_cast<std::uint16_t*>(base+0x56)=static_cast<std::uint16_t>(last.row);
+        *reinterpret_cast<std::uint32_t*>(base+0x50)=static_cast<std::uint32_t>(last.column);
+    } catch(...) { log("Unicode editor selection alignment failed; native selection retained."); }
     original_editor_selection(widget);
 }
-bool editor_key(void* widget,const KeyEvent* event) {
+struct EditorHistoryEntry {
+    eu4unicode::EditHistory history;
+    eu4unicode::EditState before;
+    unsigned depth=0;
+    bool alive=true;
+};
+thread_local std::unordered_map<void*,std::shared_ptr<EditorHistoryEntry>> editor_histories;
+void forget_editor_history(void* widget) noexcept {
+    const auto found=editor_histories.find(widget);
+    if(found!=editor_histories.end()) { found->second->alive=false;editor_histories.erase(found); }
+    if(editor_affinity.owner==widget) clear_editor_affinity();
+}
+struct EditorTransaction {
+    void* widget;std::shared_ptr<EditorHistoryEntry> entry;
+    explicit EditorTransaction(void* owner):widget(owner) {
+        try {
+            auto& stored=editor_histories[owner];if(!stored) stored=std::make_shared<EditorHistoryEntry>();
+            entry=stored;
+            if(!entry->depth) entry->before=eu4unicode::native_edit_state(widget);
+            ++entry->depth;
+        } catch(...) { entry.reset(); }
+    }
+    ~EditorTransaction() {
+        if(!entry||--entry->depth||!entry->alive) return;
+        try { entry->history.record(entry->before,eu4unicode::native_edit_state(widget)); }
+        catch(...) { entry->history.clear(); }
+    }
+};
+void editor_vertical(void* widget,bool down,bool extend) {
+    const auto view=eu4unicode::native_edit_view(widget);
     auto base=static_cast<std::byte*>(widget);
-    auto text=reinterpret_cast<EngineString*>(base+0x30);
-    auto column=reinterpret_cast<std::uint16_t*>(base+0x54);
     const auto row=*reinterpret_cast<std::uint16_t*>(base+0x56);
-    const auto selection=*reinterpret_cast<std::uint64_t*>(base+0x80);
-    std::string_view single_line;
-    if(single_line_editor(widget,single_line)) {
-        if(selection) editor_selection(widget);
+    if((down&&row+1>=view.rows.rows().size())||(!down&&!row)) return;
+    EditorPixelPoint point{};shaped_editor_position(widget,&point,false);
+    const auto font=*reinterpret_cast<const std::byte* const*>(base+0x98);
+    const auto x=(std::max)(0,static_cast<int>(point.x)-*reinterpret_cast<const int*>(font+0x38));
+    const auto next=down?row+1:row-1;const auto& line=view.rows.rows()[next];
+    const auto value=view.text.substr(line.start,line.length);
+    std::size_t hit=0;bool trailing=false;
+    if(const auto paragraph=editor_paragraph(widget,value)) {
+        const auto target=paragraph->hit_test(x/(*reinterpret_cast<const float*>(font+0x968)),0);
+        hit=target.byte_offset;trailing=target.trailing;
+    } else hit=eu4unicode::nearest_grapheme_boundary(value,x,native_editor_measure(widget,value));
+    if(extend&&base[0x90]==std::byte{0}) *reinterpret_cast<std::uint32_t*>(base+0x92)=*reinterpret_cast<std::uint32_t*>(base+0x54);
+    eu4unicode::native_edit_caret(widget,line.start+hit,!extend);
+    *reinterpret_cast<std::uint16_t*>(base+0x56)=static_cast<std::uint16_t>(next);
+    *reinterpret_cast<std::uint16_t*>(base+0x54)=static_cast<std::uint16_t>(hit);
+    if(extend) { editor_selection(widget);base[0x90]=std::byte{1}; }
+    remember_editor_affinity(widget,view.text,line.start+hit,trailing);
+    reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
+}
+bool editor_key(void* widget,const KeyEvent* event) {
+    try {
+        const auto composition=eu4unicode::native_composition();
+        if(composition.active&&(event->key==8||event->key==127||event->key==13||
+           (event->key>=0x4000004a&&event->key<=0x40000052))) return true;
+        if((event->modifiers==1&&(event->key=='z'||event->key=='y'))||(event->modifiers==5&&event->key=='z')) {
+            if(composition.active) return true;
+            const auto found=editor_histories.find(widget);
+            if(found!=editor_histories.end()) {
+                const auto state=eu4unicode::native_edit_state(widget);
+                const auto target=event->key=='z'&&event->modifiers==1?found->second->history.undo(state):found->second->history.redo(state);
+                if(target) { eu4unicode::native_edit_restore(widget,*target);clear_editor_affinity(); }
+            }
+            return true;
+        }
+        EditorTransaction transaction(widget);
+        const auto state=eu4unicode::native_edit_state(widget);
+        const auto base=static_cast<std::byte*>(widget);
+        if(base[0x90]!=std::byte{0}) editor_selection(widget);
         if(event->modifiers==4&&(event->key==0x40000050||event->key==0x4000004f)) {
-            // These native selection actions exist but the key handler does not
-            // dispatch Shift+arrows. They maintain the original selection ABI.
             const auto vtable=*static_cast<void***>(widget);
             reinterpret_cast<EditorAction>(vtable[(event->key==0x40000050?0xd0:0xe0)/8])(widget);
             return true;
         }
-    }
-    if(event->modifiers || row || selection || *column>text->size)
-        return original_editor_key(widget,event);
-    const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
-    if(!eu4unicode::valid_utf8(value)) return original_editor_key(widget,event);
-    eu4unicode::EditPlan plan{};
-    try {
-        eu4unicode::EditKey key;
-        switch(event->key) {
-        case 8: key=eu4unicode::EditKey::backspace; break;
-        case 127: key=eu4unicode::EditKey::forward_delete; break;
-        default: return original_editor_key(widget,event);
+        if((event->modifiers==0||event->modifiers==4)&&base[0xd9]!=std::byte{0}&&
+           (event->key==0x40000051||event->key==0x40000052)) {
+            if(base[0x102]!=std::byte{0}) return false;
+            editor_vertical(widget,event->key==0x40000051,event->modifiers==4);return true;
         }
-        plan=eu4unicode::plan_edit(value,*column,key);
-    } catch(...) { log("Unicode editing boundary failed; key ignored."); return true; }
-    if(event->key==8 || event->key==127) {
-        const auto start=plan.erase_begin,end=plan.erase_end;
-        const auto length=end-start;
-        if(length<=1) return original_editor_key(widget,event);
-        // Remove all but the cluster's first byte before invoking the native
-        // one-byte deletion. The engine then emits its ordinary change event
-        // only after the complete grapheme has been removed.
-        auto data=const_cast<char*>(text->data());
-        std::memmove(data+start+1,data+end,static_cast<std::size_t>(text->size)-end+1);
-        text->size-=length-1;
-        *column=static_cast<std::uint16_t>(event->key==8?start+1:start);
+        if(!event->modifiers&&(event->key==8||event->key==127)) {
+            eu4unicode::EditResult result;
+            if(state.selection.anchor!=state.selection.caret)
+                result=eu4unicode::replace_selection(state.text,state.selection.anchor,state.selection.caret,"",32000);
+            else {
+                const auto plan=eu4unicode::plan_edit(state.text,state.selection.caret,event->key==8?
+                    eu4unicode::EditKey::backspace:eu4unicode::EditKey::forward_delete);
+                result={state.text,plan.caret};result.text.erase(plan.erase_begin,plan.erase_end-plan.erase_begin);
+            }
+            if(result.text!=state.text) eu4unicode::native_edit_restore(widget,{std::move(result.text),{result.caret,result.caret}});
+            return true;
+        }
         return original_editor_key(widget,event);
-    }
-    return original_editor_key(widget,event);
+    } catch(...) { log("Unicode editor key handling failed; native action retained.");return original_editor_key(widget,event); }
 }
 using EditorCharacter=bool(*)(void*,const char*);
 using EditorInsert=void(*)(void*,const EngineString*);
@@ -599,10 +676,23 @@ thread_local ActiveCommit active_commit{};
 void insert_editor_commit(void* widget,const EngineString* text) {
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
         reinterpret_cast<std::uintptr_t>(image);
+    // Tooltip layout uses a temporary editor to wrap native formatted text.
+    // It has no interactive caret or undo history, and permits CP1252 commands.
+    if(caller==0x1415f38) { original_editor_insert(widget,text);return; }
+    EditorTransaction transaction(widget);
     if(caller==0x1535615&&active_commit.widget==widget&&active_commit.text)
         text=active_commit.text;
     if(static_cast<std::byte*>(widget)[0x90]!=std::byte{0}) editor_selection(widget);
     original_editor_insert(widget,text);
+    if(transaction.entry&&!transaction.entry->alive) return;
+    try {
+        eu4unicode::native_edit_align_commit(widget);
+    } catch(const std::exception& error) {
+        char message[512];
+        std::snprintf(message,sizeof(message),"Unicode commit caret alignment failed (caller RVA 0x%llx): %s",
+            static_cast<unsigned long long>(caller),error.what());
+        log(message);
+    } catch(...) { log("Unicode commit caret alignment failed."); }
 }
 void paste_editor_clipboard(void* widget) {
     using ClipboardText=char*(*)();
@@ -715,62 +805,63 @@ extern "C" void trim_editor_grapheme(void* widget) {
     const auto vtable=*static_cast<void***>(widget);
     reinterpret_cast<Backspace>(vtable[0x138/8])(widget);
 }
-void import_text(const EngineString* key,const EngineString* value,int version,
-                 int /*unused*/,const LoadContext* context) {
-    const auto text=std::string_view(value->data(),static_cast<std::size_t>(value->size));
-    if(!eu4unicode::valid_utf8(text)) {
-        log("Rejected invalid UTF-8 localization value.");
-        return;
-    }
-    register_text(context->collection,key->data(),value->data(),context->line,version,context->replace);
-    if(std::strcmp(key->data(),"FE_SINGLE_PLAYER")==0) {
-        log("Registered FE_SINGLE_PLAYER without single-byte conversion:");
-        log(value->data());
-    }
+void legacy_import_error(std::string_view source,int line,std::string_view key,
+                         std::size_t offset,const char* error) {
+    char message[768];
+    std::snprintf(message,sizeof(message),"Rejected text import: %.*s, line %d, key %.*s, byte %zu: %s.",
+        static_cast<int>(std::min<std::size_t>(source.size(),300)),source.data(),line,
+        static_cast<int>(std::min<std::size_t>(key.size(),200)),key.data(),offset,error);
+    log(message);
+}
+void log_legacy_import_counts() {
+    const auto counts=eu4unicode::legacy_import_counts();
+    if(!counts.localization&&!counts.script&&!counts.rejected) return;
+    char message[256];
+    std::snprintf(message,sizeof(message),
+        "Legacy import summary: %llu localization values, %llu script tokens, %llu escapes, %llu remapped units, %llu rejected values.",
+        static_cast<unsigned long long>(counts.localization),static_cast<unsigned long long>(counts.script),
+        static_cast<unsigned long long>(counts.sequences),static_cast<unsigned long long>(counts.relocated),
+        static_cast<unsigned long long>(counts.rejected));
+    log(message);
 }
 
-bool hash_matches(const std::filesystem::path& file) {
-    BCRYPT_ALG_HANDLE algorithm=nullptr;
-    BCRYPT_HASH_HANDLE hash=nullptr;
-    if(BCryptOpenAlgorithmProvider(&algorithm,BCRYPT_SHA256_ALGORITHM,nullptr,0)<0) return false;
-    DWORD object_size=0,returned=0;
-    BCryptGetProperty(algorithm,BCRYPT_OBJECT_LENGTH,reinterpret_cast<PUCHAR>(&object_size),sizeof(object_size),&returned,0);
-    std::vector<UCHAR> object(object_size);
-    bool good=BCryptCreateHash(algorithm,&hash,object.data(),object_size,nullptr,0,0)>=0;
-    std::ifstream stream(file,std::ios::binary);
-    std::array<char,65536> buffer{};
-    if(!stream) good=false;
-    while(good && stream) {
-        stream.read(buffer.data(),buffer.size());
-        good=BCryptHashData(hash,reinterpret_cast<PUCHAR>(buffer.data()),static_cast<ULONG>(stream.gcount()),0)>=0;
-    }
-    std::array<UCHAR,32> digest{};
-    if(good) good=BCryptFinishHash(hash,digest.data(),static_cast<ULONG>(digest.size()),0)>=0;
-    if(hash) BCryptDestroyHash(hash);
-    BCryptCloseAlgorithmProvider(algorithm,0);
-    constexpr UCHAR expected[]={0x9a,0xd3,0xef,0xe1,0xaf,0x16,0x9f,0x40,0xee,0x57,0x7f,0x9d,0xae,0x5d,0xeb,0xbc,
-        0x87,0xaf,0x6f,0xb8,0xb5,0x45,0x0f,0xb3,0x45,0xeb,0xf1,0x10,0xdc,0x4d,0x77,0x1a};
-    return good && std::memcmp(digest.data(),expected,32)==0;
-}
-struct Site { std::size_t rva; const char* expected; };
 std::vector<std::byte> bytes(const char* hex) {
     std::vector<std::byte> result;
     while(*hex) { char pair[]={hex[0],hex[1],0}; result.push_back(static_cast<std::byte>(std::strtoul(pair,nullptr,16))); hex+=2; }
     return result;
 }
-bool check(const Site& site) {
-    const auto expected=bytes(site.expected);
-    if(std::memcmp(image+site.rva,expected.data(),expected.size())==0) return true;
-    char message[100]; std::snprintf(message,sizeof(message),"Instruction mismatch at RVA %zx; patch refused.",site.rva); log(message);
-    return false;
-}
 bool write(std::size_t rva,const void* data,std::size_t size) {
     DWORD previous=0,unused=0;
     if(!VirtualProtect(image+rva,size,PAGE_EXECUTE_READWRITE,&previous)) return false;
     std::memcpy(image+rva,data,size);
-    FlushInstructionCache(GetCurrentProcess(),image+rva,size);
-    return VirtualProtect(image+rva,size,previous,&unused)!=0;
+    const bool flushed=FlushInstructionCache(GetCurrentProcess(),image+rva,size)!=0;
+    const bool restored=VirtualProtect(image+rva,size,previous,&unused)!=0;
+    return flushed&&restored;
 }
+struct DataPatch { std::size_t rva; std::vector<std::byte> before,after; };
+class PatchInitialization {
+    const DataPatch* patches_;
+    bool committed_=false;
+public:
+    std::size_t applied=0;
+    explicit PatchInitialization(const DataPatch* patches):patches_(patches) {}
+    void commit() noexcept {committed_=true;}
+    ~PatchInitialization() {
+        if(committed_) return;
+        // Also handles C++ exceptions during hook creation and font setup.
+        const auto disabled=MH_DisableHook(MH_ALL_HOOKS);
+        if(disabled!=MH_OK&&disabled!=MH_ERROR_DISABLED)
+            log("Patch rollback: could not disable all hooks.");
+        while(applied) {
+            const auto& patch=patches_[--applied];
+            if(!write(patch.rva,patch.before.data(),patch.before.size())) {
+                char message[120];std::snprintf(message,sizeof(message),
+                    "Patch rollback: failed to restore RVA 0x%zx.",patch.rva);log(message);
+            }
+        }
+        if(MH_Uninitialize()!=MH_OK) log("Patch rollback: MinHook cleanup failed.");
+    }
+};
 }
 
 extern "C" {
@@ -857,6 +948,7 @@ void* allocate_unicode_glyph(void* const* table,std::uint32_t scalar) noexcept {
 }
 void* find_supplementary_glyph(void* const* table,std::uint32_t scalar) noexcept {
     if(auto shaped=eu4unicode::find_paragraph_glyph(table,scalar)) return shaped;
+    if(scalar<=255&&table[scalar]) return table[scalar];
     auto glyph=eu4unicode::find_unicode_glyph(table,scalar);
     return glyph?glyph:eu4unicode::find_dynamic_glyph(table,scalar);
 }
@@ -1063,7 +1155,11 @@ bool initialize(HMODULE module) {
 #else
     log("EU4 Unicode Patch v" EU4_PATCH_VERSION " initializing; author=VulonLok.");
 #endif
-    if(!hash_matches(exe)) { log("Refused: executable hash mismatch."); return false; }
+    const auto hash=eu4unicode::executable_hash(exe);
+    if(hash.sha256.empty()) log(hash.error.c_str());
+    else log(("Executable SHA-256: "+hash.sha256).c_str());
+    const auto path_utf8=exe.u8string();
+    log(("Executable path: "+path_utf8).c_str());
     if(GetModuleHandleW(L"plugin64.dll")
 #ifdef EU4_UNICODE_RESEARCH
        || std::filesystem::exists(exe.parent_path()/L"plugins"/L"plugin64.dll")
@@ -1083,208 +1179,13 @@ bool initialize(HMODULE module) {
 #else
     constexpr bool experimental_input=true;
 #endif
-    const Site sites[]={
-        {0x15989d8,"b8007d0000443bf8440f4df8"},
-        {0x19fad70,"40554883ec60488d6c242048"},
-        {0x1595c9b,"488b85301100004883bcf82001000000"},
-        {0x1595cad,"b910000000e81dd64900"},
-        {0x1595ceb,"4c8bbd30110000498984ff20010000"},
-        {0x16fd650,"48895c240848896c2410488974241848"},
-        {0x170ca20,"48895c241848896c242048895424105657415441564157"},
-        {0x170cd10,"48895c2420488954241055565741564157488d6c2480"},
-        {0x170d1d0,"48895c2408574883ec2048895108488d05bb276b00488901"},
-        {0x171eed0,"48896c2418565741564883ec208b69484c8bf24963f0"},
-        {0x171efb0,"488b41384c8bc94885c07409448b4008442b00eb034533c0"},
-        {0x153d4a0,"4863414cc3"},
-        {0x15995b0,"4c63cf488b55f84c03ca4863ce410fb6014c8d1d08a7e90042880419ffc6"},
-        {0x1599728,"410fb601498b8cc62001000048894d004885c9"},
-        {0x159a796,"460fb60409f3410f109e680900004b8b94c620010000"},
-        {0x1598963,"4c8be24c8bf1488b0d380bdb00"},
-        {0x159b470,"4c8bdc49895b20555741564881ec00010000"},
-        {0x159b7c0,"488bc441564881ecf00000000f2970c8"},
-        {0x159b3b0,"4c8d9c2408240000410f2873e8"},
-        {0x15966ec,"498bd8488bf9488b95c8210000"},
-        {0x15968cb,"80bd10220000000f8481070000"},
-        {0x1597d70,"80bd10220000000f840d060000"},
-        {0x1598841,"4c8d9c2460220000498b5b48"},
-        {0x159af87,"8b5c244883c306895c2448"},
-        {0x15986f6,"8b95c8210000ffc28995c8210000"},
-        {0x16d5f20,"48895c241044894c24204489442418"},
-        {0x16d65d0,"4885c9745b534883ec20488bd9488b09"},
-        {0x159b687,"0fb60407498b8cc6200100004885c9"},
-        {0x159ef48,"f3410f10b6480800000fb604024d8b3cc64d85ff"},
-        {0x159f1db,"ffc78bd7448b5310413bfa0f8d17020000"},
-        {0x159f87d,"4c8b45b8f3410f10b0480800000fb604104d8b24c04d85e4"},
-        {0x159fde5,"ffc38bf38b4f10440fb68d480100004533d23bd9"},
-        {0x1704af0,"48895c2408574883ec40488bda443b4910"},
-        {0x159eddd,"488bcb4c8b4b184983f9107203488b0b803c0aa7"},
-        {0x159f6ef,"488bcf4c8b47184983f8107203488b0f8bc6803c01a7"},
-        {0x159b85c,"0fb6042b3ca7750affc748ffc3e92b010000"},
-        {0x159b999,"ffc748ffc349b8ffffff43ffffff0b"},
-        {0x159f06d,"e85e53fffff30f58f8f3440f58c0"},
-        {0x159f9a9,"e8224afffff30f58f8f3440f58c0"},
-        {0x159b95a,"e8718afffff30f58f0"},
-        {0x1595c86,"81ffff000000"}, {0x10b2a66,"b9883d0000"},
-        {0x1b24a59,"ba883d0000"}, {0x10999f9,"ba883d0000"},
-        {0x16c2cb7,"4181fe00000001"}, {0x1a683ae,"488b0d9b548d004c8bc333d2ff15b0e10f004885c0"},
-        {0x1596858,"440fb60418ba01000000488d4c2448e8b49aaffe90"},
-        {0x1597071,"458bce410fb604014c8b1cc14d85db"},
-        {0x15983a1,"418bcff3440f109a480800000fb604014c8b04c24c894558"},
-        {0x15974cb,"41ffc6443b75d80f8c59f3ffff448bbdc8210000"},
-        {0x159b91a,"0fb6142b498d8f200100004c8b1cd14d85db"},
-        {0x15997a9,"66837906000f85130100008d041b660f6ec8"}
-        ,{0x15970df,"6641837b06000f85e0030000837db000"}
-        ,{0x159c677,"488bcae86190affe8038000f84ed0600"}
-        ,{0x159cd75,"4c8d9c2438040000410f2873e8410f28"}
-        ,{0x159c6d8,"0fb61c07488d4d50e85b4baffe90440f"}
-        ,{0x159c72b,"0fb61c07488d4d50e8084baffe90440f"}
-        ,{0x159c79a,"0fb61c07488d4d50e8994aaffe90440f"}
-        ,{0x159c713,"488bcee8c58faffe488bce803c07a775"}
-        ,{0x159c833,"0fb604074d8ba4c7200100004d85e40f"}
-        ,{0x159c8a6,"6641837c2406000f85ee000000448ba5"}
-        ,{0x159c9a1,"ffc73b7e100f8c24fdffff448ba59003"}
-        ,{0x159cbb3,"488d4424604983f810490f43c1803c30"}
-        ,{0x159cec5,"0fb604064d8bacc7200100004d85ed75"}
-        ,{0x159ce31,"c644159000498b074c8b90e0000000f3"}
-        ,{0x159c899,"e8327bfffff30f58f0f30f58f8664183"}
-        ,{0x159da11,"e8ba69fffff3440f58e8f3440f104424"}
-        ,{0x159d9a0,"8b8d8803000083c106898d8803000083"}
-        ,{0x159a240,"4e8d0409410fb6003ca77573"}
-        ,{0x15996b1,"c68415d001000000498b06"}
-        ,{0x159a45f,"c6840dd001000000498b06"}
-        ,{0x15968e1,"488d45c84983ff10490f43c4803c03a7"}
-        ,{0x1596e83,"c68415a000000000488b07"}
-        ,{0x1598110,"c68415a000000000488b07"}
-        ,{0x1597d7d,"488d45a04983fc10490f43c5418bcf803c08a7488d45a0"}
-        ,{0x159b539,"4c8b4b18488bcb4983f9107203488b0b803c0fa7"}
-        ,{0x159b61e,"498b06488d542420c6440c2000"}
-        ,{0x159db79,"450fb60407ba01000000488d4c2458"}
-        ,{0x159dc03,"410fb604074d8b9cc1200100004d85db"}
-        ,{0x159df89,"f30f115da0410fb60401498b14c74885d2"}
-        ,{0x159e436,"488d4c24784883fb10480f43ce440fb60408"}
-        ,{0xfd3f40,"0fb60401888508080000f3440f10a2480800004c8b34c24d85f6"}
-        ,{0xfd3eea,"488b4f1048898d680100008d41fe"}
-        ,{0xfd413e,"837f10017e1b660f6ef60f5bf6488b8568010000ffc8660f6ec8"}
-        ,{0xfd53c4,"ffc689b5e807000048ffc148898d18010000"}
-        ,{0xfd6680,"488d85900000004983fd10480f43c60fb60418884500"}
-        ,{0xfd6bc0,"488d85900000004983fd10480f43c60fb60408498b14c6"}
-        ,{0xfd7330,"488d43104983f9107204488b43100fb60401498b94c420010000"}
-        ,{0x159e400,"83c7060fbf420c660f6ec00f5bc0"}
-        ,{0xfd53a5,"4183c506488b8d18010000488bbdc8070000"}
-        ,{0x159e60d,"488bc34c8b43184983f8107203488b038bd7"}
-        ,{0x159e75d,"0fb604104d8b9cc520010000f3410f108d680900004d85db"}
-        ,{0x159e7c5,"e8065cfffff30f58f0f30f58f88b8d70100000"}
-        ,{0x159e6f1,"4488640c40498b4500488d542440498bcd"}
-        ,{0xfd6600,"8b85a0000000ffc84c63e0"}
-        ,{0xfd66e4,"488d85900000004983fd10480f43c648638da00000000fb64408ff884500"}
-        ,{0xfd7200,"4c89442418488954241048894c2408"}
-        ,{0xfd5b70,"44894c24204489442418488954241048894c2408"}
-        ,{0xfd64ca,"48c785f80000000000000048c7452000000000"}
-        ,{0xfd7315,"4c634320418bfd"}
-        ,{0xfd65e8,"440f2fe10f86d1020000"}
-        ,{0x16d6640,"4885d20f84a60000004889742418"}
-        ,{0x14ba825,"0fbe0c28488d1c28e836065900ffc788038bc7"}
-        ,{0x1550425,"0fbe0c28488d1c28e80aaa4f00ffc788038bc7"}
-        ,{0x1569f91,"8b45bc32db3c8073050fb6d8eb12"}
-        ,{0x15366c0,"48895c240848896c24184889742420574883ec40"}
-        ,{0x95110,"48895c241048896c2418565741574883ec20"}
-        ,{0x153a306,"e805aeb5fe"}
-        ,{0x153a717,"e8f4a9b5fe"}
-        ,{0x153a99b,"e870a7b5fe"}
-        ,{0xb19590,"4053565741544883ec48"}
-        ,{0x1536c32,"e859295eff"}
-        ,{0x15354e0,"48895c240848896c2410488974241848897c24204156"}
-        ,{0x1536b80,"488bc44889580848897010488978184c896020"}
-        ,{0x14e9cac,"488b01488d5310ff5008"}
-        ,{0x153560a,"488d542420ff90a0000000"}
-        ,{0x836f33,"0f1003488bd00f11000f104b100f1148100f1043200f1140200f104b300f1148300f1043400f114040f20f104b50f20f114850"}
-        ,{0x1d91328,"22a7a4a3407b7d"}
-        ,{0x14db3c0,"48895c2410488974241848897c24205541544155"}
-        ,{0x1536e51,"488b07488bcfff9038010000"}
-        ,{0x1536f50,"48895c2408488974241048897c24184c89642420"}
-        ,{0x153aa90,"48895c240848896c2410488974241848897c2420"}
-        ,{0x15384d0,"40574883ec200fb74154488bf96685c0"}
-        ,{0x15385a0,"48895c2408574883ec40440fb74156"}
-        ,{0x153b170,"48895c240848896c24104889742418574883ec40"}
-        ,{0x15361f0,"48895c2408488974241048897c24204c89442418"}
-        ,{0x1536060,"48895c240848896c2410488974241848897c2420"}
-        ,{0x1535eb0,"48895c240848896c2410488974241848897c2420"}
-        ,{0x1536340,"448b45d0ff50603906440f4ff3488b55"}
-        ,{0x1537210,"48895c240848896c2410488974241848897c2420"}
-        ,{0x1539820,"48895c241848896c242057415441574883ec204c"}
-        ,{0x1539240,"40534883ec40488bd9c6819000000000e83bb21f00"}
-        ,{0x1534250,"48895c242055565741564157488bec4883ec40"}
-        ,{0x1535250,"40574883ec3080b96102000000488bf9"}
-        ,{0x14db940,"48895c241044884c24205556574156"}
-        ,{0x1533a0f,"e82c7ffaff"}
-        ,{0x1533d90,"48895c240848896c24104889742418"}
-        ,{0x15340a0,"40534883ec20c681c500000000"}
-        ,{0x1534100,"48895c2408574883ec2048899198020000"}
-        ,{0x14db6a0,"48895c240848897424184889542410"}
-        ,{0x162f0b0,"4883ec58660f6e02488d4424080f5bc0"}
-        ,{0x162f1b0,"0fb78150010000f30f1089e0000000"}
-        ,{0x162f070,"3991b4010000750f488bc248c1e820"}
-        ,{0x95660,"40534883ec20488b5118488bd94883"}
-        ,{0x17345f0,"48ff25a1bf8700"}
-        ,{0x17349f0,"48ff2541c58700"}
-        ,{0x1735940,"48ff25b9ac8700"}
-        ,{0x1764940,"4055564155415641574883ec20488b6c2470"}
-        ,{0x1764c7c,"4d8929"}
-        ,{0x17657c0,"40534883ec40488b99900300004885d2"}
-        ,{0x17657f6,"0f1183f4140000"}
-        ,{0x1763ab7,"c70601000000"}
-        ,{0x1734490,"48ff2559bd8700"}
-        ,{0x1735e00,"48ff2599ac8700"}
-        ,{0x15a04f0,"40534883ec60488bda4533c0"}
-        ,{0x15a05a8,"e8e38f57ff"}
-        ,{0x1538560,"40534883ec20488b01488bd9ff9068010000"}
-        ,{0x1538670,"40534883ec20488b01488bd9ff9068010000"}
-        ,{0x153857f,"488b03488bcbff90d8000000"}
-        ,{0x153868f,"488b03488bcbff90e8000000"}
-        ,{0x1594360,"48895c24084889742410574883ec20488bf1488bd9bf00010000"}
-        ,{0x15953c0,"48895c2408574881ec80000000488bf933db"}
-        ,{0x16c3f10,"405355565741564883ec70488bf985d2"}
-        ,{0x1594380,"488b0b4885c9740aba10000000e85e511a00"}
-        ,{0x159487f,"488d8f20010000e8d5faffff"}
-        ,{0x1174e95,"e8e6025900"}
-        ,{0x13b9567,"e814bc3400"}
-        ,{0x117519e,"e8ddff5800"}
-        ,{0x1175c2c,"e84ff55800"}
-        ,{0x1705180,"8b411085c00f840c010000"}
-        ,{0x19fc097,"8bca4983c302c1e10a0bc885c97417"}
-        ,{0x19fbc23,"c1e10a0bc8eb05b93f0000004c8bfa"}
-        ,{0x19fbca2,"c1e10a0bc8eb05b93f0000004c8bea"}
-        ,{0xefc33b,"e8b0406500"}
-        ,{0xefc344,"e8278a8000"}
-        ,{0xf16156,"e895a26300"}
-        ,{0xf1615e,"e80dec7e00"}
-        ,{0x17061a0,"48895c240848896c24104889742418"}
-        ,{0xefc38f,"e80c9e800083f8ff"}
-        ,{0x1141475,"e876ef4000"}
-        ,{0x114147e,"e8ed385c00"}
-        ,{0x11414be,"e82def4000"}
-        ,{0x11414c7,"e8a4385c00"}
-        ,{0x114187b,"e870eb4000"}
-        ,{0x1141884,"e8e7345c00"}
-        ,{0x1141b98,"e853e84000"}
-        ,{0x1141ba1,"e8ca315c00"}
-        ,{0x1141e9c,"e84fe54000"}
-        ,{0x1141ea6,"e8c52e5c00"}
-        ,{0x11434c8,"e823cf4000"}
-        ,{0x1143a7c,"e86fc94000"}
-        ,{0x1143a86,"e8e5125c00"}
-        ,{0x1144338,"e8b3c04000"}
-        ,{0x1144341,"e82a0a5c00"}
-        ,{0x1141fe6,"e8b5415c0083f8ff"}
-        ,{0x11420dd,"e8be405c0083f8ff"}
-        ,{0x171f880,"4055565741544155415641574883ec20"}
-        ,{0x114218d,"e8eed65d0042890437"}
-        ,{0x11421ad,"e8ced65d00ffc0"}
-        ,{0x1706010,"488bc4488958084889681048897018574883ec40"}
-        ,{0xa901fe,"e80d5ec700"}
-        ,{0x15a0390,"40534883ec50"}
-    };
-    for(const auto& site:sites) if(!check(site)) return false;
+    const auto compatibility=eu4unicode::check_executable_image(image,eu4unicode::eu4_1375_profile());
+    if(!compatibility.compatible) { log(compatibility.error.c_str());return false; }
+    char checked_message[160];
+    std::snprintf(checked_message,sizeof(checked_message),"Executable compatibility checks passed: %s; %zu code/data sites.",
+        eu4unicode::eu4_1375_profile().name,compatibility.checked_sites);
+    log(checked_message);
+
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
     eu4unicode::native_paragraph_color=reinterpret_cast<eu4unicode::NativeParagraphColor>(address(0x15a0390));
     g_main_draw_return=address(0x159a7ac);
@@ -1402,10 +1303,44 @@ bool initialize(HMODULE module) {
     g_wide_compare_right_return=address(0x19fbcae);
     repeat_text=reinterpret_cast<RepeatText>(address(0x90320));
     append_text=reinterpret_cast<AppendText>(address(0x932f0));
-    register_text=reinterpret_cast<RegisterText>(address(0x16fa8d0));
+    eu4unicode::register_imported_text=reinterpret_cast<eu4unicode::NativeTextRegistration>(address(0x16fa8d0));
+    eu4unicode::legacy_import_diagnostic=legacy_import_error;
+    // Allocate all patch/rollback buffers before modifying any instruction.
+    const DataPatch constants[]={ {0x1595c88,bytes("ff000000"),bytes("ffff1000")},
+        {0x16c2cba,bytes("00000001"),bytes("00000004")},
+        // Save-name builders and save/load selection call the CP1252 transliterator.
+        // Skip only those calls: their strings already contain UTF-8. The
+        // later filename-character validation and other callers stay native.
+        {0x1174e95,bytes("e8e6025900"),bytes("9090909090")},
+        {0x13b9567,bytes("e814bc3400"),bytes("9090909090")},
+        {0x117519e,bytes("e8ddff5800"),bytes("9090909090")},
+        {0x1175c2c,bytes("e84ff55800"),bytes("9090909090")},
+        // Keep both the original query and localized candidate in UTF-8;
+        // derive display-search keys only in the scoped matching callback.
+        {0xefc33b,bytes("e8b0406500"),bytes("9090909090")},
+        {0xefc344,bytes("e8278a8000"),bytes("9090909090")},
+        {0xf16156,bytes("e895a26300"),bytes("9090909090")},
+        {0xf1615e,bytes("e80dec7e00"),bytes("9090909090")},
+        // Province-finder names, alternative names and queries retain UTF-8.
+        {0x1141475,bytes("e876ef4000"),bytes("9090909090")},
+        {0x114147e,bytes("e8ed385c00"),bytes("9090909090")},
+        {0x11414be,bytes("e82def4000"),bytes("9090909090")},
+        {0x11414c7,bytes("e8a4385c00"),bytes("9090909090")},
+        {0x114187b,bytes("e870eb4000"),bytes("9090909090")},
+        {0x1141884,bytes("e8e7345c00"),bytes("9090909090")},
+        {0x1141b98,bytes("e853e84000"),bytes("9090909090")},
+        {0x1141ba1,bytes("e8ca315c00"),bytes("9090909090")},
+        {0x1141e9c,bytes("e84fe54000"),bytes("9090909090")},
+        {0x1141ea6,bytes("e8c52e5c00"),bytes("9090909090")},
+        {0x11434c8,bytes("e823cf4000"),bytes("9090909090")},
+        {0x1143a7c,bytes("e86fc94000"),bytes("9090909090")},
+        {0x1143a86,bytes("e8e5125c00"),bytes("9090909090")},
+        {0x1144338,bytes("e8b3c04000"),bytes("9090909090")},
+        {0x1144341,bytes("e82a0a5c00"),bytes("9090909090")} };
     if(MH_Initialize()!=MH_OK) { log("MinHook initialization failed."); return false; }
+    PatchInitialization transaction(constants);
     struct Hook { std::size_t rva; void* callback; };
-    const Hook hooks[]={ {0x16fd650,reinterpret_cast<void*>(import_text)},
+    const Hook hooks[]={ {0x16fd650,reinterpret_cast<void*>(eu4unicode::import_legacy_localization)},
         {0x15995b0,reinterpret_cast<void*>(main_copy_hook)}, {0x1599728,reinterpret_cast<void*>(main_measure_hook)},
         {0x159a796,reinterpret_cast<void*>(main_draw_hook)}, {0x159b687,reinterpret_cast<void*>(bitmap_measure_hook)},
         {0x159af87,reinterpret_cast<void*>(main_page_hook)},
@@ -1490,46 +1425,48 @@ bool initialize(HMODULE module) {
         {0x19fbca2,reinterpret_cast<void*>(wide_compare_right_hook)} };
     for(const auto& hook:hooks) {
         if(MH_CreateHook(image+hook.rva,hook.callback,nullptr)!=MH_OK) {
-            log("Hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+            log("Hook creation failed; no hooks enabled."); return false;
         }
     }
     if(MH_CreateHook(image+0x1705180,reinterpret_cast<void*>(transliterate_save_path),
         reinterpret_cast<void**>(&original_transliterate))!=MH_OK) {
-        log("Save path hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+        log("Save path hook creation failed; no hooks enabled."); return false;
     }
     if(MH_CreateHook(image+0x1704af0,reinterpret_cast<void*>(layout_substring),
         reinterpret_cast<void**>(&original_layout_substring))!=MH_OK) {
-        log("Layout substring hook creation failed; no hooks enabled.");MH_Uninitialize();return false;
+        log("Layout substring hook creation failed; no hooks enabled.");return false;
     }
     if(MH_CreateHook(image+0x159b7c0,reinterpret_cast<void*>(eu4unicode::measure_paragraph_text),
         reinterpret_cast<void**>(&eu4unicode::original_text_width))!=MH_OK||
        MH_CreateHook(image+0x159b470,reinterpret_cast<void*>(eu4unicode::measure_paragraph_height),
         reinterpret_cast<void**>(&eu4unicode::original_text_height))!=MH_OK) {
-        log("Paragraph measurement hook creation failed; no hooks enabled.");MH_Uninitialize();return false;
+        log("Paragraph measurement hook creation failed; no hooks enabled.");return false;
     }
     if(MH_CreateHook(image+0x170cd10,reinterpret_cast<void*>(eu4unicode::construct_script_file),
         reinterpret_cast<void**>(&eu4unicode::original_script_file))!=MH_OK||
        MH_CreateHook(image+0x170ca20,reinterpret_cast<void*>(eu4unicode::construct_script_file_mode),
         reinterpret_cast<void**>(&eu4unicode::original_script_file_mode))!=MH_OK||
        MH_CreateHook(image+0x170d1d0,reinterpret_cast<void*>(eu4unicode::construct_script_stream),
-        reinterpret_cast<void**>(&eu4unicode::original_script_stream))!=MH_OK) {
-        log("Script lexer hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+        reinterpret_cast<void**>(&eu4unicode::original_script_stream))!=MH_OK||
+       MH_CreateHook(image+0x170e700,reinterpret_cast<void*>(eu4unicode::read_legacy_script_token),
+        reinterpret_cast<void**>(&eu4unicode::original_script_token))!=MH_OK) {
+        log("Script lexer hook creation failed; no hooks enabled."); return false;
     }
     if(MH_CreateHook(image+0x1706010,reinterpret_cast<void*>(convert_steam_presence),
         reinterpret_cast<void**>(&original_presence_conversion))!=MH_OK) {
-        log("Steam Rich Presence hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+        log("Steam Rich Presence hook creation failed; no hooks enabled."); return false;
     }
     if(MH_CreateHook(image+0x17061a0,reinterpret_cast<void*>(find_country_name),
         reinterpret_cast<void**>(&original_find_text))!=MH_OK) {
-        log("Country search hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+        log("Country search hook creation failed; no hooks enabled."); return false;
     }
     if(MH_CreateHook(image+0x171f880,reinterpret_cast<void*>(find_province_distance),
         reinterpret_cast<void**>(&original_search_distance))!=MH_OK) {
-        log("Province search hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+        log("Province search hook creation failed; no hooks enabled."); return false;
     }
     if(MH_CreateHook(image+0x1594360,reinterpret_cast<void*>(destroy_font_table),
         reinterpret_cast<void**>(&original_font_table_destroy))!=MH_OK) {
-        log("Font lifetime hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+        log("Font lifetime hook creation failed; no hooks enabled."); return false;
     }
 #ifdef EU4_UNICODE_RESEARCH
     eu4unicode::configure_font_atlases(exe.parent_path().parent_path()/L"test-mod",
@@ -1551,9 +1488,11 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&eu4unicode::original_vertex_create))!=MH_OK||
        MH_CreateHook(image+0x16d65d0,reinterpret_cast<void*>(eu4unicode::release_font_vertices),
         reinterpret_cast<void**>(&eu4unicode::original_vertex_release))!=MH_OK) {
-        log("Dynamic font atlas hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+        log("Dynamic font atlas hook creation failed; no hooks enabled."); return false;
     }
     if(experimental_input) {
+        eu4unicode::configure_native_editor_text(image);
+        eu4unicode::configure_editor_presentation(image);
         if(MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),
              reinterpret_cast<void**>(&eu4unicode::original_ime_message))!=MH_OK ||
            MH_CreateHook(image+0x17657c0,reinterpret_cast<void*>(eu4unicode::position_native_ime_candidates),
@@ -1581,6 +1520,10 @@ bool initialize(HMODULE module) {
            MH_CreateHook(image+0x1539240,reinterpret_cast<void*>(paste_editor_clipboard),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x1534250,reinterpret_cast<void*>(paint_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_paint))!=MH_OK ||
+           MH_CreateHook(image+0x1534bb0,reinterpret_cast<void*>(draw_editor_text),
+             reinterpret_cast<void**>(&original_editor_text))!=MH_OK ||
+           MH_CreateHook(image+0x1534f90,reinterpret_cast<void*>(draw_editor_lines),
+             reinterpret_cast<void**>(&original_editor_lines))!=MH_OK ||
            MH_CreateHook(image+0x1535250,reinterpret_cast<void*>(focus_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_focus))!=MH_OK ||
            MH_CreateHook(image+0x14db940,reinterpret_cast<void*>(create_editor_sprite),
@@ -1599,64 +1542,28 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_character))!=MH_OK ||
            MH_CreateHook(image+0x1536b80,reinterpret_cast<void*>(insert_editor_commit),
              reinterpret_cast<void**>(&original_editor_insert))!=MH_OK) {
-            log("Input hook creation failed; no hooks enabled."); MH_Uninitialize(); return false;
+            log("Input hook creation failed; no hooks enabled."); return false;
         }
         editor_selections=std::make_unique<eu4unicode::NativeEditorSelections>(original_editor_sprite_factory,
             reinterpret_cast<eu4unicode::NativeSpriteDestroy>(image+0x14db6a0),
             reinterpret_cast<eu4unicode::NativeStringDestroy>(image+0x95660));
-        log("Experimental UTF-8 input and single-line grapheme editing enabled.");
+        log("UTF-8 input, multiline grapheme editing, IME presentation and undo enabled.");
         log("Native Windows IME candidate UI and caret exclusion rectangle enabled.");
     }
-    struct DataPatch { std::size_t rva; std::vector<std::byte> before,after; };
-    // Allocate all patch/rollback buffers before modifying any instruction.
-    const DataPatch constants[]={ {0x1595c88,bytes("ff000000"),bytes("ffff1000")},
-        {0x16c2cba,bytes("00000001"),bytes("00000004")},
-        // Save-name builders and save/load selection call the CP1252 transliterator.
-        // Skip only those calls: their strings already contain UTF-8. The
-        // later filename-character validation and other callers stay native.
-        {0x1174e95,bytes("e8e6025900"),bytes("9090909090")},
-        {0x13b9567,bytes("e814bc3400"),bytes("9090909090")},
-        {0x117519e,bytes("e8ddff5800"),bytes("9090909090")},
-        {0x1175c2c,bytes("e84ff55800"),bytes("9090909090")},
-        // Keep both the original query and localized candidate in UTF-8;
-        // derive display-search keys only in the scoped matching callback.
-        {0xefc33b,bytes("e8b0406500"),bytes("9090909090")},
-        {0xefc344,bytes("e8278a8000"),bytes("9090909090")},
-        {0xf16156,bytes("e895a26300"),bytes("9090909090")},
-        {0xf1615e,bytes("e80dec7e00"),bytes("9090909090")},
-        // Province-finder names, alternative names and queries retain UTF-8.
-        {0x1141475,bytes("e876ef4000"),bytes("9090909090")},
-        {0x114147e,bytes("e8ed385c00"),bytes("9090909090")},
-        {0x11414be,bytes("e82def4000"),bytes("9090909090")},
-        {0x11414c7,bytes("e8a4385c00"),bytes("9090909090")},
-        {0x114187b,bytes("e870eb4000"),bytes("9090909090")},
-        {0x1141884,bytes("e8e7345c00"),bytes("9090909090")},
-        {0x1141b98,bytes("e853e84000"),bytes("9090909090")},
-        {0x1141ba1,bytes("e8ca315c00"),bytes("9090909090")},
-        {0x1141e9c,bytes("e84fe54000"),bytes("9090909090")},
-        {0x1141ea6,bytes("e8c52e5c00"),bytes("9090909090")},
-        {0x11434c8,bytes("e823cf4000"),bytes("9090909090")},
-        {0x1143a7c,bytes("e86fc94000"),bytes("9090909090")},
-        {0x1143a86,bytes("e8e5125c00"),bytes("9090909090")},
-        {0x1144338,bytes("e8b3c04000"),bytes("9090909090")},
-        {0x1144341,bytes("e82a0a5c00"),bytes("9090909090")} };
-    std::size_t applied=0;
+    // Hook creation has not changed the executable. Recheck immediately before writes.
+    const auto activation=eu4unicode::check_executable_image(image,eu4unicode::eu4_1375_profile());
+    if(!activation.compatible) {log(activation.error.c_str());return false;}
     bool constants_ok=true;
     for(const auto& patch:constants) {
-        ++applied;
+        ++transaction.applied;
         if(!write(patch.rva,patch.after.data(),patch.after.size())) { constants_ok=false; break; }
     }
     const bool enabled=constants_ok && MH_EnableHook(MH_ALL_HOOKS)==MH_OK;
     if(!enabled) {
         log("Patch activation failed; restoring original instructions and constants.");
-        MH_DisableHook(MH_ALL_HOOKS);
-        while(applied) {
-            const auto& patch=constants[--applied];
-            write(patch.rva,patch.before.data(),patch.before.size());
-        }
-        MH_Uninitialize();
         return false;
     }
+    transaction.commit();
     patch_enabled.store(true,std::memory_order_release);
     log("UTF-8 import, UI, format, map and bitmap iterators enabled.");
     log("Script lexer UTF-8 BOM handling enabled.");
@@ -1678,6 +1585,6 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
         // thread_local is intentionally retained; do not disable thread notifications.
         try { initialize(module); } catch(...) { log("Initialization exception; patch disabled."); }
-    }
+    } else if(reason==DLL_PROCESS_DETACH) log_legacy_import_counts();
     return TRUE;
 }

@@ -54,7 +54,7 @@ SPARSE_GLYPH MACRO result, font, slot, table_offset
     RESTORE_CONTEXT
 ENDM
 LOOKUP_GLYPH MACRO result, font, slot, table_offset
-    LOCAL selected, bmp, lookup_done
+    LOCAL selected, bmp, lookup_done, lookup_missing
     cmp slot, 0ffh
     jbe bmp
     SPARSE_GLYPH result, font, slot, table_offset
@@ -66,6 +66,12 @@ lookup_done:
     jnz selected
     cmp slot, 20h
     jb selected
+    cmp slot, 0ffh
+    ja lookup_missing
+    SPARSE_GLYPH result, font, slot, table_offset
+    test result, result
+    jnz selected
+lookup_missing:
     SPARSE_GLYPH result, font, 2026h, table_offset
     test result, result
     jnz selected

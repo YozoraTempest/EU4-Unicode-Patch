@@ -26,7 +26,7 @@ bool needs_native_paragraph_shaping(std::string_view source,bool formatted) noex
         return needs_paragraph_shaping(visible);
     } catch(...) { return false; }
 }
-ParagraphText::ParagraphText(std::string_view source,bool formatted,IconMeasure measure,ColorLookup lookup):source_(source) {
+ParagraphText::ParagraphText(std::string_view source,bool formatted,IconMeasure measure,ColorLookup lookup,IconMeasure flags,BitmapMeasure bitmap,IconMeasure symbols):source_(source) {
     if(source.size()>32000) throw std::length_error("Formatted paragraph exceeds source capacity");
     struct Unit { std::size_t start,end;std::uint32_t style; };
     std::vector<Unit> units;
@@ -48,13 +48,14 @@ ParagraphText::ParagraphText(std::string_view source,bool formatted,IconMeasure 
         if(style==colors_.end()) colors_.push_back(stack);
         const auto start=visible_.size();
         std::string glyph;
-        if(unit.kind==TextUnitKind::icon) {
-            if(!measure) throw std::invalid_argument("Native icon metrics are required");
+        if(unit.kind==TextUnitKind::icon||unit.kind==TextUnitKind::flag||unit.kind==TextUnitKind::symbol) {
+            const auto& resolver=unit.kind==TextUnitKind::flag?flags:unit.kind==TextUnitKind::symbol?symbols:measure;
+            if(!resolver) throw std::invalid_argument("Native inline object metrics are required");
             const auto command=source.substr(offset,unit.end-offset);
             const auto first=decode(command).bytes;
-            const auto last=native_scalar_start(command,command.size()-1);
-            if(last<=first||last-first>127) throw std::length_error("Native icon name exceeds capacity");
-            const auto advance=measure(command.substr(first,last-first));
+            const auto last=unit.kind==TextUnitKind::flag?command.size():native_scalar_start(command,command.size()-1);
+            if(unit.kind!=TextUnitKind::symbol&&(last<=first||last-first>127)) throw std::length_error("Native icon name exceeds capacity");
+            const auto advance=resolver(unit.kind==TextUnitKind::symbol?command:command.substr(first,last-first));
             if(!std::isfinite(advance)||advance<0||advance>32767)
                 throw std::invalid_argument("Invalid native icon advance");
             glyph=encode(0xfffc);
@@ -83,6 +84,14 @@ ParagraphText::ParagraphText(std::string_view source,bool formatted,IconMeasure 
         while(unit<units.size()&&units[unit].end<=start) ++unit;
         if(unit==units.size()) throw std::runtime_error("Invalid paragraph source mapping");
         const auto id=units[unit].style;
+        const auto cluster=std::string_view(visible_).substr(start,end-start);
+        const auto scalar=decode(cluster);
+        if(bitmap&&scalar.bytes==cluster.size()&&scalar.value!=0xfffc&&scalar.value>=0x20&&
+           scalar.value!=0x85&&scalar.value!=0x2028&&scalar.value!=0x2029&&!needs_paragraph_shaping(cluster)) {
+            const auto advance=bitmap(scalar.value);
+            if(std::isfinite(advance)&&advance>=0&&advance<=32767)
+                icons_.push_back({start,end-start,std::string(cluster),advance});
+        }
         if(!styles_.empty()&&styles_.back().style==id&&styles_.back().text_start+styles_.back().text_length==start)
             styles_.back().text_length+=end-start;
         else styles_.push_back({start,end-start,id});

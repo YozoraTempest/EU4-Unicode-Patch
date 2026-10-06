@@ -1,9 +1,11 @@
 #include "unicode_editor.hpp"
 #include "unicode_services.hpp"
 #include "unicode_text.hpp"
+#include "editor_document.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 void check(bool condition,const char* message) {
@@ -86,5 +88,68 @@ int main() {
         check(nearest_grapheme_boundary(measured,pixel,measure)==edges[nearest],"pixel hits match the closest complete edge, including ties");
     }
     check(fitting_grapheme_prefix("",10,measure)==0&&nearest_grapheme_boundary("",10,measure)==0,"empty measured editor has one edge");
+    const std::string document=u8"中文 العربية\r\nहिन्दी English\n𠮷e\u0301";
+    const std::vector<std::string> native_rows={u8"中文 \n",u8"العربية\r\n",u8"हिन्दी \n","English\n",u8"𠮷e\u0301"};
+    std::vector<EditRowInput> input;
+    for(std::size_t i=0;i<native_rows.size();++i) input.push_back({native_rows[i],i==0||i==2});
+    const EditRows rows(document,input);
+    for(std::size_t i=0;i<rows.rows().size();++i) for(const auto edge:grapheme_boundaries(std::string_view(document).substr(rows.rows()[i].start,rows.rows()[i].length))) {
+        const auto offset=rows.offset({i,edge});const auto position=rows.position(offset);
+        check(rows.offset(position)==offset,"soft wraps and hard CR/LF breaks preserve document byte positions");
+    }
+    check(rows.rows().size()==5&&rows.rows()[1].consumed==rows.rows()[1].length+2,"real CR/LF remains source bytes while synthetic breaks do not");
+    const EditRows spaces(u8"中文 English العربية",{{u8"中文\n",false},{"English\n",false},{u8"العربية",false}});
+    check(spaces.rows()[1].start==7&&spaces.rows()[2].start==15&&spaces.offset({1,0})==7,
+        "native soft wraps replace consumed spaces without shifting source byte positions");
+    const EditRows trailing("A\n\n",{{"A\n",false},{"\n",false}});
+    check(trailing.rows().size()==3&&trailing.position(3).row==2&&trailing.offset({2,0})==3,
+        "a final hard newline has an empty caret row even when the native cache omits it");
+    const EditRows committed(u8"中文\nالعربية\r\nहिन्दी\nZ",
+        {{u8"中文\n",false},{u8"العربية\r\n",false},{u8"हिन्दी\n",false},{"Z",false}});
+    const auto commit_bytes=std::string_view(u8"中文\nالعربية\r\nहिन्दी\n").size();
+    const auto commit_position=committed.position(committed.commit_offset({0,commit_bytes}));
+    check(commit_position.row==3&&commit_position.column==0,
+        "native prepend byte counts map across hard CR/LF lines to the insertion end");
+    const auto soft_position=spaces.position(spaces.commit_offset({0,15}));
+    check(soft_position.row==2&&soft_position.column==0,
+        "native prepend byte counts map across consumed soft-wrap spaces");
+    const EditRows limited(u8"中",{{u8"中",false}});
+    check(limited.commit_offset({0,6})==3&&limited.position(3).column==3,
+        "native requested commit length clamps to the actual truncated document");
+    check(limited.commit_offset({0,(std::numeric_limits<std::size_t>::max)()})==3,
+        "oversized commit columns cannot overflow document offsets");
+    rejected=false;try { limited.offset({0,6}); } catch(const std::out_of_range&) { rejected=true; }
+    check(rejected,"ordinary row positions still reject columns beyond their row");
+    rejected=false;try { limited.commit_offset({1,0}); } catch(const std::out_of_range&) { rejected=true; }
+    check(rejected,"commit normalization still rejects unknown rows");
+    rejected=false;
+    try { EditRows bad(u8"e\u0301",{{"e\n",true},{u8"\u0301",false}}); } catch(const std::invalid_argument&) { rejected=true; }
+    check(rejected,"native soft wraps cannot detach combining marks");
+    EditHistory history;
+    EditState empty{"",{0,0}},chinese{u8"中文",{6,6}},multiline{document,{0,document.size()}};
+    history.record(empty,chinese);history.record(chinese,multiline);
+    auto undone=history.undo(multiline);check(undone&&undone->text==chinese.text,"undo restores an entire multiline edit atomically");
+    auto redone=history.redo(*undone);check(redone&&redone->text==document&&redone->selection.anchor==0,"redo restores text and selection direction");
+    undone=history.undo(*redone);history.record(*undone,empty);
+    check(!history.redo(empty),"a new edit discards the redo branch");
+    check(!history.undo({"external",{0,0}})&&history.bytes()==0,"external game changes discard stale undo history");
+    EditState before{std::string(31000,'a'),{0,0}};
+    for(int i=0;i<500;++i) {
+        auto after=before;after.text+='b';history.record(before,after);before=std::move(after);
+        check(history.bytes()<=2*1024*1024,"undo history has a bounded storage budget");
+    }
+    unsigned retained=0;
+    while(auto previous=history.undo(before)) { before=std::move(*previous);++retained; }
+    check(retained>0&&retained<128,"large consecutive edits evict old states within the byte budget");
+    const auto composed=composition_text(u"𠮷e\u0301 العربية हिन्दी",4);
+    check(composed.text==u8"𠮷e\u0301 العربية हिन्दी"&&composed.caret==7,"IMM UTF-16 cursor maps to a complete UTF-8 grapheme");
+    check(composition_text(u"𠮷",1).caret==0,"IME cursor cannot split a surrogate pair");
+    check(composition_text(u"e\u0301",1).caret==0,"IME cursor cannot detach a combining mark");
+    const auto preview=composition_preview({u8"A中文Z",{1,7}},composed);
+    check(preview.text=="A"+composed.text+"Z"&&preview.caret==8&&preview.begin==1,"preedit previews replace the selection without modifying the source");
+    rejected=false;try { composition_text(std::u16string(1,0xd800),0); } catch(const std::invalid_argument&) { rejected=true; }
+    check(rejected,"incomplete IME surrogate input cannot enter presentation state");
+    rejected=false;try { composition_preview(chinese,composed,6); } catch(const std::length_error&) { rejected=true; }
+    check(rejected,"over-budget preedit leaves committed text intact");
     std::cout<<"UTF-8 editor interior-byte, selection, commit and budget checks passed.\n";
 }
