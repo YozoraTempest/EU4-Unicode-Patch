@@ -105,17 +105,17 @@ int main() {
         release_font_atlas(large.table());release_unicode_font(large.table());
         check(font_texture_memory(large.table()).supplemental_reserved_bytes==0,
               "Released atlas retains supplemental memory reservations");
-        Font small(&mod_manager);small.put(0x978,128);small.put(0x97c,256);
-        register_font_atlas(small.data(),"gfx/fonts/small-bitmap-18");
-        const auto small_geometry=font_paragraph_geometry(small.data(),u8"العربية हिन्दी العربية हिन्दी",600,false,false);
+        Font narrow_font(&mod_manager);narrow_font.put(0x978,128);narrow_font.put(0x97c,256);
+        register_font_atlas(narrow_font.data(),"gfx/fonts/small-bitmap-18");
+        const auto small_geometry=font_paragraph_geometry(narrow_font.data(),u8"العربية हिन्दी العربية हिन्दी",600,false,false);
         check(small_geometry&&small_geometry->glyphs.size()>1,
               "Small mod atlas splits contextual paragraphs into fitting tiles");
         for(const auto glyph:small_geometry->glyphs)
             check(glyph->width<=126&&glyph->height<=254&&glyph->x+glyph->width<128&&glyph->y+glyph->height<256,
                   "Contextual tile extends beyond the supplemental page");
-        check(font_texture_memory(small.table()).supplemental_reserved_bytes>=128ull*256*4,
+        check(font_texture_memory(narrow_font.table()).supplemental_reserved_bytes>=128ull*256*4,
               "Non-square supplemental pages use their actual byte size");
-        release_font_atlas(small.table());release_unicode_font(small.table());
+        release_font_atlas(narrow_font.table());release_unicode_font(narrow_font.table());
     }
     {
         Font bitmap(nullptr);bitmap.anchor={1,1,8,8,0,0,19,0,0};
