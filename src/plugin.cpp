@@ -13,6 +13,7 @@
 #include "native_search.hpp"
 #include "native_steam_presence.hpp"
 #include "native_script_bom.hpp"
+#include "native_legacy_import.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
 #include "native_editor_selection.hpp"
@@ -147,10 +148,6 @@ std::int64_t find_province_distance(const EngineString* name,const EngineString*
         return eu4unicode::province_search_distance(caller,name,query,original_search_distance);
     } catch(...) { log("Unicode province distance failed; candidate ranked last."); return INT32_MAX/2; }
 }
-struct LoadContext { int line; bool replace; char padding[11]; void* collection; };
-static_assert(offsetof(LoadContext,collection)==16);
-using RegisterText=void(*)(void*,const char*,const char*,int,int,bool);
-RegisterText register_text=nullptr;
 using RepeatText=char*(*)(EngineString*,std::uint64_t,unsigned char);
 RepeatText repeat_text=nullptr;
 using AppendText=void*(*)(EngineString*,const char*,std::uint64_t);
@@ -805,18 +802,24 @@ extern "C" void trim_editor_grapheme(void* widget) {
     const auto vtable=*static_cast<void***>(widget);
     reinterpret_cast<Backspace>(vtable[0x138/8])(widget);
 }
-void import_text(const EngineString* key,const EngineString* value,int version,
-                 int /*unused*/,const LoadContext* context) {
-    const auto text=std::string_view(value->data(),static_cast<std::size_t>(value->size));
-    if(!eu4unicode::valid_utf8(text)) {
-        log("Rejected invalid UTF-8 localization value.");
-        return;
-    }
-    register_text(context->collection,key->data(),value->data(),context->line,version,context->replace);
-    if(std::strcmp(key->data(),"FE_SINGLE_PLAYER")==0) {
-        log("Registered FE_SINGLE_PLAYER without single-byte conversion:");
-        log(value->data());
-    }
+void legacy_import_error(std::string_view source,int line,std::string_view key,
+                         std::size_t offset,const char* error) {
+    char message[768];
+    std::snprintf(message,sizeof(message),"Rejected text import: %.*s, line %d, key %.*s, byte %zu: %s.",
+        static_cast<int>(std::min<std::size_t>(source.size(),300)),source.data(),line,
+        static_cast<int>(std::min<std::size_t>(key.size(),200)),key.data(),offset,error);
+    log(message);
+}
+void log_legacy_import_counts() {
+    const auto counts=eu4unicode::legacy_import_counts();
+    if(!counts.localization&&!counts.script&&!counts.rejected) return;
+    char message[256];
+    std::snprintf(message,sizeof(message),
+        "Legacy import summary: %llu localization values, %llu script tokens, %llu escapes, %llu remapped units, %llu rejected values.",
+        static_cast<unsigned long long>(counts.localization),static_cast<unsigned long long>(counts.script),
+        static_cast<unsigned long long>(counts.sequences),static_cast<unsigned long long>(counts.relocated),
+        static_cast<unsigned long long>(counts.rejected));
+    log(message);
 }
 
 std::vector<std::byte> bytes(const char* hex) {
@@ -1297,7 +1300,8 @@ bool initialize(HMODULE module) {
     g_wide_compare_right_return=address(0x19fbcae);
     repeat_text=reinterpret_cast<RepeatText>(address(0x90320));
     append_text=reinterpret_cast<AppendText>(address(0x932f0));
-    register_text=reinterpret_cast<RegisterText>(address(0x16fa8d0));
+    eu4unicode::register_imported_text=reinterpret_cast<eu4unicode::NativeTextRegistration>(address(0x16fa8d0));
+    eu4unicode::legacy_import_diagnostic=legacy_import_error;
     // Allocate all patch/rollback buffers before modifying any instruction.
     const DataPatch constants[]={ {0x1595c88,bytes("ff000000"),bytes("ffff1000")},
         {0x16c2cba,bytes("00000001"),bytes("00000004")},
@@ -1333,7 +1337,7 @@ bool initialize(HMODULE module) {
     if(MH_Initialize()!=MH_OK) { log("MinHook initialization failed."); return false; }
     PatchInitialization transaction(constants);
     struct Hook { std::size_t rva; void* callback; };
-    const Hook hooks[]={ {0x16fd650,reinterpret_cast<void*>(import_text)},
+    const Hook hooks[]={ {0x16fd650,reinterpret_cast<void*>(eu4unicode::import_legacy_localization)},
         {0x15995b0,reinterpret_cast<void*>(main_copy_hook)}, {0x1599728,reinterpret_cast<void*>(main_measure_hook)},
         {0x159a796,reinterpret_cast<void*>(main_draw_hook)}, {0x159b687,reinterpret_cast<void*>(bitmap_measure_hook)},
         {0x159af87,reinterpret_cast<void*>(main_page_hook)},
@@ -1440,7 +1444,9 @@ bool initialize(HMODULE module) {
        MH_CreateHook(image+0x170ca20,reinterpret_cast<void*>(eu4unicode::construct_script_file_mode),
         reinterpret_cast<void**>(&eu4unicode::original_script_file_mode))!=MH_OK||
        MH_CreateHook(image+0x170d1d0,reinterpret_cast<void*>(eu4unicode::construct_script_stream),
-        reinterpret_cast<void**>(&eu4unicode::original_script_stream))!=MH_OK) {
+        reinterpret_cast<void**>(&eu4unicode::original_script_stream))!=MH_OK||
+       MH_CreateHook(image+0x170e700,reinterpret_cast<void*>(eu4unicode::read_legacy_script_token),
+        reinterpret_cast<void**>(&eu4unicode::original_script_token))!=MH_OK) {
         log("Script lexer hook creation failed; no hooks enabled."); return false;
     }
     if(MH_CreateHook(image+0x1706010,reinterpret_cast<void*>(convert_steam_presence),
@@ -1576,6 +1582,6 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
         // thread_local is intentionally retained; do not disable thread notifications.
         try { initialize(module); } catch(...) { log("Initialization exception; patch disabled."); }
-    }
+    } else if(reason==DLL_PROCESS_DETACH) log_legacy_import_counts();
     return TRUE;
 }

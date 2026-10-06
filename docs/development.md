@@ -12,6 +12,7 @@
 | `unicode_editor` / `editor_document` / `native_editor_text` | 字素编辑、多行位置映射、撤销历史与字节预算 |
 | `unicode_search` / `unicode_pinyin` / `native_search` | 中文与拼音匹配、词组读音及国家／省份搜索适配 |
 | `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
+| `legacy_text` / `native_legacy_import` | EU4dll 旧转义解码、本地化注册与脚本文本导入 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
 | `shaped_paragraph` / `formatted_paragraph` / `native_paragraph` | 整段塑形、颜色及图标映射、原生绘制调用适配 |
 | `native_editor_selection` | 复杂文字选区的原生矩形及控件生命周期 |
@@ -90,13 +91,17 @@ fuzzy_pinyin=1
 
 ## 旧汉化迁移
 
-旧汉化可能在 UTF-8 文件内使用双字节转义。明确指定旧协议，把转换结果写到新目录：
+运行时在本地化注册前解码 UTF-8 中的 CP1252 转义字符，在 GUI／脚本词法入口解码原始转义字节。两处共用 `0x10`～`0x13` 协议解码器，处理旧字符重映射和 UTF-16 代理对；普通 UTF-8 和非转义私用区字符保持原值。搜索、编辑和绘制继续接收标准 UTF-8。
+
+损坏的本地化值不注册，日志记录键名、行号和字节位置；损坏或超出原生缓冲区的脚本文本终止当前文件解析。退出时汇总转换数量。不会改写模组文件。
+
+离线迁移工具仍可用于制作独立的 UTF-8 汉化包：
 
 ```powershell
 python tools\migrate-localisation.py '旧模组的localisation目录' private\migrated-localisation --format eu4dll-escaped
 ```
 
-工具保留 BOM、换行和文件结构，拒绝截断转义与孤立代理项，输出逐文件哈希报告。将转换结果用于单独的 UTF-8 模组副本；原目录保留。玩家安装不需要运行此工具。
+工具只转换 `.yml` 本地化，保留 BOM、换行和文件结构，拒绝截断转义与孤立代理项，输出逐文件哈希报告。玩家直接使用旧包时不需要运行此工具。
 
 ## 开发副本
 
