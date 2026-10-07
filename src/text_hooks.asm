@@ -1,4 +1,6 @@
 EXTERN decode_z:PROC
+EXTERN append_person_name:PROC
+EXTERN g_person_name_return:QWORD
 EXTERN decode_layout_range:PROC
 EXTERN g_alternate_end:QWORD
 EXTERN copy_scalar:PROC
@@ -64,7 +66,18 @@ EXTERN g_button_geometry_end_return:QWORD
 
 include hook_context.inc
 
+
 .CODE
+person_name_hook PROC
+    SAVE_CONTEXT
+    mov rcx, rbx
+    lea rdx, [rbp-48h]
+    call append_person_name
+    mov [rsp+80h], rax
+    RESTORE_CONTEXT
+    jmp qword ptr [g_person_name_return]
+person_name_hook ENDP
+
 main_geometry_entry_hook PROC
     SAVE_CONTEXT
     call begin_popup_font
