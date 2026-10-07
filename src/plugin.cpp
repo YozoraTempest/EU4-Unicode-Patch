@@ -75,6 +75,17 @@ void log(const char* message) {
     FlushFileBuffers(log_file);
 }
 using eu4unicode::EngineString;
+const char* lookup_name_policy(const char* key) {
+    const auto manager=*reinterpret_cast<const std::byte* const*>(image+0x2357b20);
+    if(!manager) return nullptr;
+    const auto collection=*reinterpret_cast<const void* const*>(manager);
+    if(!collection) return nullptr;
+    // The native localization index uses FNV-1, not FNV-1a. Policy keys are ASCII.
+    std::uint32_t hash=0x811c9dc5;
+    for(auto p=key;*p;++p) { hash*=0x1000193;hash^=static_cast<unsigned char>(*p); }
+    using Lookup=const char*(*)(const void*,std::uint64_t);
+    return reinterpret_cast<Lookup>(image+0x16fb030)(collection,hash);
+}
 using SubstringText=EngineString*(*)(const EngineString*,EngineString*,int,int);
 SubstringText original_layout_substring=nullptr;
 EngineString* layout_substring(const EngineString* source,EngineString* target,int begin,int end) {
@@ -1193,6 +1204,8 @@ bool initialize(HMODULE module) {
     g_person_name_return=address(0xa4b4a6);
     eu4unicode::native_name_append=reinterpret_cast<eu4unicode::NameAppend>(address(0x932f0));
     eu4unicode::native_name_assign=reinterpret_cast<eu4unicode::NameAssign>(address(0x95110));
+    eu4unicode::native_name_policy_lookup=lookup_name_policy;
+    eu4unicode::native_name_log=log;
     eu4unicode::native_paragraph_color=reinterpret_cast<eu4unicode::NativeParagraphColor>(address(0x15a0390));
     g_main_draw_return=address(0x159a7ac);
     g_main_copy_return=address(0x15995ce);

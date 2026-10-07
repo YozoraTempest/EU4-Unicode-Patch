@@ -10,6 +10,12 @@ const ImageProfile& eu4_1375_profile() {
             {0x1fb0000,0x4b4fb4,ImageAccess::write,"game globals"}
         },
         {
+            {0xa4b2d4,"488bda488bf933f68975b0","person name owner register"},
+            {0xa49753,"4885db0f841c0d000049895d60e9130d0000","person culture field"},
+            {0x27c8d0,"488b33488bd7488d4e484983fe107203488b1748837918104c8b41107203488b09","culture key string layout"},
+            {0xa4a911,"488b4e60488b01ff504084c07426488b46608b7810ba3a280000488bcbe84de9cb008bd7488bcbe8934a68ff488bcbe85bdbcb00","culture serialization layout"},
+            {0x2073688,"3a28000063756c7475726500","culture token identity",ImageAccess::read},
+            {0x16fb030,"4c8b41204c8bd2488b4128492bc048c1f8044885c07501c34863c84c8bd949c1e3044d03d885c07e380f1f8000000000488bd148d1ea488bc24803c04d3914c073174d8d04c048c7c0ffffffff482bc24983c0104803c8eb03488bca4885c97fcf4d3bc374184d39107513488b057ecac500418b480848034820488bc1c333c98bc1c3","native localization index"},
             {0xa4b48c,"488d55b848837dd010480f4355b84c8b45c8488bcbe84a7e64ffc745b001000000488b55d04883fa10723148ffc2488b4db8488bc14881fa0010","person_name_hook"},
             {0x15989d8,"b8007d0000443bf8440f4df8","text_limit_hook"},
             {0x19fad70,"40554883ec60488d6c242048","native text/font code"},
@@ -331,6 +337,7 @@ const ImageProfile& eu4_1375_profile() {
         {
             {0x1b66570,8,ImageAccess::read,"HeapAlloc import slot"},
             {0x233d850,8,ImageAccess::write,"native heap pointer"},
+            {0x2357b20,8,ImageAccess::write,"localization manager pointer"},
             {0x23494f0,8,ImageAccess::write,"GUI manager pointer"},
             {0x235ba60,8,ImageAccess::write,"UI vertex buffer base"},
             {0x2433cd0,32001,ImageAccess::write,"text copy buffer"}

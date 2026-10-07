@@ -13,6 +13,7 @@
 | `unicode_search` / `unicode_pinyin` / `native_search` | 中文与拼音匹配、词组读音及国家／省份搜索适配 |
 | `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
 | `legacy_text` / `native_legacy_import` | EU4dll 旧转义解码、本地化注册与脚本文本导入 |
+| `native_name_order` | 分开的姓／名按人物文化拼接，保留旧姓氏标记与模组规则 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
 | `shaped_paragraph` / `formatted_paragraph` / `native_paragraph` | 整段塑形、颜色及图标映射、原生绘制调用适配 |
 | `native_editor_selection` | 复杂文字选区的原生矩形及控件生命周期 |
@@ -88,6 +89,23 @@ fuzzy_pinyin=1
 输入法预编辑从 IMM 的 UTF-16 文本读取，只在绘制期间交换显示文本，返回前恢复已提交文本、选区和行缓存状态。提交继续由 SDL 处理，避免预编辑进入搜索、存档或撤销记录。`Ctrl+Z` 撤销，`Ctrl+Y` 或 `Ctrl+Shift+Z` 重做；换行许可保持控件原有设置。
 
 保存路径修正代理对转换与比较，并保留已观察保存入口的 UTF-8 名称。
+
+## 姓名顺序
+
+分开的姓与名在原生姓名拼接入口处理，使用人物自身的文化，不按所属国家改变顺序。汉文化、日文和韩文姓名默认姓在前：原文字形通常连写，拉丁字母转写加空格；匈牙利姓名默认姓在前并加空格。未知文化保持原顺序。旧 `¿` 姓氏标记仍优先决定姓在前，源文本附带的分隔符保留。
+
+模组可在本地化中覆盖文化规则。例如在 `localisation/replace/name_order_l_english.yml` 中使用当前语言标签：
+
+```yaml
+l_english:
+ EU4_UNICODE_NAME_hungarian:0 "surname_first middle_dot"
+ EU4_UNICODE_NAME_japanese:0 "surname_first auto"
+ EU4_UNICODE_NAME_custom_culture:0 "given_first space"
+```
+
+键名后缀是 `common/cultures` 中的文化 ID。顺序可选 `surname_first`、`given_first`；分隔符可选 `auto`、`none`、`space`、`middle_dot`。规则按游戏当前语言和本地化覆盖顺序读取；旧 `¿` 标记只覆盖顺序。修改后重启游戏。
+
+仅处理引擎提供的两个姓名字段；不拆分完整姓名，不改写人物数据或存档。只有完整名称的路径继续显示原内容。
 
 ## 旧汉化迁移
 

@@ -72,6 +72,7 @@ person_name_hook PROC
     SAVE_CONTEXT
     mov rcx, rbx
     lea rdx, [rbp-48h]
+    mov r8, rdi
     call append_person_name
     mov [rsp+80h], rax
     RESTORE_CONTEXT

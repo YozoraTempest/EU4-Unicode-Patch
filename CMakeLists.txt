@@ -42,6 +42,7 @@ target_include_directories(native_script_bom PUBLIC include PRIVATE vendor/utfcp
 add_library(legacy_text STATIC src/legacy_text.cpp src/native_legacy_import.cpp)
 add_library(native_name_order STATIC src/native_name_order.cpp)
 target_include_directories(native_name_order PUBLIC include)
+target_link_libraries(native_name_order PUBLIC unicode_services)
 target_compile_options(native_name_order PRIVATE /W4 /utf-8 /EHsc)
 add_executable(native_name_order_tests tests/native_name_order_tests.cpp)
 target_link_libraries(native_name_order_tests PRIVATE native_name_order)
