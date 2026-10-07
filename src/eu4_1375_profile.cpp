@@ -10,7 +10,7 @@ const ImageProfile& eu4_1375_profile() {
             {0x1fb0000,0x4b4fb4,ImageAccess::write,"game globals"}
         },
         {
-            {0xa4b48c,"488d55b848837dd010480f4355b84c8b45c8488bcbe84a7e64ff","person_name_hook"},
+            {0xa4b48c,"488d55b848837dd010480f4355b84c8b45c8488bcbe84a7e64ffc745b001000000488b55d04883fa10723148ffc2488b4db8488bc14881fa0010","person_name_hook"},
             {0x15989d8,"b8007d0000443bf8440f4df8","text_limit_hook"},
             {0x19fad70,"40554883ec60488d6c242048","native text/font code"},
             {0x1595c9b,"488b85301100004883bcf82001000000","font_lookup_hook"},
