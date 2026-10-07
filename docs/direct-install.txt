@@ -25,7 +25,7 @@ EU4UnicodePatch.README.txt
 主包使用系统字体，基础图集在游戏加载时生成，不附字体文件或预生成图集。需要补充生僻字时，下载
 @FONT_PACKAGE@，同样覆盖进游戏目录后重启。
 三个字体文件位于 plugins/eu4_unicode_patch/fonts/，安装后仍优先使用系统字体。
-删除 fonts/ 文件夹即可取消可选字库；v0.1.1 留下的字库也按可选字体使用。
+删除 fonts/ 文件夹即可取消可选字库。
 
 旧双字节补丁
 本包的加载器跳过 plugins/plugin64.dll、开发探针 eu4_unicode_probe.dll
@@ -34,12 +34,9 @@ EU4UnicodePatch.README.txt
 
 汉化
 本包提供编码、字体和输入支持，不附带完整中文翻译。
-汉化本地化支持 UTF-8 和 UTF-8 BOM；旧双字节转义汉化需要先迁移。
+支持 UTF-8、UTF-8 BOM 和 EU4dll 双字节转义汉化。旧转义在本地化、GUI 和脚本导入时转为 UTF-8，无需修改模组文件。
 模组字体按游戏加载顺序保留，支持原版同名覆盖和自定义路径。
 保留模组原有字形和字宽，缺字生成在补充图集页面。
-
-更新
-退出游戏后用新玩家包覆盖同一游戏目录。存档与用户设置保留。旧版留下的基础图集不再使用，字体缓存会自动生成。
 
 卸载
 退出游戏，删除 plugins/eu4_unicode_patch.dll、plugins/eu4_unicode_patch/、
