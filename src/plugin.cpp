@@ -651,15 +651,16 @@ void editor_vertical(void* widget,bool down,bool extend) {
 }
 bool editor_key(void* widget,const KeyEvent* event) {
     try {
+        if(event->key==27&&eu4unicode::exit_native_editor()) return true;
         const auto composing=eu4unicode::native_ime_owns_edit_keys();
         if(composing&&(event->key==8||event->key==127||event->key==13||
            (event->key>=0x4000004a&&event->key<=0x40000052))) return true;
-        if((event->modifiers==1&&(event->key=='z'||event->key=='y'))||(event->modifiers==5&&event->key=='z')) {
+        if(event->key=='z'&&(event->modifiers==1||event->modifiers==5)) {
             if(composing) return true;
             const auto found=editor_histories.find(widget);
             if(found!=editor_histories.end()) {
                 const auto state=eu4unicode::native_edit_state(widget);
-                const auto target=event->key=='z'&&event->modifiers==1?found->second->history.undo(state):found->second->history.redo(state);
+                const auto target=event->modifiers==1?found->second->history.undo(state):found->second->history.redo(state);
                 if(target) { eu4unicode::native_edit_restore(widget,*target);clear_editor_affinity(); }
             }
             return true;
@@ -1535,6 +1536,7 @@ bool initialize(HMODULE module) {
     if(experimental_input) {
         eu4unicode::start_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735ae0);
         eu4unicode::stop_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735af0);
+        eu4unicode::native_editor_blur=blur_editor_ime_rect;
         eu4unicode::native_keyboard_state=reinterpret_cast<eu4unicode::NativeKeyboardState>(image+0x1734600);
         eu4unicode::native_keyboard_key=reinterpret_cast<eu4unicode::NativeKeyboardKey>(image+0x174de00);
         eu4unicode::configure_native_editor_text(image);

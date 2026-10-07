@@ -15,8 +15,10 @@ void require(bool condition,const char* message) {
 HIMC modeled_context=nullptr;
 std::u16string preedit;
 LONG cursor=0;
+int blur_calls=0;
 std::optional<LONG> length_override;
 decltype(&ImmGetCompositionStringW) original_read=nullptr;
+void blur_editor(void* owner) { ++blur_calls;eu4unicode::blur_native_editor(owner); }
 LONG WINAPI read_preedit(HIMC context,DWORD index,LPVOID buffer,DWORD capacity) {
     if(context!=modeled_context) return original_read(context,index,buffer,capacity);
     if(index==GCS_CURSORPOS) return cursor;
@@ -48,8 +50,8 @@ struct Fixture {
         eu4unicode::clear_native_composition();
         ImmAssociateContext(window,previous);ImmDestroyContext(first);ImmDestroyContext(second);DestroyWindow(window);
     }
-    void send(UINT message,WPARAM parameter=0,LPARAM flags=0) {
-        eu4unicode::show_native_ime_candidates(window,message,parameter,&flags,video.data());
+    int send(UINT message,WPARAM parameter=0,LPARAM flags=0) {
+        return eu4unicode::show_native_ime_candidates(window,message,parameter,&flags,video.data());
     }
     void compose() {
         preedit=u"zhongwen";cursor=3;length_override.reset();
@@ -94,4 +96,20 @@ void verify_native_ime_composition() {
     fixture.compose();cursor=99;fixture.send(WM_IME_COMPOSITION,0,GCS_COMPSTR|GCS_CURSORPOS);fixture.released();
     int editor=0;
     eu4unicode::focus_native_editor(&editor);fixture.compose();eu4unicode::blur_native_editor(&editor);fixture.released();
+    const auto saved_blur=eu4unicode::native_editor_blur;
+    eu4unicode::native_editor_blur=blur_editor;
+    require(!eu4unicode::exit_native_editor(),"Escape without a focused editor must remain a game key");
+    require(fixture.send(WM_KEYDOWN,VK_ESCAPE,0x10001)==0,"Unfocused Escape must reach the native game key handler");
+    eu4unicode::focus_native_editor(&editor);
+    fixture.send(WM_KEYDOWN,'A',0x1e0001);
+    require(eu4unicode::focused_native_editor()==&editor&&blur_calls==0,"Typing must keep editor focus");
+    require(fixture.send(WM_KEYDOWN,VK_ESCAPE,0x10001)==1,"Focused Escape must be consumed before game shortcuts");
+    require(!eu4unicode::focused_native_editor()&&blur_calls==1,"Escape must release the native editor focus");
+    fixture.released();
+    eu4unicode::focus_native_editor(&editor);fixture.compose();
+    fixture.send(WM_KEYDOWN,VK_PROCESSKEY,0x1e0001);
+    require(eu4unicode::focused_native_editor()==&editor&&blur_calls==1,"An IME-owned letter must keep focus");
+    require(fixture.send(WM_KEYDOWN,VK_PROCESSKEY,0x10001)==1,"IME-owned Escape must be consumed before game shortcuts");
+    require(!eu4unicode::focused_native_editor()&&blur_calls==2,"IME-owned Escape must cancel preedit and release focus");
+    fixture.released();eu4unicode::native_editor_blur=saved_blur;
 }

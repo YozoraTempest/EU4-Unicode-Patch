@@ -18,7 +18,7 @@ bool stop_saw_preedit=false;
 void start_input() { ++starts; }
 void stop_input() { ++stops;stop_saw_preedit=eu4unicode::native_composition().active; }
 HIMC next_context=nullptr;
-int native_handler(HWND window,UINT message,WPARAM,LPARAM* flags,void* video) {
+int native_handler(HWND window,UINT message,WPARAM parameter,LPARAM* flags,void* video) {
     ++calls;
     if(!video) return 0;
     const auto data=static_cast<const std::byte*>(video);
@@ -28,6 +28,7 @@ int native_handler(HWND window,UINT message,WPARAM,LPARAM* flags,void* video) {
     if(message==WM_IME_SETCONTEXT) { *flags=0;return 0; }
     if(message==WM_INPUTLANGCHANGE&&next_context) ImmAssociateContext(window,next_context);
     if(message==WM_IME_COMPOSITION&&(*flags&GCS_RESULTSTR)) ++commits;
+    if(message==WM_KEYDOWN) return parameter==VK_PROCESSKEY?1:0;
     return 1;
 }
 void require_at(bool condition,int line) {

@@ -11,6 +11,7 @@ namespace eu4unicode {
 NativeImeMessage original_ime_message=nullptr;
 NativeImeRect original_ime_rect=nullptr;
 NativeTextInputAction start_native_text_input=nullptr,stop_native_text_input=nullptr;
+NativeEditorBlur native_editor_blur=nullptr;
 namespace {
 thread_local void* focused_editor=nullptr;
 std::mutex composition_mutex;
@@ -87,8 +88,15 @@ void restore_ime_position(HWND window,void* video,std::uint32_t candidate_mask=1
 int show_native_ime_candidates(HWND window,UINT message,WPARAM parameter,LPARAM* flags,void* video) {
     const bool active=ime_enabled(video);
     const auto incoming=flags?*flags:0;
+    // SDL has already called TranslateMessage, so ImmGetVirtualKey can no
+    // longer recover VK_PROCESSKEY. The original hardware scan code remains
+    // in lParam even while the IME owns preedit.
+    const bool escape=message==WM_KEYDOWN&&(parameter==VK_ESCAPE||
+        (parameter==VK_PROCESSKEY&&MapVirtualKeyW(static_cast<UINT>((incoming>>16)&0xff),
+            MAPVK_VSC_TO_VK)==VK_ESCAPE));
     update_composition(window,message,incoming,active);
     const auto trapped=original_ime_message(window,message,parameter,flags,video);
+    if(escape&&exit_native_editor()) return 1;
     // SDL clears all WM_IME_SETCONTEXT UI flags. Preserve the caller's
     // requested native candidate/reading UI; SDL still owns text commits.
     if(active&&flags&&message==WM_IME_SETCONTEXT)
@@ -123,6 +131,10 @@ bool native_ime_owns_edit_keys() {
 }
 void clear_native_composition() noexcept { try { std::lock_guard<std::mutex> lock(composition_mutex);composition={}; } catch(...) {} }
 void* focused_native_editor() noexcept { return focused_editor; }
+bool exit_native_editor() {
+    if(!focused_editor) return false;
+    native_editor_blur(focused_editor);return true;
+}
 void blur_native_editor(void* owner) {
     if(!owner||focused_editor!=owner) return;
     focused_editor=nullptr;
