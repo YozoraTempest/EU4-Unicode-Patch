@@ -10,7 +10,9 @@
 namespace eu4unicode {
 NativeImeMessage original_ime_message=nullptr;
 NativeImeRect original_ime_rect=nullptr;
+NativeTextInputAction start_native_text_input=nullptr,stop_native_text_input=nullptr;
 namespace {
+thread_local void* focused_editor=nullptr;
 std::mutex composition_mutex;
 NativeComposition composition;
 void update_composition(HWND window,UINT message,WPARAM parameter,LPARAM flags,bool active) noexcept {
@@ -109,6 +111,20 @@ int show_native_ime_candidates(HWND window,UINT message,WPARAM parameter,LPARAM*
 }
 NativeComposition native_composition() { std::lock_guard<std::mutex> lock(composition_mutex);return composition; }
 void clear_native_composition() noexcept { try { std::lock_guard<std::mutex> lock(composition_mutex);composition={}; } catch(...) {} }
+void* focused_native_editor() noexcept { return focused_editor; }
+void blur_native_editor(void* owner) {
+    if(!owner||focused_editor!=owner) return;
+    focused_editor=nullptr;
+    clear_native_composition();
+    stop_native_text_input();
+}
+void focus_native_editor(void* owner) {
+    if(!owner||focused_editor==owner) return;
+    if(focused_editor) blur_native_editor(focused_editor);
+    clear_native_composition();
+    focused_editor=owner;
+    start_native_text_input();
+}
 void position_native_ime_candidates(void* device,const ImeRect* rect) {
     original_ime_rect(device,rect);
     if(!device||!rect) return;

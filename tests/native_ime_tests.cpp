@@ -11,6 +11,10 @@ void verify_native_editor_selections();
 
 namespace {
 int calls=0,commits=0;
+int starts=0,stops=0;
+bool stop_saw_preedit=false;
+void start_input() { ++starts; }
+void stop_input() { ++stops;stop_saw_preedit=eu4unicode::native_composition().active; }
 HIMC next_context=nullptr;
 int native_handler(HWND window,UINT message,WPARAM,LPARAM* flags,void* video) {
     ++calls;
@@ -67,6 +71,20 @@ int main() {
         require(eu4unicode::native_composition().active);
         require(eu4unicode::show_native_ime_candidates(nullptr,WM_IME_ENDCOMPOSITION,0,&lifecycle,video.data())==1);
         require(!eu4unicode::native_composition().active);
+        eu4unicode::start_native_text_input=start_input;eu4unicode::stop_native_text_input=stop_input;
+        int editor_a=0,editor_b=0;
+        eu4unicode::focus_native_editor(&editor_a);eu4unicode::focus_native_editor(&editor_a);
+        require(starts==1&&stops==0&&eu4unicode::focused_native_editor()==&editor_a);
+        eu4unicode::show_native_ime_candidates(nullptr,WM_IME_STARTCOMPOSITION,0,&lifecycle,video.data());
+        eu4unicode::focus_native_editor(&editor_b);
+        require(starts==2&&stops==1&&!stop_saw_preedit&&!eu4unicode::native_composition().active);
+        eu4unicode::blur_native_editor(&editor_a);
+        require(stops==1&&eu4unicode::focused_native_editor()==&editor_b);
+        eu4unicode::show_native_ime_candidates(nullptr,WM_IME_STARTCOMPOSITION,0,&lifecycle,video.data());
+        eu4unicode::blur_native_editor(&editor_b);eu4unicode::blur_native_editor(&editor_b);
+        require(stops==2&&!stop_saw_preedit&&!eu4unicode::focused_native_editor()&&!eu4unicode::native_composition().active);
+        eu4unicode::focus_native_editor(nullptr);eu4unicode::blur_native_editor(nullptr);
+        require(starts==2&&stops==2);
         eu4unicode::show_native_ime_candidates(nullptr,WM_IME_STARTCOMPOSITION,0,&lifecycle,video.data());
         eu4unicode::show_native_ime_candidates(nullptr,WM_KILLFOCUS,0,&lifecycle,video.data());
         require(!eu4unicode::native_composition().active);
@@ -127,6 +145,6 @@ int main() {
         const eu4unicode::ImeRect invalid{(std::numeric_limits<int>::max)(),170,2,20};
         eu4unicode::position_native_ime_candidates(device.data(),&invalid);geometry(ime.second,0,start);
         composition_geometry(ime.second,changed);
-        std::puts("PASS: native IME UI flags, lifecycle propagation, context replacement, candidate-list geometry and single commit dispatch.");
+        std::puts("PASS: native IME UI flags, lifecycle propagation, context replacement, candidate-list geometry, editor focus ownership and single commit dispatch.");
     } catch(const std::exception& error) { std::fprintf(stderr,"%s\n",error.what());return 1; }
 }

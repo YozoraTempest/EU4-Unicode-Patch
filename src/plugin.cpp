@@ -204,7 +204,7 @@ using EditorKey=bool(*)(void*,const KeyEvent*);
 EditorKey original_editor_key=nullptr;
 using EditorAction=void(*)(void*);
 EditorAction original_editor_left=nullptr,original_editor_right=nullptr,original_editor_selection=nullptr;
-EditorAction original_editor_paint=nullptr,original_editor_focus=nullptr;
+EditorAction original_editor_paint=nullptr,original_editor_focus=nullptr,original_editor_blur=nullptr;
 struct InputRect { int x,y,w,h; };
 struct EditorImeRectState { void* window=nullptr; void* owner=nullptr; InputRect rect{}; };
 thread_local EditorImeRectState editor_ime_rect_state{};
@@ -222,6 +222,16 @@ void focus_editor_ime_rect(void* outer) {
         ~FocusScope() { --editor_focus_depth; }
     } scope;
     original_editor_focus(outer);
+    const auto base=static_cast<std::byte*>(outer);
+    const auto manager=*reinterpret_cast<std::byte**>(image+0x23494f0);
+    if(manager&&base[0x260]==std::byte{1}&&
+       *reinterpret_cast<void**>(manager+0x210)==base+0x1d0)
+        eu4unicode::focus_native_editor(outer);
+}
+void blur_editor_ime_rect(void* outer) {
+    original_editor_blur(outer);
+    eu4unicode::blur_native_editor(outer);
+    if(editor_ime_rect_state.owner==outer) editor_ime_rect_state={};
 }
 void paint_editor_ime_rect(void* outer) {
     eu4unicode::EditorPresentation presentation(outer);
@@ -411,11 +421,14 @@ void* create_editor_sprite(void* manager,const EngineString* name,void* context,
     return sprite;
 }
 void destroy_editor(void* outer) {
+    eu4unicode::blur_native_editor(outer);
+    if(editor_ime_rect_state.owner==outer) editor_ime_rect_state={};
     forget_editor_history(static_cast<std::byte*>(outer)+0xc8);
     if(editor_selections) editor_selections->release(outer,*reinterpret_cast<void**>(static_cast<std::byte*>(outer)+0x1f8));
     original_editor_destroy(outer);
 }
 void hide_editor(void* outer) {
+    if(eu4unicode::focused_native_editor()==outer) blur_editor_ime_rect(outer);
     if(editor_selections) editor_selections->hide(outer);
     original_editor_hide(outer);
 }
@@ -1330,6 +1343,10 @@ bool initialize(HMODULE module) {
     // Allocate all patch/rollback buffers before modifying any instruction.
     const DataPatch constants[]={ {0x1595c88,bytes("ff000000"),bytes("ffff1000")},
         {0x16c2cba,bytes("00000001"),bytes("00000004")},
+        // Use the native IME UI policy from SDL's IME_SHOW_UI path: retain
+        // IMM and the normal TSF manager, but skip the additional UI-less
+        // manager and sinks, which request application-managed candidate UI.
+        {0x1764e56,bytes("4c8db368150000"),experimental_input?bytes("e9270100009090"):bytes("4c8db368150000")},
         // Save-name builders and save/load selection call the CP1252 transliterator.
         // Skip only those calls: their strings already contain UTF-8. The
         // later filename-character validation and other callers stay native.
@@ -1515,6 +1532,8 @@ bool initialize(HMODULE module) {
         log("Dynamic font atlas hook creation failed; no hooks enabled."); return false;
     }
     if(experimental_input) {
+        eu4unicode::start_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735ae0);
+        eu4unicode::stop_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735af0);
         eu4unicode::configure_native_editor_text(image);
         eu4unicode::configure_editor_presentation(image);
         if(MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),
@@ -1550,6 +1569,8 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_lines))!=MH_OK ||
            MH_CreateHook(image+0x1535250,reinterpret_cast<void*>(focus_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_focus))!=MH_OK ||
+           MH_CreateHook(image+0x15353f0,reinterpret_cast<void*>(blur_editor_ime_rect),
+             reinterpret_cast<void**>(&original_editor_blur))!=MH_OK ||
            MH_CreateHook(image+0x14db940,reinterpret_cast<void*>(create_editor_sprite),
              reinterpret_cast<void**>(&original_editor_sprite_factory))!=MH_OK ||
            MH_CreateHook(image+0x1533d90,reinterpret_cast<void*>(destroy_editor),
