@@ -37,3 +37,5 @@ extern void(*native_name_log)(const char*);
 }
 extern "C" void* append_person_name(eu4unicode::EngineString* given,
     const eu4unicode::EngineString* suffix,const eu4unicode::NativeNamePerson* person) noexcept;
+extern "C" void* append_generated_name(eu4unicode::EngineString* given,const char* family,
+    std::uint64_t family_size,const eu4unicode::NativeNameCulture* culture) noexcept;

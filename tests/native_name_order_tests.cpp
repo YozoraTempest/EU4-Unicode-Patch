@@ -43,6 +43,18 @@ void check(const std::string& first,const std::string& last,const std::string& e
         std::cerr<<"Name order test failed: "<<culture<<" / "<<first<<" / "<<last<<" -> "<<result<<'\n';std::exit(1);
     }
 }
+void generated(const std::string& first,const std::string& last,const std::string& expected,
+               const std::string& culture,bool formatted=true) {
+    auto given=borrowed(first);
+    NativeNameCulture native_culture{};native_culture.key=borrowed(culture);
+    appends=assignments=0;
+    if(append_generated_name(&given,last.data(),last.size(),&native_culture)!=&given||
+       result!=expected||std::string_view(given.data(),static_cast<std::size_t>(given.size))!=first||
+       assignments!=(formatted?1:0)||appends!=(formatted?0:1)) {
+        std::cerr<<"Generated name test failed: "<<culture<<" / "<<first<<" / "<<last<<" -> "<<result<<'\n';
+        std::exit(1);
+    }
+}
 }
 int main() {
     native_name_append=append;native_name_assign=assign;
@@ -76,12 +88,31 @@ int main() {
     check(""," Hunyadi","Hunyadi",true,"hungarian");
     check("Reimu"," ¿Hakurei·","Hakurei·Reimu",true);
     check("János"," ¿Hunyadi ","Hunyadi János",true,"hungarian");
+    generated("上珍 ","戴","戴上珍","chihan");
+    generated("雄英 ","沈","沈雄英","chihan");
+    generated("可喜 ","顾","顾可喜","chihan");
+    generated("János ","Hunyadi","Hunyadi János","hungarian");
+    generated("亚诺什 ","匈雅提","匈雅提 亚诺什","hungarian");
+    generated("家康 ","徳川","徳川家康","togoku");
+    generated("영수 ","김","김영수","korean");
+    generated("Ieyasu ","Tokugawa","Tokugawa Ieyasu","japanese");
+    generated("Jean Philippe ","de Valois","Jean Philippe de Valois","french",false);
+    generated("姓名 ","", "姓名 ","chihan",false);
+    generated("", "戴", "戴","chihan");
+    generated("𠮷𠮷𠮷𠮷𠮷 ","王王王王王王","王王王王王王𠮷𠮷𠮷𠮷𠮷","chihan");
+    generated("德操 ","¿危","危德操","custom_culture");
+    generated("德操 ",std::string(1,char(0xbf))+"危","危德操","custom_culture");
+    generated("A ","x¿B","A x¿B","custom_culture",false);
+    generated("János ","¿Hunyadi","Hunyadi János","hungarian");
     policies["EU4_UNICODE_NAME_hungarian"]="surname_first middle_dot";
     check("亚诺什"," 匈雅提","匈雅提·亚诺什",true,"hungarian");
     check("亚诺什"," ¿匈雅提·","匈雅提·亚诺什",true,"hungarian");
+    generated("亚诺什 ","匈雅提","匈雅提·亚诺什","hungarian");
     policies["EU4_UNICODE_NAME_hungarian"]="given_first space";
     check("János"," Hunyadi","János Hunyadi",true,"hungarian");
     check("János"," ¿Hunyadi","Hunyadi János",true,"hungarian");
+    generated("János ","Hunyadi","János Hunyadi","hungarian");
+    generated("János ","¿Hunyadi","Hunyadi János","hungarian");
     policies["EU4_UNICODE_NAME_custom_culture"]="surname_first none";
     check("名字"," 姓氏","姓氏名字",true,"custom_culture");
     policies["EU4_UNICODE_NAME_custom_culture"]="given_first none";

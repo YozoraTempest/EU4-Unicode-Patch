@@ -879,6 +879,8 @@ public:
 extern "C" {
 std::uintptr_t g_person_name_return;
 void person_name_hook();
+std::uintptr_t g_generated_name_return;
+void generated_name_hook();
 std::uintptr_t g_main_draw_return,g_main_copy_return,g_main_measure_return;
 std::uintptr_t g_ui_vertices,g_main_page_return,g_button_page_return;
 std::uintptr_t g_main_geometry_entry_return,g_main_geometry_end_return;
@@ -1202,6 +1204,7 @@ bool initialize(HMODULE module) {
 
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
     g_person_name_return=address(0xa4b4a6);
+    g_generated_name_return=address(0x314301);
     eu4unicode::native_name_append=reinterpret_cast<eu4unicode::NameAppend>(address(0x932f0));
     eu4unicode::native_name_assign=reinterpret_cast<eu4unicode::NameAssign>(address(0x95110));
     eu4unicode::native_name_policy_lookup=lookup_name_policy;
@@ -1360,6 +1363,7 @@ bool initialize(HMODULE module) {
     PatchInitialization transaction(constants);
     struct Hook { std::size_t rva; void* callback; };
     const Hook hooks[]={ {0xa4b48c,reinterpret_cast<void*>(person_name_hook)},
+        {0x3142f2,reinterpret_cast<void*>(generated_name_hook)},
         {0x16fd650,reinterpret_cast<void*>(eu4unicode::import_legacy_localization)},
         {0x15995b0,reinterpret_cast<void*>(main_copy_hook)}, {0x1599728,reinterpret_cast<void*>(main_measure_hook)},
         {0x159a796,reinterpret_cast<void*>(main_draw_hook)}, {0x159b687,reinterpret_cast<void*>(bitmap_measure_hook)},
