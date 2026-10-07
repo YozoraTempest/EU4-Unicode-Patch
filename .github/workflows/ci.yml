@@ -53,4 +53,6 @@ jobs:
             build/executable_compatibility_tests.exe
             build/legacy_decode.exe
             build/legacy_text_tests.exe
+            build/native_name_order_tests.exe
+            build/native_ime_tests.exe
             build/open-font-preview.png

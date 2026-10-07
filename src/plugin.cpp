@@ -14,8 +14,10 @@
 #include "native_steam_presence.hpp"
 #include "native_script_bom.hpp"
 #include "native_legacy_import.hpp"
+#include "native_name_order.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
+#include "native_keyboard.hpp"
 #include "native_editor_selection.hpp"
 #include "native_font_atlas.hpp"
 #include "native_font_draw.hpp"
@@ -74,6 +76,17 @@ void log(const char* message) {
     FlushFileBuffers(log_file);
 }
 using eu4unicode::EngineString;
+const char* lookup_name_policy(const char* key) {
+    const auto manager=*reinterpret_cast<const std::byte* const*>(image+0x2357b20);
+    if(!manager) return nullptr;
+    const auto collection=*reinterpret_cast<const void* const*>(manager);
+    if(!collection) return nullptr;
+    // The native localization index uses FNV-1, not FNV-1a. Policy keys are ASCII.
+    std::uint32_t hash=0x811c9dc5;
+    for(auto p=key;*p;++p) { hash*=0x1000193;hash^=static_cast<unsigned char>(*p); }
+    using Lookup=const char*(*)(const void*,std::uint64_t);
+    return reinterpret_cast<Lookup>(image+0x16fb030)(collection,hash);
+}
 using SubstringText=EngineString*(*)(const EngineString*,EngineString*,int,int);
 SubstringText original_layout_substring=nullptr;
 EngineString* layout_substring(const EngineString* source,EngineString* target,int begin,int end) {
@@ -192,7 +205,7 @@ using EditorKey=bool(*)(void*,const KeyEvent*);
 EditorKey original_editor_key=nullptr;
 using EditorAction=void(*)(void*);
 EditorAction original_editor_left=nullptr,original_editor_right=nullptr,original_editor_selection=nullptr;
-EditorAction original_editor_paint=nullptr,original_editor_focus=nullptr;
+EditorAction original_editor_paint=nullptr,original_editor_focus=nullptr,original_editor_blur=nullptr;
 struct InputRect { int x,y,w,h; };
 struct EditorImeRectState { void* window=nullptr; void* owner=nullptr; InputRect rect{}; };
 thread_local EditorImeRectState editor_ime_rect_state{};
@@ -210,6 +223,16 @@ void focus_editor_ime_rect(void* outer) {
         ~FocusScope() { --editor_focus_depth; }
     } scope;
     original_editor_focus(outer);
+    const auto base=static_cast<std::byte*>(outer);
+    const auto manager=*reinterpret_cast<std::byte**>(image+0x23494f0);
+    if(manager&&base[0x260]==std::byte{1}&&
+       *reinterpret_cast<void**>(manager+0x210)==base+0x1d0)
+        eu4unicode::focus_native_editor(outer);
+}
+void blur_editor_ime_rect(void* outer) {
+    original_editor_blur(outer);
+    eu4unicode::blur_native_editor(outer);
+    if(editor_ime_rect_state.owner==outer) editor_ime_rect_state={};
 }
 void paint_editor_ime_rect(void* outer) {
     eu4unicode::EditorPresentation presentation(outer);
@@ -399,11 +422,14 @@ void* create_editor_sprite(void* manager,const EngineString* name,void* context,
     return sprite;
 }
 void destroy_editor(void* outer) {
+    eu4unicode::blur_native_editor(outer);
+    if(editor_ime_rect_state.owner==outer) editor_ime_rect_state={};
     forget_editor_history(static_cast<std::byte*>(outer)+0xc8);
     if(editor_selections) editor_selections->release(outer,*reinterpret_cast<void**>(static_cast<std::byte*>(outer)+0x1f8));
     original_editor_destroy(outer);
 }
 void hide_editor(void* outer) {
+    if(eu4unicode::focused_native_editor()==outer) blur_editor_ime_rect(outer);
     if(editor_selections) editor_selections->hide(outer);
     original_editor_hide(outer);
 }
@@ -625,15 +651,16 @@ void editor_vertical(void* widget,bool down,bool extend) {
 }
 bool editor_key(void* widget,const KeyEvent* event) {
     try {
-        const auto composition=eu4unicode::native_composition();
-        if(composition.active&&(event->key==8||event->key==127||event->key==13||
+        if(event->key==27&&eu4unicode::exit_native_editor()) return true;
+        const auto composing=eu4unicode::native_ime_owns_edit_keys();
+        if(composing&&(event->key==8||event->key==127||event->key==13||
            (event->key>=0x4000004a&&event->key<=0x40000052))) return true;
-        if((event->modifiers==1&&(event->key=='z'||event->key=='y'))||(event->modifiers==5&&event->key=='z')) {
-            if(composition.active) return true;
+        if(event->key=='z'&&(event->modifiers==1||event->modifiers==5)) {
+            if(composing) return true;
             const auto found=editor_histories.find(widget);
             if(found!=editor_histories.end()) {
                 const auto state=eu4unicode::native_edit_state(widget);
-                const auto target=event->key=='z'&&event->modifiers==1?found->second->history.undo(state):found->second->history.redo(state);
+                const auto target=event->modifiers==1?found->second->history.undo(state):found->second->history.redo(state);
                 if(target) { eu4unicode::native_edit_restore(widget,*target);clear_editor_affinity(); }
             }
             return true;
@@ -865,6 +892,10 @@ public:
 }
 
 extern "C" {
+std::uintptr_t g_person_name_return;
+void person_name_hook();
+std::uintptr_t g_generated_name_return;
+void generated_name_hook();
 std::uintptr_t g_main_draw_return,g_main_copy_return,g_main_measure_return;
 std::uintptr_t g_ui_vertices,g_main_page_return,g_button_page_return;
 std::uintptr_t g_main_geometry_entry_return,g_main_geometry_end_return;
@@ -1187,6 +1218,12 @@ bool initialize(HMODULE module) {
     log(checked_message);
 
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
+    g_person_name_return=address(0xa4b4a6);
+    g_generated_name_return=address(0x314301);
+    eu4unicode::native_name_append=reinterpret_cast<eu4unicode::NameAppend>(address(0x932f0));
+    eu4unicode::native_name_assign=reinterpret_cast<eu4unicode::NameAssign>(address(0x95110));
+    eu4unicode::native_name_policy_lookup=lookup_name_policy;
+    eu4unicode::native_name_log=log;
     eu4unicode::native_paragraph_color=reinterpret_cast<eu4unicode::NativeParagraphColor>(address(0x15a0390));
     g_main_draw_return=address(0x159a7ac);
     g_main_copy_return=address(0x15995ce);
@@ -1308,6 +1345,10 @@ bool initialize(HMODULE module) {
     // Allocate all patch/rollback buffers before modifying any instruction.
     const DataPatch constants[]={ {0x1595c88,bytes("ff000000"),bytes("ffff1000")},
         {0x16c2cba,bytes("00000001"),bytes("00000004")},
+        // Use the native IME UI policy from SDL's IME_SHOW_UI path: retain
+        // IMM and the normal TSF manager, but skip the additional UI-less
+        // manager and sinks, which request application-managed candidate UI.
+        {0x1764e56,bytes("4c8db368150000"),experimental_input?bytes("e9270100009090"):bytes("4c8db368150000")},
         // Save-name builders and save/load selection call the CP1252 transliterator.
         // Skip only those calls: their strings already contain UTF-8. The
         // later filename-character validation and other callers stay native.
@@ -1340,7 +1381,9 @@ bool initialize(HMODULE module) {
     if(MH_Initialize()!=MH_OK) { log("MinHook initialization failed."); return false; }
     PatchInitialization transaction(constants);
     struct Hook { std::size_t rva; void* callback; };
-    const Hook hooks[]={ {0x16fd650,reinterpret_cast<void*>(eu4unicode::import_legacy_localization)},
+    const Hook hooks[]={ {0xa4b48c,reinterpret_cast<void*>(person_name_hook)},
+        {0x3142f2,reinterpret_cast<void*>(generated_name_hook)},
+        {0x16fd650,reinterpret_cast<void*>(eu4unicode::import_legacy_localization)},
         {0x15995b0,reinterpret_cast<void*>(main_copy_hook)}, {0x1599728,reinterpret_cast<void*>(main_measure_hook)},
         {0x159a796,reinterpret_cast<void*>(main_draw_hook)}, {0x159b687,reinterpret_cast<void*>(bitmap_measure_hook)},
         {0x159af87,reinterpret_cast<void*>(main_page_hook)},
@@ -1491,9 +1534,20 @@ bool initialize(HMODULE module) {
         log("Dynamic font atlas hook creation failed; no hooks enabled."); return false;
     }
     if(experimental_input) {
+        eu4unicode::start_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735ae0);
+        eu4unicode::stop_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735af0);
+        eu4unicode::native_editor_blur=blur_editor_ime_rect;
+        eu4unicode::native_editor_history=[](void* owner,bool redo) {
+            const KeyEvent event{'z',0,redo?5u:1u};
+            editor_key(static_cast<std::byte*>(owner)+0xc8,&event);
+        };
+        eu4unicode::native_keyboard_state=reinterpret_cast<eu4unicode::NativeKeyboardState>(image+0x1734600);
+        eu4unicode::native_keyboard_key=reinterpret_cast<eu4unicode::NativeKeyboardKey>(image+0x174de00);
         eu4unicode::configure_native_editor_text(image);
         eu4unicode::configure_editor_presentation(image);
-        if(MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),
+        if(MH_CreateHook(image+0x173ab00,reinterpret_cast<void*>(eu4unicode::pump_native_keyboard),
+             reinterpret_cast<void**>(&eu4unicode::original_keyboard_pump))!=MH_OK ||
+           MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),
              reinterpret_cast<void**>(&eu4unicode::original_ime_message))!=MH_OK ||
            MH_CreateHook(image+0x17657c0,reinterpret_cast<void*>(eu4unicode::position_native_ime_candidates),
              reinterpret_cast<void**>(&eu4unicode::original_ime_rect))!=MH_OK ||
@@ -1526,6 +1580,8 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_lines))!=MH_OK ||
            MH_CreateHook(image+0x1535250,reinterpret_cast<void*>(focus_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_focus))!=MH_OK ||
+           MH_CreateHook(image+0x15353f0,reinterpret_cast<void*>(blur_editor_ime_rect),
+             reinterpret_cast<void**>(&original_editor_blur))!=MH_OK ||
            MH_CreateHook(image+0x14db940,reinterpret_cast<void*>(create_editor_sprite),
              reinterpret_cast<void**>(&original_editor_sprite_factory))!=MH_OK ||
            MH_CreateHook(image+0x1533d90,reinterpret_cast<void*>(destroy_editor),
@@ -1549,6 +1605,7 @@ bool initialize(HMODULE module) {
             reinterpret_cast<eu4unicode::NativeStringDestroy>(image+0x95660));
         log("UTF-8 input, multiline grapheme editing, IME presentation and undo enabled.");
         log("Native Windows IME candidate UI and caret exclusion rectangle enabled.");
+        log("Native Win-key release recovery enabled.");
     }
     // Hook creation has not changed the executable. Recheck immediately before writes.
     const auto activation=eu4unicode::check_executable_image(image,eu4unicode::eu4_1375_profile());
