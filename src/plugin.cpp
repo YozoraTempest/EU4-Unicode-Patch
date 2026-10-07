@@ -17,6 +17,7 @@
 #include "native_name_order.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
+#include "native_keyboard.hpp"
 #include "native_editor_selection.hpp"
 #include "native_font_atlas.hpp"
 #include "native_font_draw.hpp"
@@ -1534,9 +1535,13 @@ bool initialize(HMODULE module) {
     if(experimental_input) {
         eu4unicode::start_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735ae0);
         eu4unicode::stop_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735af0);
+        eu4unicode::native_keyboard_state=reinterpret_cast<eu4unicode::NativeKeyboardState>(image+0x1734600);
+        eu4unicode::native_keyboard_key=reinterpret_cast<eu4unicode::NativeKeyboardKey>(image+0x174de00);
         eu4unicode::configure_native_editor_text(image);
         eu4unicode::configure_editor_presentation(image);
-        if(MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),
+        if(MH_CreateHook(image+0x173ab00,reinterpret_cast<void*>(eu4unicode::pump_native_keyboard),
+             reinterpret_cast<void**>(&eu4unicode::original_keyboard_pump))!=MH_OK ||
+           MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),
              reinterpret_cast<void**>(&eu4unicode::original_ime_message))!=MH_OK ||
            MH_CreateHook(image+0x17657c0,reinterpret_cast<void*>(eu4unicode::position_native_ime_candidates),
              reinterpret_cast<void**>(&eu4unicode::original_ime_rect))!=MH_OK ||
@@ -1594,6 +1599,7 @@ bool initialize(HMODULE module) {
             reinterpret_cast<eu4unicode::NativeStringDestroy>(image+0x95660));
         log("UTF-8 input, multiline grapheme editing, IME presentation and undo enabled.");
         log("Native Windows IME candidate UI and caret exclusion rectangle enabled.");
+        log("Native Win-key release recovery enabled.");
     }
     // Hook creation has not changed the executable. Recheck immediately before writes.
     const auto activation=eu4unicode::check_executable_image(image,eu4unicode::eu4_1375_profile());

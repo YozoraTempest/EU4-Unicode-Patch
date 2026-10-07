@@ -9,6 +9,7 @@
 #include <string>
 void verify_native_editor_selections();
 void verify_native_ime_composition();
+void verify_native_keyboard();
 
 namespace {
 int calls=0,commits=0;
@@ -147,6 +148,7 @@ int main() {
         eu4unicode::position_native_ime_candidates(device.data(),&invalid);geometry(ime.second,0,start);
         composition_geometry(ime.second,changed);
         verify_native_ime_composition();
-        std::puts("PASS: native IME UI flags, lifecycle propagation, context replacement, candidate-list geometry, editor focus ownership, live preedit key ownership and single commit dispatch.");
+        verify_native_keyboard();
+        std::puts("PASS: native IME UI flags, lifecycle propagation, context replacement, candidate-list geometry, editor focus ownership, live preedit key ownership, lost Win-key release repair and single commit dispatch.");
     } catch(const std::exception& error) { std::fprintf(stderr,"%s\n",error.what());return 1; }
 }
