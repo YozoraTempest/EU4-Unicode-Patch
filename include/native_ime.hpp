@@ -12,6 +12,8 @@ using NativeTextInputAction=void(*)();
 extern NativeTextInputAction start_native_text_input,stop_native_text_input;
 using NativeEditorBlur=void(*)(void*);
 extern NativeEditorBlur native_editor_blur;
+using NativeEditorHistory=void(*)(void*,bool);
+extern NativeEditorHistory native_editor_history;
 void focus_native_editor(void* owner);
 void blur_native_editor(void* owner);
 void* focused_native_editor() noexcept;

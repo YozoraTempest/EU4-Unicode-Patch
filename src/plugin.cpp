@@ -1537,6 +1537,10 @@ bool initialize(HMODULE module) {
         eu4unicode::start_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735ae0);
         eu4unicode::stop_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735af0);
         eu4unicode::native_editor_blur=blur_editor_ime_rect;
+        eu4unicode::native_editor_history=[](void* owner,bool redo) {
+            const KeyEvent event{'z',0,redo?5u:1u};
+            editor_key(static_cast<std::byte*>(owner)+0xc8,&event);
+        };
         eu4unicode::native_keyboard_state=reinterpret_cast<eu4unicode::NativeKeyboardState>(image+0x1734600);
         eu4unicode::native_keyboard_key=reinterpret_cast<eu4unicode::NativeKeyboardKey>(image+0x174de00);
         eu4unicode::configure_native_editor_text(image);

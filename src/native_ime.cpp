@@ -12,6 +12,7 @@ NativeImeMessage original_ime_message=nullptr;
 NativeImeRect original_ime_rect=nullptr;
 NativeTextInputAction start_native_text_input=nullptr,stop_native_text_input=nullptr;
 NativeEditorBlur native_editor_blur=nullptr;
+NativeEditorHistory native_editor_history=nullptr;
 namespace {
 thread_local void* focused_editor=nullptr;
 std::mutex composition_mutex;
@@ -91,12 +92,22 @@ int show_native_ime_candidates(HWND window,UINT message,WPARAM parameter,LPARAM*
     // SDL has already called TranslateMessage, so ImmGetVirtualKey can no
     // longer recover VK_PROCESSKEY. The original hardware scan code remains
     // in lParam even while the IME owns preedit.
-    const bool escape=message==WM_KEYDOWN&&(parameter==VK_ESCAPE||
-        (parameter==VK_PROCESSKEY&&MapVirtualKeyW(static_cast<UINT>((incoming>>16)&0xff),
-            MAPVK_VSC_TO_VK)==VK_ESCAPE));
+    const auto key=parameter==VK_PROCESSKEY?
+        MapVirtualKeyW(static_cast<UINT>((incoming>>16)&0xff),MAPVK_VSC_TO_VK):parameter;
+    const bool escape=message==WM_KEYDOWN&&key==VK_ESCAPE;
     update_composition(window,message,incoming,active);
     const auto trapped=original_ime_message(window,message,parameter,flags,video);
     if(escape&&exit_native_editor()) return 1;
+    // The native game dispatch can consume Ctrl+Shift+Z before it reaches
+    // the editor. Handle history in the window message path while focus
+    // belongs to an editor, preserving IME ownership of live preedit.
+    if(message==WM_KEYDOWN&&key=='Z'&&focused_editor&&
+       (GetKeyState(VK_CONTROL)&0x8000)&&!(GetKeyState(VK_MENU)&0x8000)&&
+       !(GetKeyState(VK_LWIN)&0x8000)&&!(GetKeyState(VK_RWIN)&0x8000)&&
+       !native_ime_owns_edit_keys()) {
+        native_editor_history(focused_editor,(GetKeyState(VK_SHIFT)&0x8000)!=0);
+        return 1;
+    }
     // SDL clears all WM_IME_SETCONTEXT UI flags. Preserve the caller's
     // requested native candidate/reading UI; SDL still owns text commits.
     if(active&&flags&&message==WM_IME_SETCONTEXT)

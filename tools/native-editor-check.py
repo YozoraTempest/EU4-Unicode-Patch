@@ -152,7 +152,10 @@ def verify(base, fn, hook, engine_string, font_source, callbacks, crt, address_h
             assert len(deleted) < len(original) and deleted.decode(), (sample, deleted)
             dispatch(widget, ord('z'), 1)
             assert current(widget) == original and offset(widget) == len(original), sample
-            dispatch(widget, ord('y'), 1)
+            old_redo = (C.c_uint32 * 3)(ord('y'), 0, 1)
+            key(widget, C.addressof(old_redo))
+            assert current(widget) == original, sample
+            dispatch(widget, ord('z'), 5)
             assert current(widget) == deleted, sample
             dispatch(widget, ord('z'), 1)
             assert current(widget) == original, sample
@@ -238,7 +241,7 @@ def verify(base, fn, hook, engine_string, font_source, callbacks, crt, address_h
         if commits[-1]['passed'] and value != sample.encode():
             dispatch(widget, ord('z'), 1)
             assert current(widget) == sample.encode() and offset(widget) == target, commits[-1]
-            dispatch(widget, ord('y'), 1)
+            dispatch(widget, ord('z'), 5)
             assert current(widget) == value and offset(widget) == expected_caret, commits[-1]
             if expected_caret:
                 dispatch(widget, 8)

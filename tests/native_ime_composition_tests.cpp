@@ -7,6 +7,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace {
 void require(bool condition,const char* message) {
@@ -18,6 +19,25 @@ LONG cursor=0;
 int blur_calls=0;
 std::optional<LONG> length_override;
 decltype(&ImmGetCompositionStringW) original_read=nullptr;
+decltype(&GetKeyState) original_key_state=nullptr;
+unsigned modifiers=0;
+std::vector<bool> history_actions;
+void* history_owner=nullptr;
+int shortcut_messages=0;
+eu4unicode::NativeImeMessage original_message=nullptr;
+SHORT WINAPI read_key_state(int key) {
+    switch(key) {
+    case VK_CONTROL:return modifiers&1?static_cast<SHORT>(0x8000):0;
+    case VK_SHIFT:return modifiers&4?static_cast<SHORT>(0x8000):0;
+    case VK_MENU:return modifiers&2?static_cast<SHORT>(0x8000):0;
+    case VK_LWIN:case VK_RWIN:return modifiers&8?static_cast<SHORT>(0x8000):0;
+    default:return original_key_state(key);
+    }
+}
+void history_action(void* owner,bool redo) { history_owner=owner;history_actions.push_back(redo); }
+int forward_message(HWND window,UINT message,WPARAM parameter,LPARAM* flags,void* video) {
+    ++shortcut_messages;return original_message(window,message,parameter,flags,video);
+}
 void blur_editor(void* owner) { ++blur_calls;eu4unicode::blur_native_editor(owner); }
 LONG WINAPI read_preedit(HIMC context,DWORD index,LPVOID buffer,DWORD capacity) {
     if(context!=modeled_context) return original_read(context,index,buffer,capacity);
@@ -32,6 +52,7 @@ struct Fixture {
     HWND window=CreateWindowExW(0,L"STATIC",L"Preedit contract",0,0,0,100,100,nullptr,nullptr,nullptr,nullptr);
     HIMC first=ImmCreateContext(),second=ImmCreateContext(),previous=nullptr;
     void* target=nullptr;
+    void* key_target=nullptr;
     alignas(void*) std::array<std::byte,0x1510> video{};
     Fixture() {
         require(window&&first&&second,"Cannot create composition fixture");
@@ -44,9 +65,14 @@ struct Fixture {
         require(target&&MH_CreateHook(target,reinterpret_cast<void*>(read_preedit),
             reinterpret_cast<void**>(&original_read))==MH_OK,"Cannot hook composition reader");
         require(MH_EnableHook(target)==MH_OK,"Cannot enable composition reader hook");
+        key_target=reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"user32.dll"),"GetKeyState"));
+        require(key_target&&MH_CreateHook(key_target,reinterpret_cast<void*>(read_key_state),
+            reinterpret_cast<void**>(&original_key_state))==MH_OK,"Cannot hook shortcut modifier reader");
+        require(MH_EnableHook(key_target)==MH_OK,"Cannot enable shortcut modifier reader");
     }
     ~Fixture() {
-        MH_DisableHook(target);MH_RemoveHook(target);MH_Uninitialize();modeled_context=nullptr;
+        MH_DisableHook(target);MH_RemoveHook(target);
+        MH_DisableHook(key_target);MH_RemoveHook(key_target);MH_Uninitialize();modeled_context=nullptr;
         eu4unicode::clear_native_composition();
         ImmAssociateContext(window,previous);ImmDestroyContext(first);ImmDestroyContext(second);DestroyWindow(window);
     }
@@ -112,4 +138,39 @@ void verify_native_ime_composition() {
     require(fixture.send(WM_KEYDOWN,VK_PROCESSKEY,0x10001)==1,"IME-owned Escape must be consumed before game shortcuts");
     require(!eu4unicode::focused_native_editor()&&blur_calls==2,"IME-owned Escape must cancel preedit and release focus");
     fixture.released();eu4unicode::native_editor_blur=saved_blur;
+    const auto saved_history=eu4unicode::native_editor_history;
+    original_message=eu4unicode::original_ime_message;
+    eu4unicode::original_ime_message=forward_message;
+    eu4unicode::native_editor_history=history_action;
+    modifiers=5;history_actions.clear();shortcut_messages=0;
+    require(fixture.send(WM_KEYDOWN,'Z',0x2c0001)==0&&history_actions.empty(),
+        "An unfocused history shortcut must remain a game key");
+    eu4unicode::focus_native_editor(&editor);
+    modifiers=0;
+    require(fixture.send(WM_KEYDOWN,'Z',0x2c0001)==0&&history_actions.empty(),
+        "Plain typing must not invoke editor history");
+    modifiers=1;
+    require(fixture.send(WM_KEYDOWN,'Z',0x2c0001)==1&&history_actions==std::vector<bool>{false},
+        "Ctrl+Z must undo before the native game dispatch");
+    modifiers=5;
+    require(fixture.send(WM_KEYDOWN,'Z',0x2c0001)==1&&history_actions==std::vector<bool>({false,true}),
+        "Ctrl+Shift+Z must redo before the native game dispatch");
+    require(history_owner==&editor&&eu4unicode::focused_native_editor()==&editor,
+        "History must target the focused editor without releasing input");
+    require(shortcut_messages==4,"Each history message must reach the native IME exactly once");
+    fixture.send(WM_KEYUP,'Z',0xc02c0001);
+    fixture.send(WM_KEYDOWN,'Y',0x150001);
+    fixture.send(WM_KEYDOWN,'A',0x1e0001);
+    for(const auto state:{4u,7u,13u}) { modifiers=state;fixture.send(WM_KEYDOWN,'Z',0x2c0001); }
+    require(history_actions.size()==2,"Key releases, Ctrl+Y and unrelated modifier combinations must not replay history");
+    modifiers=5;fixture.compose();fixture.send(WM_KEYDOWN,'Z',0x2c0001);
+    fixture.send(WM_KEYDOWN,VK_PROCESSKEY,0x2c0001);
+    require(history_actions.size()==2&&eu4unicode::native_ime_owns_edit_keys(),
+        "Live preedit must retain its history shortcuts");
+    preedit.clear();
+    require(fixture.send(WM_KEYDOWN,VK_PROCESSKEY,0x2c0001)==1&&history_actions.size()==3&&history_actions.back(),
+        "An IME-owned Z without live preedit must redo the editor document");
+    modifiers=0;eu4unicode::blur_native_editor(&editor);
+    eu4unicode::native_editor_history=saved_history;
+    eu4unicode::original_ime_message=original_message;
 }
