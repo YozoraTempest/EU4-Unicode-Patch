@@ -15,14 +15,11 @@ namespace {
 thread_local void* focused_editor=nullptr;
 std::mutex composition_mutex;
 NativeComposition composition;
-void update_composition(HWND window,UINT message,WPARAM parameter,LPARAM flags,bool active) noexcept {
+void update_composition(HWND window,UINT message,LPARAM flags,bool active) noexcept {
     try {
-        if(message==WM_IME_ENDCOMPOSITION||message==WM_KILLFOCUS||
-           message==WM_INPUTLANGCHANGE||(message==WM_IME_SETCONTEXT&&!parameter)||!active) {
+        if(message==WM_IME_STARTCOMPOSITION||message==WM_IME_ENDCOMPOSITION||message==WM_KILLFOCUS||
+           message==WM_INPUTLANGCHANGE||message==WM_IME_SETCONTEXT||!active) {
             clear_native_composition();return;
-        }
-        if(message==WM_IME_STARTCOMPOSITION) {
-            std::lock_guard<std::mutex> lock(composition_mutex);composition={window,{},true};return;
         }
         if(message!=WM_IME_COMPOSITION) return;
         if(!flags||(flags&GCS_RESULTSTR)) { clear_native_composition();if(!(flags&GCS_COMPSTR)) return; }
@@ -30,9 +27,9 @@ void update_composition(HWND window,UINT message,WPARAM parameter,LPARAM flags,b
         if(!context) { clear_native_composition();return; }
         struct Release { HWND window;HIMC context;~Release(){ImmReleaseContext(window,context);} } release{window,context};
         const auto bytes=ImmGetCompositionStringW(context,GCS_COMPSTR,nullptr,0);
-        if(bytes<0||bytes>64000||bytes%sizeof(char16_t)) { clear_native_composition();return; }
+        if(bytes<=0||bytes>64000||bytes%sizeof(char16_t)) { clear_native_composition();return; }
         std::u16string text(static_cast<std::size_t>(bytes)/sizeof(char16_t),u'\0');
-        if(bytes&&ImmGetCompositionStringW(context,GCS_COMPSTR,text.data(),bytes)!=bytes) { clear_native_composition();return; }
+        if(ImmGetCompositionStringW(context,GCS_COMPSTR,text.data(),bytes)!=bytes) { clear_native_composition();return; }
         const auto cursor=ImmGetCompositionStringW(context,GCS_CURSORPOS,nullptr,0);
         if(cursor<0||static_cast<std::size_t>(cursor)>text.size()) { clear_native_composition();return; }
         auto value=composition_text(text,static_cast<std::size_t>(cursor));
@@ -90,7 +87,7 @@ void restore_ime_position(HWND window,void* video,std::uint32_t candidate_mask=1
 int show_native_ime_candidates(HWND window,UINT message,WPARAM parameter,LPARAM* flags,void* video) {
     const bool active=ime_enabled(video);
     const auto incoming=flags?*flags:0;
-    update_composition(window,message,parameter,incoming,active);
+    update_composition(window,message,incoming,active);
     const auto trapped=original_ime_message(window,message,parameter,flags,video);
     // SDL clears all WM_IME_SETCONTEXT UI flags. Preserve the caller's
     // requested native candidate/reading UI; SDL still owns text commits.
@@ -110,6 +107,20 @@ int show_native_ime_candidates(HWND window,UINT message,WPARAM parameter,LPARAM*
     return trapped;
 }
 NativeComposition native_composition() { std::lock_guard<std::mutex> lock(composition_mutex);return composition; }
+bool native_ime_owns_edit_keys() {
+    const auto current=native_composition();
+    if(!current.active) return false;
+    // Switching TSF profiles can end preedit without WM_IME_ENDCOMPOSITION or
+    // a change of keyboard layout. Confirm that the current HIMC still has
+    // preedit before withholding editing keys from the game.
+    const auto context=current.window?ImmGetContext(current.window):nullptr;
+    const auto bytes=context?ImmGetCompositionStringW(context,GCS_COMPSTR,nullptr,0):0;
+    if(context) ImmReleaseContext(current.window,context);
+    if(current.value.text.empty()||bytes<=0||bytes>64000||bytes%sizeof(char16_t)) {
+        clear_native_composition();return false;
+    }
+    return true;
+}
 void clear_native_composition() noexcept { try { std::lock_guard<std::mutex> lock(composition_mutex);composition={}; } catch(...) {} }
 void* focused_native_editor() noexcept { return focused_editor; }
 void blur_native_editor(void* owner) {

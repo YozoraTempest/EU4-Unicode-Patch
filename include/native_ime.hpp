@@ -17,5 +17,6 @@ int show_native_ime_candidates(HWND window,UINT message,WPARAM parameter,LPARAM*
 void position_native_ime_candidates(void* device,const ImeRect* rect);
 struct NativeComposition { HWND window=nullptr;CompositionText value;bool active=false; };
 NativeComposition native_composition();
+bool native_ime_owns_edit_keys();
 void clear_native_composition() noexcept;
 }

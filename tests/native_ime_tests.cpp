@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 void verify_native_editor_selections();
+void verify_native_ime_composition();
 
 namespace {
 int calls=0,commits=0;
@@ -68,7 +69,7 @@ int main() {
         eu4unicode::original_ime_message=native_handler;
         LPARAM lifecycle=0;
         require(eu4unicode::show_native_ime_candidates(nullptr,WM_IME_STARTCOMPOSITION,0,&lifecycle,video.data())==0);
-        require(eu4unicode::native_composition().active);
+        require(!eu4unicode::native_composition().active&&!eu4unicode::native_ime_owns_edit_keys());
         require(eu4unicode::show_native_ime_candidates(nullptr,WM_IME_ENDCOMPOSITION,0,&lifecycle,video.data())==1);
         require(!eu4unicode::native_composition().active);
         eu4unicode::start_native_text_input=start_input;eu4unicode::stop_native_text_input=stop_input;
@@ -145,6 +146,7 @@ int main() {
         const eu4unicode::ImeRect invalid{(std::numeric_limits<int>::max)(),170,2,20};
         eu4unicode::position_native_ime_candidates(device.data(),&invalid);geometry(ime.second,0,start);
         composition_geometry(ime.second,changed);
-        std::puts("PASS: native IME UI flags, lifecycle propagation, context replacement, candidate-list geometry, editor focus ownership and single commit dispatch.");
+        verify_native_ime_composition();
+        std::puts("PASS: native IME UI flags, lifecycle propagation, context replacement, candidate-list geometry, editor focus ownership, live preedit key ownership and single commit dispatch.");
     } catch(const std::exception& error) { std::fprintf(stderr,"%s\n",error.what());return 1; }
 }
