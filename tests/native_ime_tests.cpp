@@ -115,7 +115,7 @@ int main() {
         std::memcpy(video.data()+0x14f4,&changed,sizeof(changed));lists=0b0110;
         eu4unicode::show_native_ime_candidates(ime.window,WM_IME_NOTIFY,IMN_CHANGECANDIDATE,&lists,video.data());
         geometry(ime.second,1,changed);geometry(ime.second,2,changed);geometry(ime.second,3,start);
-        const eu4unicode::ImeRect invalid{std::numeric_limits<int>::max(),170,2,20};
+        const eu4unicode::ImeRect invalid{(std::numeric_limits<int>::max)(),170,2,20};
         eu4unicode::position_native_ime_candidates(device.data(),&invalid);geometry(ime.second,0,start);
         std::puts("PASS: native IME UI flags, lifecycle propagation, context replacement, candidate-list geometry and single commit dispatch.");
     } catch(const std::exception& error) { std::fprintf(stderr,"%s\n",error.what());return 1; }
