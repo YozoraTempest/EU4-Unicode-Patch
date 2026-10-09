@@ -49,6 +49,8 @@ jobs:
             build/*.map
             build/native_font_atlas_tests.exe
             build/native_font_pages_tests.exe
+            build/native_paragraph_tests.exe
+            build/localized_format_tests.exe
             build/executable_check.exe
             build/executable_compatibility_tests.exe
             build/legacy_decode.exe
