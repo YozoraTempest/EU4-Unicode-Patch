@@ -1548,6 +1548,8 @@ bool initialize(HMODULE module) {
         eu4unicode::configure_editor_presentation(image);
         if(MH_CreateHook(image+0x173ab00,reinterpret_cast<void*>(eu4unicode::pump_native_keyboard),
              reinterpret_cast<void**>(&eu4unicode::original_keyboard_pump))!=MH_OK ||
+           MH_CreateHook(image+0x1765850,reinterpret_cast<void*>(eu4unicode::start_native_ime),
+             reinterpret_cast<void**>(&eu4unicode::original_native_ime_start))!=MH_OK ||
            MH_CreateHook(image+0x1764940,reinterpret_cast<void*>(eu4unicode::show_native_ime_candidates),
              reinterpret_cast<void**>(&eu4unicode::original_ime_message))!=MH_OK ||
            MH_CreateHook(image+0x17657c0,reinterpret_cast<void*>(eu4unicode::position_native_ime_candidates),

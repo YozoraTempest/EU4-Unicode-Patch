@@ -16,8 +16,11 @@ int calls=0,commits=0;
 int starts=0,stops=0;
 bool stop_saw_preedit=false;
 bool ime_active=false;
+int backend_starts=0,input_device=0;
+void* started_device=nullptr;
 std::array<std::uint8_t,2> text_events{1,1};
-void start_input() { ++starts;ime_active=true;text_events={1,1}; }
+void backend_start(void* device) { ++backend_starts;started_device=device;ime_active=true; }
+void start_input() { ++starts;text_events={1,1};eu4unicode::start_native_ime(&input_device); }
 void stop_input() {
     ++stops;stop_saw_preedit=eu4unicode::native_composition().active;
     ime_active=false;text_events={0,0};
@@ -90,10 +93,18 @@ int main() {
         require(!eu4unicode::native_composition().active);
         eu4unicode::start_native_text_input=start_input;eu4unicode::stop_native_text_input=stop_input;
         eu4unicode::native_text_event_state=event_state;
+        eu4unicode::original_native_ime_start=backend_start;
+        eu4unicode::start_native_ime(&input_device);
+        require(!ime_active&&backend_starts==0);
         int editor_a=0,editor_b=0;
         eu4unicode::focus_native_editor(&editor_a);eu4unicode::focus_native_editor(&editor_a);
         require(starts==1&&stops==0&&eu4unicode::focused_native_editor()==&editor_a);
         require(ime_active&&text_events[0]==1&&text_events[1]==1);
+        require(backend_starts==1&&started_device==&input_device);
+        // SDL stops/restarts the backend across Alt+Tab without changing the
+        // editor owner or event subscriptions. Re-enter IME only for that owner.
+        ime_active=false;eu4unicode::start_native_ime(&input_device);
+        require(ime_active&&backend_starts==2&&eu4unicode::focused_native_editor()==&editor_a);
         eu4unicode::show_native_ime_candidates(nullptr,WM_IME_STARTCOMPOSITION,0,&lifecycle,video.data());
         eu4unicode::focus_native_editor(&editor_b);
         require(starts==2&&stops==1&&!stop_saw_preedit&&!eu4unicode::native_composition().active);
@@ -118,6 +129,9 @@ int main() {
                 require(ime_active&&text_events[0]==1&&text_events[1]==1);
                 eu4unicode::blur_native_editor(&editor_b);
                 require(!ime_active&&text_events==before);
+                const auto backend_before=backend_starts;
+                eu4unicode::start_native_ime(&input_device);
+                require(!ime_active&&text_events==before&&backend_starts==backend_before);
                 eu4unicode::blur_native_editor(&editor_b);
                 require(!ime_active&&text_events==before);
             }
@@ -185,6 +199,6 @@ int main() {
         verify_native_ime_composition();
         require(!ime_active&&text_events[0]==1&&text_events[1]==1);
         verify_native_keyboard();
-        std::puts("PASS: native IME UI flags, lifecycle propagation, context replacement, candidate-list geometry, editor focus ownership, preserved game character events after blur, live preedit key ownership, lost Win-key release repair and single commit dispatch.");
+        std::puts("PASS: native IME UI flags, lifecycle propagation, context replacement, candidate-list geometry, editor focus ownership, preserved game character events after blur, IME focus ownership across window reactivation, live preedit key ownership, lost Win-key release repair and single commit dispatch.");
     } catch(const std::exception& error) { std::fprintf(stderr,"%s\n",error.what());return 1; }
 }

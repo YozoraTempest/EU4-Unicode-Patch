@@ -12,6 +12,7 @@ NativeImeMessage original_ime_message=nullptr;
 NativeImeRect original_ime_rect=nullptr;
 NativeTextInputAction start_native_text_input=nullptr,stop_native_text_input=nullptr;
 NativeTextEventState native_text_event_state=nullptr;
+NativeImeStart original_native_ime_start=nullptr;
 NativeEditorBlur native_editor_blur=nullptr;
 NativeEditorHistory native_editor_history=nullptr;
 namespace {
@@ -146,6 +147,11 @@ bool native_ime_owns_edit_keys() {
 }
 void clear_native_composition() noexcept { try { std::lock_guard<std::mutex> lock(composition_mutex);composition={}; } catch(...) {} }
 void* focused_native_editor() noexcept { return focused_editor; }
+void start_native_ime(void* device) {
+    // SDL also invokes the backend on window focus gain when character events
+    // are enabled. Game shortcuts must not reactivate IME outside an editor.
+    if(focused_editor) original_native_ime_start(device);
+}
 bool exit_native_editor() {
     if(!focused_editor) return false;
     native_editor_blur(focused_editor);return true;

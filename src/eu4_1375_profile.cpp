@@ -186,6 +186,7 @@ const ImageProfile& eu4_1375_profile() {
             {0x1735ae0,"48ff2501ab8700","SDL_StartTextInput"},
             {0x1735af0,"48ff2501ab8700","SDL_StopTextInput"},
             {0x1734070,"48ff2579c28700","SDL_EventState"},
+            {0x1765850,"40534883ec20488bd9e8e281feff4885c0","WIN_StartTextInput"},
             {0x1764940,"4055564155415641574883ec20488b6c2470","show_native_ime_candidates"},
             {0x1764c7c,"4d8929","native text/font code"},
             {0x17657c0,"40534883ec40488b99900300004885d2","position_native_ime_candidates"},
