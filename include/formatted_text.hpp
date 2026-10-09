@@ -32,5 +32,6 @@ private:
     std::string visible_;
     std::vector<std::size_t> prefixes_,lines_;
 };
+bool native_wrap_before(const FormattedText& boundaries,std::string_view text,std::size_t last_byte) noexcept;
 bool layout_substring_caller(std::uintptr_t caller) noexcept;
 }

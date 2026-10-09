@@ -13,6 +13,23 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <new>
+
+// Fail exactly one C++ allocation, then permit exception cleanup to allocate.
+// This exercises the real atlas packing path without filling a 256 MiB atlas.
+namespace { thread_local int allocation_countdown=-1; }
+void* operator new(std::size_t bytes) {
+    if(allocation_countdown>=0&&allocation_countdown--==0) {
+        allocation_countdown=-1;throw std::bad_alloc();
+    }
+    if(auto* memory=std::malloc(bytes?bytes:1)) return memory;
+    throw std::bad_alloc();
+}
+void operator delete(void* memory) noexcept { std::free(memory); }
+void operator delete(void* memory,std::size_t) noexcept { std::free(memory); }
+void* operator new[](std::size_t bytes) { return ::operator new(bytes); }
+void operator delete[](void* memory) noexcept { ::operator delete(memory); }
+void operator delete[](void* memory,std::size_t) noexcept { ::operator delete(memory); }
 
 void check(bool value,const char* message) {
     if(!value) { std::cerr<<"FAIL: "<<message<<'\n';std::exit(1); }
@@ -342,6 +359,37 @@ int main() {
         release_font_atlas(reloaded_alias.table());
         check(!dynamic_font(reloaded_alias.data())&&font_glyph_page(glyph)==0,"font reload releases its final page ownership");
     }
+    int reference_manager=1,failure_manager=2;
+    Font reference_font(&reference_manager);
+    register_font_atlas(reference_font.data(),"gfx/fonts/zh-hans-18");
+    const std::string failure_text=u8"§Yالعربية§! §Rالسلام عليكم§!\n§Gहिन्दी§! / e\u0301";
+    const auto reference_geometry=font_paragraph_geometry(reference_font.data(),failure_text,240,true);
+    check(reference_geometry&&!reference_geometry->records.empty(),"allocation failure reference geometry exists");
+    bool completed=false;int failures=0;
+    for(int point=0;point<512&&!completed;++point) {
+        Font candidate(&failure_manager);
+        register_font_atlas(candidate.data(),"gfx/fonts/zh-hans-18");
+        font_paragraph_layout(candidate.data(),failure_text,240,true);
+        const auto before=font_texture_memory(candidate.table());
+        allocation_countdown=point;
+        try { font_paragraph_geometry(candidate.data(),failure_text,240,true);completed=true; }
+        catch(const std::bad_alloc&) { ++failures; }
+        allocation_countdown=-1;
+        if(!completed) {
+            const auto after=font_texture_memory(candidate.table());
+            check(after.supplemental_reserved_bytes==before.supplemental_reserved_bytes,
+                  "failed paragraph allocation retained new atlas pages");
+        }
+        const auto retried=font_paragraph_geometry(candidate.data(),failure_text,240,true);
+        check(retried->records.size()==reference_geometry->records.size(),"failed allocation changed retry glyph count");
+        for(std::size_t glyph_index=0;glyph_index<retried->records.size();++glyph_index)
+            check(std::memcmp(&retried->records[glyph_index],&reference_geometry->records[glyph_index],sizeof(NativeGlyph))==0&&
+                  font_glyph_page(&retried->records[glyph_index])==font_glyph_page(&reference_geometry->records[glyph_index]),
+                  "failed paragraph allocation consumed atlas coordinates");
+        release_font_atlas(candidate.table());
+    }
+    check(completed&&failures>0,"allocation failure sweep reached a complete geometry build");
+    release_font_atlas(reference_font.table());
     std::filesystem::remove_all(directory);
     std::cout<<"Native paragraph metrics, scoped transport, page ownership and source preservation checks passed.\n";
 }

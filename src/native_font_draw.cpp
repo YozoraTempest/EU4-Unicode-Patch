@@ -25,9 +25,13 @@ using Microsoft::WRL::ComPtr;
 using IndexedDraw=HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*,D3DPRIMITIVETYPE,INT,UINT,UINT,UINT,UINT);
 using PrimitiveDraw=HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*,D3DPRIMITIVETYPE,UINT,UINT);
 using CreateVertexBuffer=HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*,UINT,DWORD,DWORD,D3DPOOL,IDirect3DVertexBuffer9**,HANDLE*);
+using SetStreamSource=HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*,UINT,IDirect3DVertexBuffer9*,UINT,UINT);
+using CreateTexture=HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*,UINT,UINT,UINT,DWORD,D3DFORMAT,D3DPOOL,IDirect3DTexture9**,HANDLE*);
 IndexedDraw original_indexed_draw=nullptr;
 PrimitiveDraw original_primitive_draw=nullptr;
 CreateVertexBuffer original_create_vertex_buffer=nullptr;
+SetStreamSource original_set_stream_source=nullptr;
+CreateTexture original_create_texture=nullptr;
 void* draw_entry=nullptr;
 FontLog logger=nullptr;
 thread_local bool capturing=false;
@@ -42,6 +46,8 @@ struct BufferUploads {
 };
 // Borrow buffer identities. Holding a default-pool buffer would block Reset.
 std::unordered_map<IDirect3DVertexBuffer9*,BufferUploads> uploads;
+struct Stream { IDirect3DVertexBuffer9* buffer=nullptr;UINT offset=0,stride=0; };
+std::unordered_map<IDirect3DDevice9*,Stream> streams;
 struct DrawBuffer { ComPtr<IDirect3DVertexBuffer9> buffer;UINT capacity=0; };
 std::unordered_map<IDirect3DDevice9*,DrawBuffer> draw_buffers;
 std::recursive_mutex mutex;
@@ -57,7 +63,8 @@ std::vector<FontPageSize> page_sizes(const FontTexturePages& pages) {
     for(const auto& page:pages) result.push_back(page.size);
     return result;
 }
-void forget_buffer(IDirect3DVertexBuffer9* buffer) {
+void forget_buffer(IDirect3DVertexBuffer9* buffer,bool released=false) {
+    if(released) for(auto& stream:streams) if(stream.second.buffer==buffer) stream.second={};
     const auto found=uploads.find(buffer);
     if(found==uploads.end()) return;
     for(const auto& upload:found->second.ranges) cached_bytes-=upload.second.bytes.size();
@@ -150,9 +157,42 @@ HRESULT STDMETHODCALLTYPE create_vertex_buffer(IDirect3DDevice9* device,UINT len
     if(SUCCEEDED(status)&&result&&*result) {
         std::lock_guard<std::recursive_mutex> lock(mutex);
         // Reset or a new game can reuse the address of a destroyed buffer.
-        forget_buffer(*result);
+        forget_buffer(*result,true);
     }
     return status;
+}
+HRESULT STDMETHODCALLTYPE set_stream_source(IDirect3DDevice9* device,UINT index,IDirect3DVertexBuffer9* buffer,UINT offset,UINT stride) {
+    const auto status=original_set_stream_source(device,index,buffer,offset,stride);
+    if(SUCCEEDED(status)&&!index) {
+        try {
+            std::lock_guard<std::recursive_mutex> lock(mutex);
+            streams[device]={buffer,offset,stride};
+        } catch(...) { return E_OUTOFMEMORY; }
+    }
+    return status;
+}
+HRESULT STDMETHODCALLTYPE create_texture(IDirect3DDevice9* device,UINT width,UINT height,UINT levels,DWORD usage,D3DFORMAT format,
+                                         D3DPOOL pool,IDirect3DTexture9** result,HANDLE* shared) {
+    const auto status=original_create_texture(device,width,height,levels,usage,format,pool,result,shared);
+    if(SUCCEEDED(status)&&result&&*result) invalidate_font_texture(*result);
+    return status;
+}
+template<class Vertex>
+bool captured_font_vertices(IDirect3DDevice9* device,UINT start,std::uint64_t count,std::vector<Vertex>& result,Stream& expected) {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    const auto stream=streams.find(device);
+    if(stream==streams.end()||stream->second.stride!=sizeof(Vertex)) return false;
+    const auto buffer=uploads.find(stream->second.buffer);
+    if(buffer==uploads.end()) return false;
+    const auto offset=static_cast<std::uint64_t>(stream->second.offset)+static_cast<std::uint64_t>(start)*sizeof(Vertex);
+    const auto bytes=count*sizeof(Vertex);
+    if(offset>UINT_MAX||bytes>UINT_MAX) throw std::out_of_range("Font vertex range exceeds the native buffer");
+    const auto data=font_vertices(buffer->second,static_cast<UINT>(offset),static_cast<UINT>(bytes),sizeof(Vertex));
+    if(!data||!page_tags(data,static_cast<std::size_t>(bytes),sizeof(Vertex))) return false;
+    result.resize(static_cast<std::size_t>(count));
+    std::memcpy(result.data(),data,static_cast<std::size_t>(bytes));
+    expected=stream->second;
+    return true;
 }
 struct RestoreState {
     IDirect3DDevice9* device;
@@ -171,10 +211,20 @@ HRESULT STDMETHODCALLTYPE draw_indexed_font(IDirect3DDevice9* device,D3DPRIMITIV
                                             UINT vertices,UINT start,UINT primitives) {
     RestoreState state{device};
     try {
+        if(type!=D3DPT_TRIANGLELIST||minimum||start||base<0||!vertices||vertices%4||primitives!=vertices/2)
+            return original_indexed_draw(device,type,base,minimum,vertices,start,primitives);
+        std::vector<MapFontVertex> physical;
+        Stream expected;
+        if(!captured_font_vertices(device,static_cast<UINT>(base),vertices,physical,expected))
+            return original_indexed_draw(device,type,base,minimum,vertices,start,primitives);
+        // Query COM resources only after the captured geometry proves this is
+        // a paged font draw. These hooks also see the game's other rendering.
+        checked(device->GetStreamSource(0,&state.buffer,&state.offset,&state.stride));
+        if(state.buffer.Get()!=expected.buffer||state.offset!=expected.offset||state.stride!=expected.stride)
+            return original_indexed_draw(device,type,base,minimum,vertices,start,primitives);
         checked(device->GetTexture(0,&state.texture));
         const auto pages=font_texture_pages(state.texture.Get());
-        if(pages.size()<=1) return original_indexed_draw(device,type,base,minimum,vertices,start,primitives);
-        checked(device->GetStreamSource(0,&state.buffer,&state.offset,&state.stride));
+        if(pages.size()<=1) throw std::runtime_error("Paged map font texture is unavailable");
         if(logger&&!logged_contract) {
             char message[160];std::snprintf(message,sizeof(message),"Map font draw contract: type=%u base=%d minimum=%u vertices=%u start=%u primitives=%u stride=%u",type,base,minimum,vertices,start,primitives,state.stride);
             logger(message);logged_contract=true;
@@ -185,18 +235,6 @@ HRESULT STDMETHODCALLTYPE draw_indexed_font(IDirect3DDevice9* device,D3DPRIMITIV
            state.stride!=sizeof(MapFontVertex)||!state.buffer)
             return original_indexed_draw(device,type,base,minimum,vertices,start,primitives);
         std::lock_guard<std::recursive_mutex> lock(mutex);
-        const auto buffer=uploads.find(state.buffer.Get());
-        if(buffer==uploads.end()) return original_indexed_draw(device,type,base,minimum,vertices,start,primitives);
-        const auto byte_offset=static_cast<std::uint64_t>(state.offset)+static_cast<std::uint64_t>(base)*state.stride;
-        const auto byte_count=static_cast<std::uint64_t>(vertices)*sizeof(MapFontVertex);
-        if(byte_offset>UINT_MAX||byte_count>UINT_MAX) throw std::out_of_range("Font vertex range exceeds the native buffer");
-        const auto data=font_vertices(buffer->second,static_cast<UINT>(byte_offset),static_cast<UINT>(byte_count),sizeof(MapFontVertex));
-        if(!data)
-            throw std::runtime_error("Paged font geometry has no matching CPU upload");
-        std::vector<MapFontVertex> physical(vertices);
-        std::memcpy(physical.data(),data,vertices*sizeof(MapFontVertex));
-        if(std::none_of(physical.begin(),physical.end(),[](const auto& vertex){return vertex.u>=2;}))
-            return original_indexed_draw(device,type,base,minimum,vertices,start,primitives);
         const auto batches=split_font_quads(physical,page_sizes(pages));
         auto& scratch=draw_buffers[device];
         const auto bytes=vertices*static_cast<UINT>(sizeof(MapFontVertex));
@@ -231,26 +269,23 @@ HRESULT STDMETHODCALLTYPE draw_indexed_font(IDirect3DDevice9* device,D3DPRIMITIV
 HRESULT STDMETHODCALLTYPE draw_popup_font(IDirect3DDevice9* device,D3DPRIMITIVETYPE type,UINT start,UINT primitives) {
     RestoreState state{device};
     try {
-        checked(device->GetTexture(0,&state.texture));
-        const auto pages=font_texture_pages(state.texture.Get());
-        if(pages.size()<=1) return original_primitive_draw(device,type,start,primitives);
-        checked(device->GetStreamSource(0,&state.buffer,&state.offset,&state.stride));
-        if(type!=D3DPT_TRIANGLELIST||primitives%2||state.stride!=sizeof(PopupFontVertex)||!state.buffer)
+        if(type!=D3DPT_TRIANGLELIST||!primitives||primitives%2)
             return original_primitive_draw(device,type,start,primitives);
         const auto count=static_cast<std::uint64_t>(primitives)*3;
-        const auto offset=static_cast<std::uint64_t>(state.offset)+static_cast<std::uint64_t>(start)*state.stride;
-        if(count*sizeof(PopupFontVertex)>UINT_MAX||offset>UINT_MAX) throw std::out_of_range("Popup font vertex range is too large");
+        std::vector<PopupFontVertex> physical;
+        Stream expected;
+        if(!captured_font_vertices(device,start,count,physical,expected))
+            return original_primitive_draw(device,type,start,primitives);
+        checked(device->GetStreamSource(0,&state.buffer,&state.offset,&state.stride));
+        if(state.buffer.Get()!=expected.buffer||state.offset!=expected.offset||state.stride!=expected.stride)
+            return original_primitive_draw(device,type,start,primitives);
+        checked(device->GetTexture(0,&state.texture));
+        const auto pages=font_texture_pages(state.texture.Get());
+        if(pages.size()<=1) throw std::runtime_error("Paged popup font texture is unavailable");
+        if(type!=D3DPT_TRIANGLELIST||primitives%2||state.stride!=sizeof(PopupFontVertex)||!state.buffer)
+            return original_primitive_draw(device,type,start,primitives);
         std::lock_guard<std::recursive_mutex> lock(mutex);
-        const auto buffer=uploads.find(state.buffer.Get());
-        if(buffer==uploads.end()) return original_primitive_draw(device,type,start,primitives);
         const auto bytes=static_cast<UINT>(count*sizeof(PopupFontVertex));
-        const auto data=font_vertices(buffer->second,static_cast<UINT>(offset),bytes,sizeof(PopupFontVertex));
-        if(!data)
-            return original_primitive_draw(device,type,start,primitives);
-        std::vector<PopupFontVertex> physical(static_cast<std::size_t>(count));
-        std::memcpy(physical.data(),data,bytes);
-        if(std::none_of(physical.begin(),physical.end(),[](const auto& vertex){return vertex.u>=2;}))
-            return original_primitive_draw(device,type,start,primitives);
         const auto batches=split_popup_glyphs(physical,page_sizes(pages));
         auto& scratch=draw_buffers[device];
         if(scratch.capacity<bytes) {
@@ -279,6 +314,9 @@ void install_font_draw_device(IDirect3DDevice9* device) {
     if(MH_CreateHook(table[82],reinterpret_cast<void*>(draw_indexed_font),reinterpret_cast<void**>(&original_indexed_draw))!=MH_OK||
        MH_CreateHook(table[81],reinterpret_cast<void*>(draw_popup_font),reinterpret_cast<void**>(&original_primitive_draw))!=MH_OK||
        MH_CreateHook(table[26],reinterpret_cast<void*>(create_vertex_buffer),reinterpret_cast<void**>(&original_create_vertex_buffer))!=MH_OK||
+       MH_CreateHook(table[100],reinterpret_cast<void*>(set_stream_source),reinterpret_cast<void**>(&original_set_stream_source))!=MH_OK||
+       MH_CreateHook(table[23],reinterpret_cast<void*>(create_texture),reinterpret_cast<void**>(&original_create_texture))!=MH_OK||
+       MH_EnableHook(table[23])!=MH_OK||MH_EnableHook(table[100])!=MH_OK||
        MH_EnableHook(table[26])!=MH_OK||MH_EnableHook(table[82])!=MH_OK||MH_EnableHook(table[81])!=MH_OK)
         throw std::runtime_error("Paged font drawing hook failed");
     draw_entry=table[82];
@@ -286,6 +324,7 @@ void install_font_draw_device(IDirect3DDevice9* device) {
 void reset_font_draw_device(IDirect3DDevice9* device) noexcept {
     try {
         std::lock_guard<std::recursive_mutex> lock(mutex);draw_buffers.erase(device);
+        streams.erase(device);
         for(auto current=uploads.begin();current!=uploads.end();) {
             if(current->second.device==device&&current->second.pool==D3DPOOL_DEFAULT) {
                 const auto buffer=current->first;++current;forget_buffer(buffer);
@@ -296,7 +335,7 @@ void reset_font_draw_device(IDirect3DDevice9* device) noexcept {
 void release_font_draw_cache() noexcept {
     try {
         std::lock_guard<std::recursive_mutex> lock(mutex);
-        uploads.clear();cached_bytes=0;draw_buffers.clear();logged_draw=false;
+        uploads.clear();streams.clear();cached_bytes=0;draw_buffers.clear();logged_draw=false;
     } catch(...) {}
 }
 void build_map_font_geometry(void* owner,void* sector,void* labels,int count,void* font) {
@@ -332,7 +371,7 @@ void* create_font_vertices(void* context,const void* data,int vertices,int strid
 void release_font_vertices(void* buffer) {
     if(buffer) {
         std::lock_guard<std::recursive_mutex> lock(mutex);
-        forget_buffer(*static_cast<IDirect3DVertexBuffer9**>(buffer));
+        forget_buffer(*static_cast<IDirect3DVertexBuffer9**>(buffer),true);
     }
     original_vertex_release(buffer);
 }

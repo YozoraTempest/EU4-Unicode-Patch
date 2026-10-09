@@ -15,6 +15,7 @@
 #include "native_script_bom.hpp"
 #include "native_legacy_import.hpp"
 #include "native_name_order.hpp"
+#include "native_localized_format.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
 #include "native_keyboard.hpp"
@@ -48,7 +49,7 @@ thread_local std::uint32_t button_extra=0;
 thread_local std::uint32_t button_slot=0;
 thread_local std::uint32_t last_scalar_bytes=1;
 thread_local std::shared_ptr<const eu4unicode::FormattedText> active_line_breaks,button_line_breaks;
-thread_local std::shared_ptr<const eu4unicode::FormattedText> popup_line_breaks;
+thread_local std::shared_ptr<const eu4unicode::FormattedText> popup_line_breaks,fit_line_breaks;
 struct CachedFormattedText { std::shared_ptr<const eu4unicode::FormattedText> value; std::size_t bytes; };
 thread_local std::unordered_map<std::string,CachedFormattedText> formatted_cache;
 thread_local std::size_t formatted_cache_bytes=0;
@@ -928,6 +929,7 @@ std::uintptr_t g_map_vertex_count_return;
 std::uintptr_t g_map_page_tag_return,g_map_justify_page_tag_return;
 std::uintptr_t g_map_kern_call;
 std::uintptr_t g_map_fit_format_return,g_map_fit_plain_entry,g_map_fit_measure_return,g_map_fit_kern_return;
+std::uintptr_t g_map_fit_begin_return,g_map_fit_wrap_allow,g_map_fit_wrap_skip;
 std::uintptr_t g_map_fit_icon_end_return,g_map_adjust_gap_end_return,g_map_adjust_last_return;
 std::uintptr_t g_country_shape_return,g_province_shape_return,g_country_gap_return,g_country_gap_skip;
 std::uintptr_t g_input_return;
@@ -963,6 +965,7 @@ void map_adjust_copy_hook(); void map_adjust_glyph_hook(); void map_upper_hook()
 void map_vertex_count_hook();
 void map_page_tag_hook();void map_justify_page_tag_hook();
 void map_fit_format_hook();void map_fit_measure_hook();void map_fit_kern_hook();void map_fit_icon_end_hook();
+void map_fit_begin_hook();void map_fit_wrap_hook();
 void map_adjust_gap_end_hook();void map_adjust_last_hook();
 void country_shape_hook();void province_shape_hook();void country_shape_gap_hook();
 void input_hook();
@@ -1073,6 +1076,18 @@ bool unicode_wrap_before(std::uint32_t last_byte) noexcept {
     if(!active_line_breaks || last_byte+1<last_scalar_bytes) return false;
     const auto offset=last_byte+1-last_scalar_bytes;
     return active_line_breaks->line_before(offset);
+}
+void prepare_fit_wrap(const EngineString* source) noexcept {
+    fit_line_breaks.reset();
+    try { fit_line_breaks=formatted_boundaries({source->data(),static_cast<std::size_t>(source->size)}); }
+    catch(...) { log("Unicode size measurement boundary preparation failed."); }
+}
+bool fit_wrap_before(const EngineString* source,std::uint32_t last_byte) noexcept {
+    if(!fit_line_breaks) return false;
+    const auto value=std::string_view(source->data(),static_cast<std::size_t>(source->size));
+    // Match the drawing routine: the current glyph has already contributed
+    // its advance, and a wrap moves that glyph onto the following line.
+    return eu4unicode::native_wrap_before(*fit_line_breaks,value,last_byte);
 }
 void prepare_button_wrap(const EngineString* source) noexcept {
     button_line_breaks.reset();
@@ -1317,6 +1332,9 @@ bool initialize(HMODULE module) {
     g_map_fit_plain_entry=address(0x159e751);
     g_map_fit_measure_return=address(0x159e775);
     g_map_fit_kern_return=address(0x159e7d8);
+    g_map_fit_begin_return=address(0x159e5d1);
+    g_map_fit_wrap_allow=address(0x159e7f0);
+    g_map_fit_wrap_skip=address(0x159e841);
     g_map_fit_icon_end_return=address(0x159e702);
     g_map_adjust_gap_end_return=address(0xfd660b);
     g_map_adjust_last_return=address(0xfd671a);
@@ -1449,6 +1467,8 @@ bool initialize(HMODULE module) {
         {0x159e400,reinterpret_cast<void*>(map_page_tag_hook)},
         {0xfd53a5,reinterpret_cast<void*>(map_justify_page_tag_hook)},
         {0x159e60d,reinterpret_cast<void*>(map_fit_format_hook)},
+        {0x159e5c4,reinterpret_cast<void*>(map_fit_begin_hook)},
+        {0x159e7e1,reinterpret_cast<void*>(map_fit_wrap_hook)},
         {0x159e75d,reinterpret_cast<void*>(map_fit_measure_hook)},
         {0x159e7c5,reinterpret_cast<void*>(map_fit_kern_hook)},
         {0x159e6f1,reinterpret_cast<void*>(map_fit_icon_end_hook)},
@@ -1517,7 +1537,15 @@ bool initialize(HMODULE module) {
 #else
     eu4unicode::configure_font_atlases(exe.parent_path(),fonts,log,"gfx/fonts/eu4-unicode/cache/",true);
 #endif
-    if(MH_CreateHook(image+0x15953c0,reinterpret_cast<void*>(load_font_atlas),
+    eu4unicode::configure_localized_format(image);
+    eu4unicode::localized_assign=reinterpret_cast<eu4unicode::LocalizedAssign>(image+0x95110);
+    if(MH_CreateHook(image+0x14c7890,reinterpret_cast<void*>(eu4unicode::format_localized_date),
+        reinterpret_cast<void**>(&eu4unicode::original_localized_date))!=MH_OK||
+       MH_CreateHook(image+0xe3d40,reinterpret_cast<void*>(eu4unicode::concat_localized_date),
+        reinterpret_cast<void**>(&eu4unicode::original_localized_date_concat))!=MH_OK||
+       MH_CreateHook(image+0x23a900,reinterpret_cast<void*>(eu4unicode::format_localized_battle_title),
+        reinterpret_cast<void**>(&eu4unicode::original_localized_battle_title))!=MH_OK||
+       MH_CreateHook(image+0x15953c0,reinterpret_cast<void*>(load_font_atlas),
         reinterpret_cast<void**>(&original_font_load))!=MH_OK||
        MH_CreateHook(image+0x16c3f10,reinterpret_cast<void*>(eu4unicode::synchronize_font_texture),
         reinterpret_cast<void**>(&eu4unicode::original_texture_lookup))!=MH_OK||

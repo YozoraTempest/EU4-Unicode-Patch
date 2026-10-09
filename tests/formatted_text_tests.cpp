@@ -48,8 +48,18 @@ int main() {
         check(wrapped.line_before(3),"color directive blocked a Chinese line boundary");
         check(!wrapped.line_before(9)&&!wrapped.line_before(12),"line break separated punctuation from preceding text");
         check(wrapped.line_before(15),"Chinese line boundary after punctuation missing");
+        check(native_wrap_before(wrapped,punctuation,8),"measurement missed the boundary before a colored Chinese glyph");
+        check(!native_wrap_before(wrapped,punctuation,13),"measurement moved closing punctuation onto a new line");
+        const std::string plain=u8"中文，中文";
+        const FormattedText plain_boundaries(plain);
+        for(std::size_t last_byte=3;last_byte<6;++last_byte)
+            check(native_wrap_before(plain_boundaries,plain,last_byte),"measurement used a UTF-8 continuation byte as a line boundary");
+        for(std::size_t last_byte=6;last_byte<9;++last_byte)
+            check(!native_wrap_before(plain_boundaries,plain,last_byte),"measurement split closing punctuation from preceding Chinese text");
+        check(!native_wrap_before(FormattedText("word word"),"word word",5),"measurement changed the native Latin word path");
         const FormattedText cluster(u8"中e§R\u0301§!文");
         check(!cluster.line_before(4)&&!cluster.line_before(7),"line break split a colored combining sequence");
+        check(!native_wrap_before(cluster,u8"中e§R\u0301§!文",8),"measurement split a colored combining sequence");
         check(FormattedText(u8"§中文").visible_text()==u8"§中文","non-ASCII character consumed as a color code");
         check(FormattedText("\xa3" "yes ").visible_text()==u8"\ufffc","compiled icon with whitespace delimiter was lost");
         for(const auto text:{u8"é",u8"中",u8"𠮷"}) {
