@@ -1,5 +1,6 @@
 #pragma once
 #include <windows.h>
+#include <cstdint>
 #include "editor_document.hpp"
 
 namespace eu4unicode {
@@ -10,6 +11,8 @@ extern NativeImeMessage original_ime_message;
 extern NativeImeRect original_ime_rect;
 using NativeTextInputAction=void(*)();
 extern NativeTextInputAction start_native_text_input,stop_native_text_input;
+using NativeTextEventState=std::uint8_t(*)(std::uint32_t,int);
+extern NativeTextEventState native_text_event_state;
 using NativeEditorBlur=void(*)(void*);
 extern NativeEditorBlur native_editor_blur;
 using NativeEditorHistory=void(*)(void*,bool);

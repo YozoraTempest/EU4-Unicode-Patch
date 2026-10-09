@@ -11,10 +11,14 @@ namespace eu4unicode {
 NativeImeMessage original_ime_message=nullptr;
 NativeImeRect original_ime_rect=nullptr;
 NativeTextInputAction start_native_text_input=nullptr,stop_native_text_input=nullptr;
+NativeTextEventState native_text_event_state=nullptr;
 NativeEditorBlur native_editor_blur=nullptr;
 NativeEditorHistory native_editor_history=nullptr;
 namespace {
 thread_local void* focused_editor=nullptr;
+constexpr std::uint32_t text_editing_event=0x302,text_input_event=0x303;
+constexpr int query_event_state=-1;
+thread_local std::uint8_t previous_text_editing=0,previous_text_input=0;
 std::mutex composition_mutex;
 NativeComposition composition;
 void update_composition(HWND window,UINT message,LPARAM flags,bool active) noexcept {
@@ -151,11 +155,18 @@ void blur_native_editor(void* owner) {
     focused_editor=nullptr;
     clear_native_composition();
     stop_native_text_input();
+    // SDL_StopTextInput also disables character events. EU4 uses those events
+    // for printable game shortcuts, including the main keyboard's +/- keys.
+    // Restore their prior subscriptions without reactivating the IME context.
+    native_text_event_state(text_editing_event,previous_text_editing);
+    native_text_event_state(text_input_event,previous_text_input);
 }
 void focus_native_editor(void* owner) {
     if(!owner||focused_editor==owner) return;
     if(focused_editor) blur_native_editor(focused_editor);
     clear_native_composition();
+    previous_text_editing=native_text_event_state(text_editing_event,query_event_state);
+    previous_text_input=native_text_event_state(text_input_event,query_event_state);
     focused_editor=owner;
     start_native_text_input();
 }

@@ -1536,6 +1536,7 @@ bool initialize(HMODULE module) {
     if(experimental_input) {
         eu4unicode::start_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735ae0);
         eu4unicode::stop_native_text_input=reinterpret_cast<eu4unicode::NativeTextInputAction>(image+0x1735af0);
+        eu4unicode::native_text_event_state=reinterpret_cast<eu4unicode::NativeTextEventState>(image+0x1734070);
         eu4unicode::native_editor_blur=blur_editor_ime_rect;
         eu4unicode::native_editor_history=[](void* owner,bool redo) {
             const KeyEvent event{'z',0,redo?5u:1u};
