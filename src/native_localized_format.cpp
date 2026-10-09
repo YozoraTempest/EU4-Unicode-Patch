@@ -35,7 +35,7 @@ EngineString* concat_localized_date(EngineString* result,const EngineString* mon
         try { replacement=chinese_month_year(text(month),text(year)); } catch(...) {}
     }
     auto* output=original_localized_date_concat(result,month,year);
-    assign(output,replacement);
+    try { assign(output,replacement); } catch(...) {}
     return output;
 }
 EngineString* format_localized_battle_title(const void* battle,EngineString* result) {

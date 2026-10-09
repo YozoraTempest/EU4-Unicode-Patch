@@ -459,6 +459,26 @@ selection_results = selection_check['verify'](base, symbols, address_hook, callb
 map_check = __import__('runpy').run_path(str(root / 'tools/native-map-check.py'))
 assets = args.assets_directory.resolve() if args.assets_directory else game.parent
 map_results = map_check['verify'](base, fn, hook, engine_string, assets, pointer, symbol, executable_code)
+hook(0x159e5c4,'map_fit_begin_hook')
+hook(0x159e7e1,'map_fit_wrap_hook')
+# Events and map labels share this native size-fitting routine. Use fixed
+# glyph metrics so a width regression cannot hide behind font substitution.
+for cp in map(ord,'中文，。'):
+    record=fn('find_unicode_glyph',C.c_void_p,C.c_void_p,C.c_uint)(table,cp) or allocate(table,cp)
+    assert record,cp
+    C.memmove(record,struct.pack('<7h2B',0,0,10,10,0,0,10,0,0),16)
+fit=C.CFUNCTYPE(C.c_int,C.c_void_p,C.c_void_p,C.c_int,C.c_int,C.c_void_p,C.c_void_p,C.c_bool)(base+0x159e510)
+fit_results=[]
+for text in ['中文中文中文中文','§Y中文§!中文中文中文','中文，中文。中文',
+             '中e§R\u0301§!文','ABC DEF GHI JKL']:
+    source_string=engine_string(text.encode())
+    for width in (20,30,40,1000):
+        output_size=(C.c_int*2)()
+        lines=fit(font_base,C.byref(source_string),width,10000,C.byref(margin),C.byref(output_size),True)
+        if text.startswith('中文中文') or text.startswith('§Y中文'):
+            expected=max(1,(8+(width//10)-1)//(width//10))
+            assert lines==expected and output_size[0]<=width,(text,width,lines,list(output_size),expected)
+        fit_results.append({'text':text,'width':width,'lines':lines,'size':list(output_size)})
 editor_check = __import__('runpy').run_path(str(root / 'tools/native-editor-check.py'))
 editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks, crt,
                                        address_hook, executable_code)
@@ -476,7 +496,8 @@ report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_
           'ui_page_emission':ui_page_results,'ui_geometry_scopes':ui_scope_results,
           'button_format_arguments':button_format_results,
           'native_selection_sprites':selection_results,'native_map_fit':map_results,
-          'native_multiline_editor':editor_results,'native_patch_messages':patch_messages}
+          'native_multiline_editor':editor_results,'native_event_fit':fit_results,
+          'native_patch_messages':patch_messages}
 if args.report:
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f"PASS: {len(results)} native width cases, {len(layout_results)} native layouts, "
