@@ -4,6 +4,7 @@
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
 #include "formatted_text.hpp"
+#include "formatted_text_cache.hpp"
 #include "unicode_editor.hpp"
 #include "native_editor_text.hpp"
 #include "native_editor_presentation.hpp"
@@ -50,24 +51,9 @@ thread_local std::uint32_t button_slot=0;
 thread_local std::uint32_t last_scalar_bytes=1;
 thread_local std::shared_ptr<const eu4unicode::FormattedText> active_line_breaks,button_line_breaks;
 thread_local std::shared_ptr<const eu4unicode::FormattedText> popup_line_breaks,fit_line_breaks;
-struct CachedFormattedText { std::shared_ptr<const eu4unicode::FormattedText> value; std::size_t bytes; };
-thread_local std::unordered_map<std::string,CachedFormattedText> formatted_cache;
-thread_local std::size_t formatted_cache_bytes=0;
+thread_local eu4unicode::FormattedTextCache formatted_cache;
 std::shared_ptr<const eu4unicode::FormattedText> formatted_boundaries(std::string_view text) {
-    std::string key(text);
-    const auto found=formatted_cache.find(key);
-    if(found!=formatted_cache.end()) return found->second.value;
-    auto value=std::make_shared<const eu4unicode::FormattedText>(text);
-    const auto bytes=key.size()+value->memory_size()+sizeof(CachedFormattedText);
-    constexpr std::size_t budget=1024*1024;
-    if(bytes<=budget) {
-        if(formatted_cache.size()>=256||formatted_cache_bytes>budget-bytes) {
-            formatted_cache.clear();formatted_cache_bytes=0;
-        }
-        formatted_cache.emplace(std::move(key),CachedFormattedText{value,bytes});
-        formatted_cache_bytes+=bytes;
-    }
-    return value;
+    return formatted_cache.get(text);
 }
 void log(const char* message) {
     if(log_file==INVALID_HANDLE_VALUE) return;

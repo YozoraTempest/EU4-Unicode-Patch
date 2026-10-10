@@ -1,4 +1,5 @@
 #include "formatted_text.hpp"
+#include "formatted_text_cache.hpp"
 #include "unicode_text.hpp"
 #include <cstdlib>
 #include <iostream>
@@ -8,8 +9,69 @@ using namespace eu4unicode;
 void check(bool value,const char* message) {
     if(!value) throw std::runtime_error(message);
 }
+void check_cache() {
+    FormattedTextCache cache(1024*1024,2);
+    std::string source=u8"中e§R\u0301§!文";
+    const auto original=source;
+    const auto first=cache.get(source);
+    source.assign("changed");
+    check(cache.get(original)==first,"cache key borrowed mutable caller storage");
+    const auto second=cache.get(u8"§Y省份§!");
+    check(cache.get(original)==first,"recent boundary value was replaced");
+    cache.get(u8"第三条文字");
+    check(cache.size()==2&&cache.get(original)==first,"least recent entry eviction removed hot text");
+    check(cache.get(u8"§Y省份§!")!=second,"least recent entry was not evicted");
+    check(second->visible_text()==u8"省份","eviction invalidated an active layout value");
+    const FormattedText expected(original);
+    for(std::size_t offset=0;offset<=original.size();++offset) {
+        check(first->prefix(offset)==expected.prefix(offset),"cached prefix changed formatted clusters");
+        check(first->line_before(offset)==expected.line_before(offset),"cached line boundary changed formatted clusters");
+    }
+
+    FormattedTextCache large;
+    std::vector<std::shared_ptr<const FormattedText>> values;
+    for(int index=0;index<600;++index)
+        values.push_back(large.get(u8"§Y中文地名§! £adm£ "+std::to_string(index)));
+    check(large.size()==600,"ordinary UI working set exceeded cache limits");
+    for(int index=0;index<600;++index)
+        check(large.get(u8"§Y中文地名§! £adm£ "+std::to_string(index))==values[index],
+              "repeated large UI working set rebuilt boundaries");
+    for(int index=0;index<2400;++index) {
+        large.get(u8"变化文字"+std::to_string(index));
+        check(large.get(u8"§Y中文地名§! £adm£ 0")==values[0],"changing text evicted a frequently used layout");
+    }
+    check(large.size()<=1024&&large.cached_bytes()<=1024*1024,"cache exceeded retention limits");
+
+    FormattedTextCache formats;
+    check(formats.get(u8"§Y中文§!")!=formats.get(u8"§R中文§!"),"distinct format commands share byte offsets");
+    check(formats.get("@FRA")!=formats.get("@FRA "),"distinct flag source lengths share a cache key");
+    check(formats.get("") == formats.get(""),"empty text cannot be cached");
+
+    FormattedTextCache measured;
+    const auto retained=measured.get("first");
+    const auto one_entry=measured.cached_bytes();
+    check(one_entry>0,"cache retention accounting is empty");
+    FormattedTextCache limited(one_entry*2,10);
+    const auto hot=limited.get("first");
+    const auto cold=limited.get("other");
+    limited.get("first");
+    limited.get("third");
+    check(limited.size()==2&&limited.cached_bytes()<=one_entry*2,"byte limit did not evict one old entry");
+    check(limited.get("first")==hot,"byte pressure removed recently used text");
+    check(limited.get("other")!=cold,"byte pressure retained the least recent entry");
+    limited.get("first");
+    const auto before=limited.cached_bytes();
+    const auto oversized=limited.get(std::string(20000,'x'));
+    check(oversized->visible_text().size()==20000,"uncached large text lost its layout");
+    check(limited.cached_bytes()==before&&limited.get("first")==hot,"oversized text flushed ordinary UI entries");
+    FormattedTextCache disabled_bytes(0,10),disabled_entries(1024,0);
+    disabled_bytes.get("first");disabled_entries.get("first");
+    check(disabled_bytes.size()==0&&disabled_entries.size()==0,"disabled cache retained values");
+    check(retained->visible_text()=="first","independent cache lifetime changed a retained value");
+}
 int main() {
     try {
+        check_cache();
         for(const auto text:{u8"万帕诺亚格",u8"施泰亚莫阿克",u8"é中𠮷A",u8"A e\u0301 中",u8"§Y万帕诺亚格§!",u8"A£adm£中文"}) {
             const std::string_view source(text);
             const FormattedText layout(source);
@@ -75,7 +137,7 @@ int main() {
         check(FormattedText(native_color).visible_text()==u8"中文","compiled native color literal lost its meaning");
         check(layout_substring_caller(0x159ff80)&&layout_substring_caller(0x15a00a0),"list substring branch missing");
         check(!layout_substring_caller(0x1704af0),"unrelated substring caller was included");
-        std::cout<<"PASS: native formatted text, complete prefixes and scalar positions\n";
+        std::cout<<"PASS: native formatted text, bounded layout cache, complete prefixes and scalar positions\n";
         return 0;
     } catch(const std::exception& error) {
         std::cerr<<error.what()<<'\n';return 1;
