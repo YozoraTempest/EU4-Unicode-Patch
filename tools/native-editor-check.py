@@ -256,8 +256,11 @@ def verify(base, fn, hook, engine_string, font_source, callbacks, crt, address_h
     # continuations. Preserve each production return address without running
     # the tooltip/chat owner's game-state dependencies.
     formatted = []
-    for owner, site in (('tooltip', 0x1415f33), ('chat', 0x83eadb)):
-        address_hook(site + 5, executable_code(b'\x48\x83\xc4\x28\xc3'))
+    for owner, site, continuation in (('tooltip', 0x1415f33, 0x1415f38),
+                                      ('chat', 0x83eadb, 0x83eae6)):
+        # Chat returns through a two-byte jump; hook its destination so the
+        # original call/return pair stays intact and MinHook has enough room.
+        address_hook(continuation, executable_code(b'\x48\x83\xc4\x28\xc3'))
         bridge = executable_code(b'\x48\x83\xec\x28\x48\xb8' +
                                  struct.pack('<Q', base + site) + b'\xff\xe0')
         temporary_insert = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p)(bridge)
