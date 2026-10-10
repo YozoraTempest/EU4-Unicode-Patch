@@ -704,9 +704,9 @@ thread_local ActiveCommit active_commit{};
 void insert_editor_commit(void* widget,const EngineString* text) {
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress())-
         reinterpret_cast<std::uintptr_t>(image);
-    // Tooltip layout uses a temporary editor to wrap native formatted text.
+    // Tooltip and chat layout use temporary editors to wrap native formatted text.
     // It has no interactive caret or undo history, and permits CP1252 commands.
-    if(caller==0x1415f38) { original_editor_insert(widget,text);return; }
+    if(caller==0x1415f38||caller==0x83eae0) { original_editor_insert(widget,text);return; }
     EditorTransaction transaction(widget);
     if(caller==0x1535615&&active_commit.widget==widget&&active_commit.text)
         text=active_commit.text;
@@ -933,6 +933,7 @@ std::uintptr_t g_map_fit_begin_return,g_map_fit_wrap_allow,g_map_fit_wrap_skip;
 std::uintptr_t g_map_fit_icon_end_return,g_map_adjust_gap_end_return,g_map_adjust_last_return;
 std::uintptr_t g_country_shape_return,g_province_shape_return,g_country_gap_return,g_country_gap_skip;
 std::uintptr_t g_input_return;
+std::uintptr_t g_speed_increase_return,g_speed_other_return;
 std::uintptr_t g_editor_fit_return;
 std::uintptr_t g_text_limit_return;
 std::uintptr_t g_font_allocate,g_font_duplicate,g_font_store_return,g_font_initialize,g_font_skip,g_engine_new;
@@ -969,6 +970,7 @@ void map_fit_begin_hook();void map_fit_wrap_hook();
 void map_adjust_gap_end_hook();void map_adjust_last_hook();
 void country_shape_hook();void province_shape_hook();void country_shape_gap_hook();
 void input_hook();
+void speed_increase_hook();
 void editor_fit_hook();
 void text_limit_hook();
 void font_lookup_hook(); void font_store_hook();
@@ -1162,6 +1164,9 @@ std::size_t copy_last_map_scalar(const EngineString* source,char* destination) n
     destination[size]=0;
     return size;
 }
+bool use_speed_increase(std::uint8_t character) noexcept {
+    return eu4unicode::native_speed_increase(character);
+}
 void dispatch_utf8(void* window,void* receiver,const char* payload,std::uint32_t event_value) {
     std::size_t length=0;
     while(length<32 && payload[length]) ++length;
@@ -1345,6 +1350,8 @@ bool initialize(HMODULE module) {
     g_country_gap_return=address(0xfd65f2);
     g_country_gap_skip=address(0xfd68c3);
     g_input_return=address(0x156a22a);
+    g_speed_increase_return=address(0x816de0);
+    g_speed_other_return=address(0x816e12);
     g_editor_fit_return=address(0x1536e5d);
     g_text_limit_return=address(0x15989e4);
     g_font_allocate=address(0x1595cad);
@@ -1400,6 +1407,7 @@ bool initialize(HMODULE module) {
     PatchInitialization transaction(constants);
     struct Hook { std::size_t rva; void* callback; };
     const Hook hooks[]={ {0xa4b48c,reinterpret_cast<void*>(person_name_hook)},
+        {0x816dd5,reinterpret_cast<void*>(speed_increase_hook)},
         {0x3142f2,reinterpret_cast<void*>(generated_name_hook)},
         {0x16fd650,reinterpret_cast<void*>(eu4unicode::import_legacy_localization)},
         {0x15995b0,reinterpret_cast<void*>(main_copy_hook)}, {0x1599728,reinterpret_cast<void*>(main_measure_hook)},

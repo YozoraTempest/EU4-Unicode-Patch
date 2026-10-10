@@ -482,6 +482,9 @@ for text in ['中文中文中文中文','§Y中文§!中文中文中文','中文
 editor_check = __import__('runpy').run_path(str(root / 'tools/native-editor-check.py'))
 editor_results = editor_check['verify'](base, fn, hook, engine_string, font_base, callbacks, crt,
                                        address_hook, executable_code)
+keyboard_check = __import__('runpy').run_path(str(root / 'tools/native-keyboard-check.py'))
+keyboard_results = keyboard_check['verify'](base, fn, hook, pointer, address_hook,
+                                           executable_code, callbacks)
 patch_messages = ''
 if patch_log:
     pointer('log_file', C.c_void_p(-1).value)
@@ -497,6 +500,7 @@ report = {'source_commit': build_info['source_commit'], 'patch_dll_sha256': dll_
           'button_format_arguments':button_format_results,
           'native_selection_sprites':selection_results,'native_map_fit':map_results,
           'native_multiline_editor':editor_results,'native_event_fit':fit_results,
+          'native_campaign_shortcuts':keyboard_results,
           'native_patch_messages':patch_messages}
 if args.report:
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')

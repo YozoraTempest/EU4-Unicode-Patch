@@ -9,4 +9,5 @@ extern NativeKeyboardPump original_keyboard_pump;
 extern NativeKeyboardState native_keyboard_state;
 extern NativeKeyboardKey native_keyboard_key;
 void pump_native_keyboard(void* device);
+bool native_speed_increase(std::uint8_t character) noexcept;
 }
