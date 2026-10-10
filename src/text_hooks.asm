@@ -65,11 +65,28 @@ EXTERN g_main_geometry_entry_return:QWORD
 EXTERN g_main_geometry_end_return:QWORD
 EXTERN g_button_geometry_entry_return:QWORD
 EXTERN g_button_geometry_end_return:QWORD
+EXTERN use_speed_increase:PROC
+EXTERN g_speed_increase_return:QWORD
+EXTERN g_speed_other_return:QWORD
 
 include hook_context.inc
 
 
 .CODE
+speed_increase_hook PROC
+    SAVE_CONTEXT
+    movzx ecx, al
+    call use_speed_increase
+    test al, al
+    jz speed_other_character
+    RESTORE_CONTEXT
+    cmp byte ptr [rsi+19f1h], 0
+    jmp qword ptr [g_speed_increase_return]
+speed_other_character:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_speed_other_return]
+speed_increase_hook ENDP
+
 person_name_hook PROC
     SAVE_CONTEXT
     mov rcx, rbx

@@ -40,4 +40,5 @@ struct FontTextureMemory {
 };
 FontTextureMemory font_texture_memory(void* const* table);
 FontTexturePages font_texture_pages(IDirect3DBaseTexture9* first);
+void invalidate_font_texture(IDirect3DBaseTexture9* texture) noexcept;
 }

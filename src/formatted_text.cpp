@@ -91,6 +91,10 @@ std::size_t FormattedText::prefix(std::size_t limit) const noexcept {
 bool FormattedText::line_before(std::size_t offset) const noexcept {
     return std::binary_search(lines_.begin(),lines_.end(),offset);
 }
+bool native_wrap_before(const FormattedText& boundaries,std::string_view text,std::size_t last_byte) noexcept {
+    const auto offset=native_scalar_start(text,last_byte);
+    return native_measure_scalar(text.substr(offset)).value>255&&boundaries.line_before(offset);
+}
 std::size_t FormattedText::memory_size() const noexcept {
     return sizeof(*this)+visible_.capacity()+
         (prefixes_.capacity()+lines_.capacity())*sizeof(std::size_t);

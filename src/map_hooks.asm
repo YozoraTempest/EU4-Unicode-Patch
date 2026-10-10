@@ -12,6 +12,8 @@ EXTERN mark_current_map_font_glyph:PROC
 EXTERN shape_country_map_text:PROC
 EXTERN shape_province_map_text:PROC
 EXTERN map_paragraph_active:PROC
+EXTERN prepare_fit_wrap:PROC
+EXTERN fit_wrap_before:PROC
 EXTERN g_country_shape_return:QWORD
 EXTERN g_province_shape_return:QWORD
 EXTERN g_country_gap_return:QWORD
@@ -37,6 +39,9 @@ EXTERN g_map_fit_format_return:QWORD
 EXTERN g_map_fit_plain_entry:QWORD
 EXTERN g_map_fit_measure_return:QWORD
 EXTERN g_map_fit_kern_return:QWORD
+EXTERN g_map_fit_begin_return:QWORD
+EXTERN g_map_fit_wrap_allow:QWORD
+EXTERN g_map_fit_wrap_skip:QWORD
 EXTERN g_map_fit_icon_end_return:QWORD
 EXTERN g_map_adjust_gap_end_return:QWORD
 EXTERN g_map_adjust_last_return:QWORD
@@ -104,6 +109,39 @@ map_fit_format_plain:
     RESTORE_CONTEXT
     jmp qword ptr [g_map_fit_plain_entry]
 map_fit_format_hook ENDP
+
+map_fit_begin_hook PROC
+    SAVE_CONTEXT
+    mov rcx, rbx
+    call prepare_fit_wrap
+    RESTORE_CONTEXT
+    mov r15d, ecx
+    mov esi, r12d
+    mov edi, r12d
+    mov r9d, dword ptr [rbx+10h]
+    jmp qword ptr [g_map_fit_begin_return]
+map_fit_begin_hook ENDP
+
+map_fit_wrap_hook PROC
+    cvtdq2ps xmm0, xmm0
+    mulss xmm0, xmm1
+    ucomiss xmm0, xmm8
+    jp map_fit_wrap_boundary
+    je map_fit_wrap_allowed
+map_fit_wrap_boundary:
+    SAVE_CONTEXT
+    mov rcx, rbx
+    mov edx, edi
+    call fit_wrap_before
+    test al, al
+    jz map_fit_wrap_blocked
+    RESTORE_CONTEXT
+map_fit_wrap_allowed:
+    jmp qword ptr [g_map_fit_wrap_allow]
+map_fit_wrap_blocked:
+    RESTORE_CONTEXT
+    jmp qword ptr [g_map_fit_wrap_skip]
+map_fit_wrap_hook ENDP
 
 map_fit_measure_hook PROC
     SAVE_CONTEXT

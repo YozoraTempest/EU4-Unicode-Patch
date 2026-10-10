@@ -572,6 +572,10 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
     geometry->layout=entry.layout;
     geometry->records.resize(glyphs.size());
     geometry->glyphs.reserve(glyphs.size());
+    struct PagePosition { int x,y,row;std::size_t pending; };
+    std::vector<PagePosition> positions;positions.reserve(atlas.pages.size());
+    for(const auto& page:atlas.pages) positions.push_back({page->x,page->y,page->row,page->pending.size()});
+    const auto reserved_before=atlas.supplemental_reserved_bytes;
     geometry->first_token=allocate_paragraph_tokens(atlas,static_cast<std::uint32_t>(glyphs.size()));
     try {
         for(std::size_t offset=0;offset<transport.size();) {
@@ -590,6 +594,15 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
         }
     } catch(...) {
         for(const auto& record:geometry->records) glyph_pages.erase(&record);
+        // Geometry has not been published or uploaded while this atlas lock
+        // is held. Undo partial packing; repeated oversized requests must not
+        // consume the remaining page space or discard existing cached UVs.
+        atlas.pages.resize(positions.size());
+        atlas.supplemental_reserved_bytes=reserved_before;
+        for(std::size_t index=0;index<positions.size();++index) {
+            auto& page=*atlas.pages[index];const auto& position=positions[index];
+            page.x=position.x;page.y=position.y;page.row=position.row;page.pending.resize(position.pending);
+        }
         release_paragraph_tokens(atlas,geometry->first_token,static_cast<std::uint32_t>(glyphs.size()));
         throw;
     }
@@ -655,6 +668,15 @@ FontTexturePages font_texture_pages(IDirect3DBaseTexture9* first) {
         return result;
     }
     return {};
+}
+void invalidate_font_texture(IDirect3DBaseTexture9* texture) noexcept {
+    try {
+        std::lock_guard<std::recursive_mutex> lock(mutex);
+        // A newly created resource can reuse a released native texture's
+        // address. Its pixels have not been uploaded, regardless of identity.
+        for(const auto& binding:bindings) for(auto& page:binding.second->pages)
+            if(page->uploaded==texture) page->uploaded=nullptr;
+    } catch(...) {}
 }
 void* synchronize_font_texture(void* manager,int id) {
     auto wrapper=original_texture_lookup(manager,id);

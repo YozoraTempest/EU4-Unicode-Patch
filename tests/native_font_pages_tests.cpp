@@ -16,6 +16,12 @@
 namespace {
 using Microsoft::WRL::ComPtr;
 using eu4unicode::MapFontVertex;
+using GetTexture=HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*,DWORD,IDirect3DBaseTexture9**);
+GetTexture original_get_texture=nullptr;
+std::size_t texture_queries=0;
+HRESULT STDMETHODCALLTYPE count_texture_queries(IDirect3DDevice9* device,DWORD stage,IDirect3DBaseTexture9** texture) {
+    ++texture_queries;return original_get_texture(device,stage,texture);
+}
 struct TextureWrapper { IDirect3DTexture9* texture=nullptr; };
 struct VertexWrapper { IDirect3DVertexBuffer9* buffer;int stride,capacity;unsigned flags=0; };
 enum class DrawPath { indexed,popup,ui_upload,ui_create,ui_partial,ui_dynamic,ui_managed };
@@ -209,7 +215,9 @@ void draw_glyphs(IDirect3DDevice9* device,void* font,IDirect3DTexture9* first,
             vertex_upload(nullptr,&overwrite_wrapper,triangles.data(),-1,static_cast<int>(stream_offset),0);
         } else eu4unicode::upload_map_font_vertices(nullptr,&overwrite_wrapper,triangles.data(),-1,static_cast<int>(stream_offset),0);
         checked(device->Clear(0,nullptr,D3DCLEAR_TARGET,0,1,0));
+        texture_queries=0;
         checked(device->BeginScene());checked(device->DrawPrimitive(D3DPT_TRIANGLELIST,start_vertex,6));checked(device->EndScene());
+        require(texture_queries==0,"Unpaged drawing queried a texture through the font hook");
         require(read_surface(device,target.Get(),regions[1])==read_glyph(device,first,b),"UI buffer reused stale page tags after an unpaged upload");
     }
     checked(device->SetTexture(0,nullptr));checked(device->SetStreamSource(0,nullptr,0,0));checked(device->SetIndices(nullptr));
@@ -231,6 +239,10 @@ int wmain(int argc,wchar_t** argv) {
         parameters.hDeviceWindow=window;parameters.BackBufferWidth=64;parameters.BackBufferHeight=64;
         ComPtr<IDirect3DDevice9> device;
         checked(api->CreateDevice(D3DADAPTER_DEFAULT,D3DDEVTYPE_HAL,window,D3DCREATE_SOFTWARE_VERTEXPROCESSING,&parameters,&device));
+        auto get_texture=(*reinterpret_cast<void***>(device.Get()))[64];
+        require(MH_CreateHook(get_texture,reinterpret_cast<void*>(count_texture_queries),reinterpret_cast<void**>(&original_get_texture))==MH_OK,
+                "Cannot count texture queries");
+        require(MH_EnableHook(get_texture)==MH_OK,"Cannot enable texture query counter");
         ComPtr<IDirect3DTexture9> texture;
         checked(device->CreateTexture(2048,4096,1,0,D3DFMT_A8R8G8B8,D3DPOOL_DEFAULT,&texture,nullptr));
         TextureWrapper wrapper{texture.Get()};
@@ -271,6 +283,10 @@ int wmain(int argc,wchar_t** argv) {
                     pages[1].size.width==2048&&pages[1].size.height==2048,
                     "Supplemental GPU pages inherited the original font dimensions");
             const auto second_reference=eu4unicode::rasterize_scalar(second_scalar,size).alpha;
+            eu4unicode::invalidate_font_texture(texture.Get());
+            require(eu4unicode::font_texture_pages(texture.Get()).empty(),"Recreated texture kept its previous atlas identity");
+            eu4unicode::synchronize_font_texture(&wrapper,1);
+            require(eu4unicode::font_texture_pages(texture.Get()).size()==pages.size(),"Recreated primary texture did not republish its pages");
             require(read_glyph(device.Get(),pages[0].texture.Get(),*first)==reference,"Growing the atlas changed the first page");
             require(read_glyph(device.Get(),pages.at(eu4unicode::font_glyph_page(second)).texture.Get(),*second)==second_reference,"Additional page upload differs from its raster");
             if(size==88) draw_glyphs(device.Get(),font,texture.Get(),*first,*second,reference,second_reference);

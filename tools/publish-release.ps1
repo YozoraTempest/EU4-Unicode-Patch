@@ -67,6 +67,7 @@ $notes=$channelNote+$updates+@"
 
 作者：VulonLok · [QQ 交流群](https://qm.qq.com/q/Csnqqd8rUO)
 "@
+if ($Channel -eq 'Release') { $notes=$updates.Trim()+"`n" }
 $notesFile=Join-Path $root 'release-notes.md'
 [IO.File]::WriteAllText($notesFile,$notes,[Text.UTF8Encoding]::new($false))
 if (!$release) {
