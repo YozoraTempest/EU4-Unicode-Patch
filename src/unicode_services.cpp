@@ -17,15 +17,33 @@ void checked_text(std::string_view text) {
         throw std::length_error("Text exceeds ICU boundary offset range");
     if(!valid_utf8(text)) throw std::invalid_argument("Invalid UTF-8 text");
 }
+using BoundaryIterator=std::unique_ptr<UBreakIterator,decltype(&ubrk_close)>;
+struct BoundaryTextScope {
+    BoundaryIterator& iterator;
+    ~BoundaryTextScope() {
+        // ICU keeps a shallow text reference. Detach before caller storage can
+        // disappear, including when allocating the result throws.
+        static constexpr UChar empty=0;
+        UErrorCode status=U_ZERO_ERROR;
+        ubrk_setText(iterator.get(),&empty,0,&status);
+        if(U_FAILURE(status)) iterator.reset();
+    }
+};
 std::vector<std::size_t> boundaries(std::string_view text,UBreakIteratorType type) {
     checked_text(text);
+    thread_local BoundaryIterator character(nullptr,ubrk_close),line(nullptr,ubrk_close);
+    auto& iterator=type==UBRK_CHARACTER?character:line;
     UErrorCode status=U_ZERO_ERROR;
+    if(!iterator) {
+        BoundaryIterator created(ubrk_open(type,"",nullptr,0,&status),ubrk_close);
+        checked(status);
+        iterator=std::move(created);
+        status=U_ZERO_ERROR;
+    }
     std::unique_ptr<UText,decltype(&utext_close)> source(utext_openUTF8(nullptr,text.data(),
         static_cast<int64_t>(text.size()),&status),utext_close);
     checked(status);
-    std::unique_ptr<UBreakIterator,decltype(&ubrk_close)> iterator(
-        ubrk_open(type,"",nullptr,0,&status),ubrk_close);
-    checked(status);
+    const BoundaryTextScope scope{iterator};
     ubrk_setUText(iterator.get(),source.get(),&status);
     checked(status);
     std::vector<std::size_t> result;
