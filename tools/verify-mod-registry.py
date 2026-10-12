@@ -101,7 +101,6 @@ class Reader:
         manager = self.pointer(base + 0x2349520)
         if manager and state['checksum_ready']:
             state['enabled_mods'] = self.strings(manager + 0x88)
-            state['native_load_order_names'] = self.string(manager + 0xa0)
             head = self.pointer(manager + 0xd0)
             pending, seen, entries = [self.pointer(head + 8)], set(), []
             while pending:
@@ -114,8 +113,8 @@ class Reader:
                 pending.extend([self.pointer(node), self.pointer(node + 16)])
                 mod = node + 0x40
                 entries.append({'key': self.string(node + 0x20), 'name': self.string(mod + 0x10),
-                                'descriptor': self.string(mod + 0x90), 'directory': self.string(mod + 0xd0),
-                                'archive': self.string(mod + 0xb0),
+                                'descriptor': self.string(mod + 0x90), 'directory': self.string(mod + 0xb0),
+                                'archive': self.string(mod + 0xd0),
                                 'dependencies': self.vector_strings(mod + 0xf0)})
             state['registry'] = sorted(entries, key=lambda value: value['key'])
         return state
@@ -277,6 +276,54 @@ def run(args):
     print(json.dumps(summary, ensure_ascii=False), flush=True)
 
 
+def compare(args):
+    """Assert behavior from native process snapshots and real resource logs."""
+    root = args.root.resolve()
+    rows = []
+    for fixture in sorted((root / 'fixtures').iterdir()):
+        definition = json.loads((fixture / 'test.json').read_text(encoding='utf-8'))
+        candidates = definition['candidates']
+        enabled = [file for file, _, active in candidates if active]
+        first = f'mod/{candidates[0][0]}'
+        selected = f'mod/{enabled[0]}' if len(enabled) == 1 else first
+        before_dir, after_dir = root / args.before / fixture.name, root / args.after / fixture.name
+        before = json.loads((before_dir / 'result.json').read_text(encoding='utf-8'))
+        after = json.loads((after_dir / 'result.json').read_text(encoding='utf-8'))
+        baseline = json.loads((before_dir / 'native-state.json').read_text(encoding='utf-8'))
+        patched = json.loads((after_dir / 'native-state.json').read_text(encoding='utf-8'))
+        assert before['menu_ready'] and after['menu_ready'], fixture.name
+        assert baseline['enabled_mods'] == patched['enabled_mods'] == definition['enabled_mods'], fixture.name
+        assert before['selected'] == first and after['selected'] == selected, fixture.name
+        normal = len(enabled) == 1 or (len(enabled) > 1 and candidates[0][2])
+        assert after['chinese'] == normal and after['map_font_missing'] != normal, fixture.name
+        if len(enabled) != 1:
+            assert (before['selected'], before['opinion'], before['map_font_missing']) == (
+                after['selected'], after['opinion'], after['map_font_missing']), fixture.name
+        assert len(after['collisions']) == (1 if len(candidates) > 1 else 0), fixture.name
+        if after['collisions']:
+            rule = 'unique-enabled' if len(enabled) == 1 else 'native-none-enabled' if not enabled else 'native-multiple-enabled'
+            assert f'rule={rule}' in after['collisions'][0], fixture.name
+            assert f'replaced={"yes" if selected != first else "no"}' in after['collisions'][0], fixture.name
+            # The log retains actual registration order, independently of the
+            # intended filenames or creation order in the test definition.
+            positions = [after['collisions'][0].index(f'"mod/{file}"') for file, _, _ in candidates]
+            assert positions == sorted(positions), fixture.name
+        names = lambda state: {item['name']: (item['key'], item['dependencies']) for item in state['registry']}
+        assert names(baseline) == names(patched), fixture.name
+        adapter = next(item for item in patched['registry'] if item['name'] == 'P2KE Patch - Chinese Language Mod')
+        assert MAIN in adapter['dependencies'] and SUPPLEMENT in adapter['dependencies'], fixture.name
+        for name in [MAIN, SUPPLEMENT]:
+            assert name in names(patched) and names(patched)[name][0] == name, fixture.name
+        main = next(item for item in patched['registry'] if item['name'] == MAIN)
+        descriptor = (after_dir / 'userdir' / selected).read_text(encoding='utf-8')
+        directory = re.search(r'(?m)^path="([^"]+)"', descriptor).group(1)
+        assert Path(main['directory']).resolve() == Path(directory).resolve(), fixture.name
+        assert not baseline['frida_loaded'] and not patched['frida_loaded'], fixture.name
+        rows.append({'case': fixture.name, 'before': before, 'after': after, 'passed': True})
+    save(root / 'comparison.json', {'passed': True, 'groups': len(rows), 'rows': rows})
+    print(f'Passed {len(rows)} native registry/resource comparisons.', flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -292,8 +339,12 @@ def main():
     run_parser.add_argument('--label', required=True)
     run_parser.add_argument('--package', type=Path, required=True)
     run_parser.add_argument('--timeout', type=int, default=240)
+    compare_parser = commands.add_parser('compare')
+    compare_parser.add_argument('--root', type=Path, required=True)
+    compare_parser.add_argument('--before', required=True)
+    compare_parser.add_argument('--after', required=True)
     args = parser.parse_args()
-    {'prepare': prepare, 'run': run}[args.command](args)
+    {'prepare': prepare, 'run': run, 'compare': compare}[args.command](args)
 
 
 if __name__ == '__main__':

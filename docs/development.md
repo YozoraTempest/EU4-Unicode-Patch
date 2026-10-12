@@ -51,11 +51,12 @@ EU4 1.37.5 的模组表以原始 `name` 为键。原生初始化先扫描 `.mod`
 
 原生挂钩生命周期的自动检查位于 `native_mod_registry_tests`；真实游戏的顺序与资源加载验证由隔离启动测试完成，不能由模拟对象测试替代。
 
-`tools/verify-mod-registry.py` 创建新的隔离 runtime、私有可写字体目录和每组独立 userdir，使用指定的 CI 玩家包逐次启动游戏。`prepare` 要求空的证据目录及当前有效的工坊／本地上传内容路径；原始内容只读，测试描述符独立生成。`run` 只用 Windows 只读进程 API 检查自己启动的游戏，并保留原生登记表、名称依赖、加载名称顺序、原版中文文本、地图字体日志、描述符、启用列表及文件哈希。脚本不注入、不调用远程函数、不修改当前播放集，只终止自身的测试进程。
+`tools/verify-mod-registry.py` 创建新的隔离 runtime、私有可写字体目录和每组独立 userdir，使用指定的 CI 玩家包逐次启动游戏。`prepare` 要求空的证据目录及当前有效的工坊／本地上传内容路径；原始内容只读，测试描述符独立生成。`run` 只用 Windows 只读进程 API 检查自己启动的游戏，并保留原生登记表、名称依赖、原版中文文本、地图字体日志、描述符、启用列表及文件哈希。脚本不注入、不调用远程函数、不修改当前播放集，只终止自身的测试进程。
 
 ```powershell
 python tools/verify-mod-registry.py prepare --root D:/evidence/new-mod-registry-test --game "D:/SteamLibrary/steamapps/common/Europa Universalis IV" --workshop D:/SteamLibrary/steamapps/workshop/content/236850 --upload D:/path/to/current/local-upload --settings D:/path/to/test/settings.txt
 python tools/verify-mod-registry.py run --root D:/evidence/new-mod-registry-test --case old-disabled-first --label after --package D:/ci/EU4UnicodePatch-1.37.5-v0.1.14.zip
+python tools/verify-mod-registry.py compare --root D:/evidence/new-mod-registry-test --before before --after after
 ```
 
 样例包含无冲突、旧工坊／本地上传的双向扫描顺序、三候选唯一启用、全部未启用和多份同时启用。对修复前后的 CI 包运行相同样例，检查结果与原生日志；历史描述符路径不能直接复用。此游戏验证需要拥有对应本机内容，不在公共 CI 上运行。
