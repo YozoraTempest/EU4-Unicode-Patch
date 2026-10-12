@@ -16,6 +16,7 @@
 #include "native_script_bom.hpp"
 #include "native_legacy_import.hpp"
 #include "native_name_order.hpp"
+#include "native_mod_registry.hpp"
 #include "native_localized_format.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
@@ -1508,6 +1509,18 @@ bool initialize(HMODULE module) {
        MH_CreateHook(image+0x170e700,reinterpret_cast<void*>(eu4unicode::read_legacy_script_token),
         reinterpret_cast<void**>(&eu4unicode::original_script_token))!=MH_OK) {
         log("Script lexer hook creation failed; no hooks enabled."); return false;
+    }
+    eu4unicode::native_mod_register=reinterpret_cast<eu4unicode::NativeModRegister>(image+0x150e720);
+    eu4unicode::native_mod_assign=reinterpret_cast<eu4unicode::NativeModAssign>(image+0x1508310);
+    eu4unicode::native_mod_enabled=reinterpret_cast<eu4unicode::NativeModEnabled>(image+0x1dc380);
+    eu4unicode::native_mod_log=log;
+    if(MH_CreateHook(image+0x1506d30,reinterpret_cast<void*>(eu4unicode::initialize_mod_registry),
+        reinterpret_cast<void**>(&eu4unicode::original_mod_initialize))!=MH_OK||
+       MH_CreateHook(image+0x1508860,reinterpret_cast<void*>(eu4unicode::scan_mod_registry),
+        reinterpret_cast<void**>(&eu4unicode::original_mod_scan))!=MH_OK||
+       MH_CreateHook(image+0x15105b0,reinterpret_cast<void*>(eu4unicode::insert_mod_registry),
+        reinterpret_cast<void**>(&eu4unicode::original_mod_insert))!=MH_OK) {
+        log("Mod registry hook creation failed; no hooks enabled.");return false;
     }
     if(MH_CreateHook(image+0x1706010,reinterpret_cast<void*>(convert_steam_presence),
         reinterpret_cast<void**>(&original_presence_conversion))!=MH_OK) {
