@@ -88,6 +88,8 @@ class Reader:
         needed = W.DWORD()
         if not self.psapi.EnumProcessModules(self.handle, modules, C.sizeof(modules), C.byref(needed)):
             raise C.WinError(C.get_last_error())
+        if not needed.value or needed.value > C.sizeof(modules) or not modules[0]:
+            raise OSError('Process module list is not available yet')
         paths = []
         for module in modules[:needed.value // C.sizeof(W.HMODULE)]:
             name = C.create_unicode_buffer(32768)
