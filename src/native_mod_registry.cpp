@@ -24,19 +24,21 @@ std::string_view text(const EngineString& value) {
 EngineString borrow(const std::string& value) {
     // Both native readers leave this input alone; they copy into engine owners.
     EngineString result{};
-    result.storage.pointer=value.c_str();result.size=value.size();result.capacity=16;
+    result.storage.pointer=value.c_str();result.size=value.size();
+    result.capacity=std::max<std::size_t>(16,value.size());
     return result;
 }
 NativeModView& node_mod(void* node) {
     return *reinterpret_cast<NativeModView*>(static_cast<std::byte*>(node)+node_value_offset);
 }
-struct Candidate { std::string descriptor; };
+struct Candidate { std::string descriptor;bool active=false; };
 struct Group { void* node=nullptr;std::vector<Candidate> candidates; };
+enum class ReplayStatus { not_registered,assigned,rejected,assignment_failed,parse_failed };
 struct Replay {
     const std::string& name;
     const std::string& descriptor;
     void* node;
-    bool assigned=false;
+    ReplayStatus status=ReplayStatus::not_registered;
 };
 struct Scan {
     void* manager;
@@ -44,8 +46,8 @@ struct Scan {
     Replay* replay=nullptr;
     std::map<std::string,Group,std::less<>> groups;
 };
-// Each scan/initialization owns its metadata. No manager, node, or temporary
-// descriptor pointer survives the call, including nested or subsequent scans.
+// Each scan/initialization owns its metadata; game pointers are not cached
+// across calls. The verified initializer invokes one nonrecursive scan.
 thread_local Scan* current=nullptr;
 struct Scope {
     Scan* previous;
@@ -58,7 +60,61 @@ struct Scanning {
     explicit Scanning(Scan& value):scan(value),previous(value.scanning) { scan.scanning=true; }
     ~Scanning() { scan.scanning=previous; }
 };
-void log(const char* value) noexcept { if(native_mod_log) native_mod_log(value); }
+struct Replaying {
+    Scan& scan;
+    explicit Replaying(Scan& value,Replay& replay):scan(value) { scan.replay=&replay; }
+    ~Replaying() { scan.replay=nullptr; }
+};
+void log(const char* value) noexcept {
+    try { if(native_mod_log) native_mod_log(value); }
+    catch(...) { /* Diagnostics must not interrupt registration or cleanup. */ }
+}
+const char* status_name(ReplayStatus status) {
+    switch(status) {
+    case ReplayStatus::assigned:return "assigned";
+    case ReplayStatus::rejected:return "rejected";
+    case ReplayStatus::assignment_failed:return "assignment-failed-state-unknown";
+    case ReplayStatus::parse_failed:return "parse-failed";
+    default:return "not-registered";
+    }
+}
+void report_rejection(const Replay& replay,const NativeModEntry& entry) noexcept {
+    try {
+        std::ostringstream message;
+        message.exceptions(std::ios::badbit|std::ios::failbit);
+        message<<"Mod collision replay rejected: expected_name="<<std::quoted(replay.name)
+               <<" actual_key="<<std::quoted(std::string(text(entry.key)))
+               <<" actual_name="<<std::quoted(std::string(text(entry.mod.name)))
+               <<" expected_descriptor="<<std::quoted(replay.descriptor)
+               <<" actual_descriptor="<<std::quoted(std::string(text(entry.mod.descriptor)));
+        log(message.str().c_str());
+    } catch(...) { log("Mod collision replay rejected; diagnostic allocation failed."); }
+}
+void report_collision(const std::string& name,const Group& group,std::size_t count,
+                      const Candidate* selected,const Replay* replay) noexcept {
+    try {
+        std::ostringstream message;
+        message.exceptions(std::ios::badbit|std::ios::failbit);
+        message<<"Mod name collision: name="<<std::quoted(name)<<" candidates=[";
+        for(std::size_t i=0;i<group.candidates.size();++i) {
+            if(i) message<<", ";
+            message<<std::quoted(group.candidates[i].descriptor)
+                   <<(group.candidates[i].active?" (enabled)":" (disabled)");
+        }
+        const bool assigned=replay&&replay->status==ReplayStatus::assigned;
+        message<<"] rule="<<(count==1?"unique-enabled":count==0?"native-none-enabled":"native-multiple-enabled")
+               <<" requested="<<std::quoted(selected?selected->descriptor:std::string{})
+               <<" selected=";
+        // An interrupted native assignment has no verified rollback contract.
+        // Report owned metadata instead of reading possibly partial members.
+        if(replay&&(replay->status==ReplayStatus::assignment_failed||replay->status==ReplayStatus::parse_failed))
+            message<<"unknown";
+        else message<<std::quoted(assigned?replay->descriptor:group.candidates.front().descriptor);
+        message<<" replaced="<<(assigned?"yes":"no")
+               <<" status="<<(replay?status_name(replay->status):"native-retained");
+        log(message.str().c_str());
+    } catch(...) { log("Mod collision diagnostic allocation failed; registration processing continues."); }
+}
 bool enabled(const Scan& scan,const std::string& descriptor) {
     const auto path=borrow(descriptor);
     // Same native exact-length/byte comparison as the enabled collection loop.
@@ -66,41 +122,37 @@ bool enabled(const Scan& scan,const std::string& descriptor) {
 }
 void resolve(Scan& scan) noexcept {
     if(scan.failed) return;
-    try {
-        for(auto& [name,group]:scan.groups) {
-            if(group.candidates.size()<2) continue;
-            std::vector<bool> active;
-            std::size_t count=0,selected=0;
-            for(std::size_t i=0;i<group.candidates.size();++i) {
-                const bool value=enabled(scan,group.candidates[i].descriptor);
-                active.push_back(value);
-                if(value) { ++count;selected=i; }
+    for(auto& [name,group]:scan.groups) {
+        try {
+            std::size_t count=0;
+            Candidate* selected=nullptr;
+            for(auto& candidate:group.candidates) {
+                candidate.active=enabled(scan,candidate.descriptor);
+                if(candidate.active) { ++count;selected=&candidate; }
             }
-            bool replaced=false;
-            if(count==1&&text(node_mod(group.node).descriptor)!=group.candidates[selected].descriptor) {
+            if(count==1&&group.candidates.front().descriptor!=selected->descriptor) {
                 // Reparse only the discarded enabled descriptor. The engine
                 // owns its temporary members and destroys them normally.
-                Replay replay{name,group.candidates[selected].descriptor,group.node};
+                Replay replay{name,selected->descriptor,group.node};
                 const auto path=borrow(replay.descriptor);
-                scan.replay=&replay;
-                try { native_mod_register(scan.manager,&path); }
-                catch(...) { scan.replay=nullptr;throw; }
-                scan.replay=nullptr;
-                replaced=replay.assigned;
-                if(!replaced) log("Mod collision repair could not register the selected descriptor.");
+                {
+                    Replaying context(scan,replay);
+                    try { native_mod_register(scan.manager,&path); }
+                    catch(...) {
+                        replay.status=ReplayStatus::parse_failed;
+                        scan.failed=true;
+                    }
+                }
+                report_collision(name,group,count,selected,&replay);
+                if(scan.failed) {
+                    log("Mod collision native operation failed; further repairs stopped.");
+                    return;
+                }
+            } else {
+                report_collision(name,group,count,count==1?selected:nullptr,nullptr);
             }
-            std::ostringstream message;
-            message<<"Mod name collision: name="<<std::quoted(name)<<" candidates=[";
-            for(std::size_t i=0;i<group.candidates.size();++i) {
-                if(i) message<<", ";
-                message<<std::quoted(group.candidates[i].descriptor)<<(active[i]?" (enabled)":" (disabled)");
-            }
-            message<<"] rule="<<(count==1?"unique-enabled":count==0?"native-none-enabled":"native-multiple-enabled")
-                   <<" selected="<<std::quoted(std::string(text(node_mod(group.node).descriptor)))
-                   <<" replaced="<<(replaced?"yes":"no");
-            log(message.str().c_str());
-        }
-    } catch(...) { log("Mod collision resolution failed."); }
+        } catch(...) { log("Mod collision enabled lookup failed; further repairs stopped.");return; }
+    }
 }
 }
 
@@ -114,6 +166,8 @@ void initialize_mod_registry(void* manager,const void* configuration) {
 }
 void scan_mod_registry(void* manager) {
     if(current&&current->manager==manager&&current->initializing&&!current->scanning) {
+        current->groups.clear();
+        current->failed=false;
         Scanning scanning(*current);
         original_mod_scan(manager);
         return;
@@ -129,35 +183,53 @@ NativeModInsertResult* insert_mod_registry(void* tree,NativeModInsertResult* res
     if(!scan||tree!=static_cast<std::byte*>(scan->manager)+mod_tree_offset||
        (!scan->scanning&&!scan->replay)) return original_mod_insert(tree,result,entry);
     if(scan->replay) {
-        const auto& replay=*scan->replay;
-        const bool matches=text(entry->key)==replay.name&&text(entry->mod.descriptor)==replay.descriptor;
-        auto* returned=original_mod_insert(tree,result,entry);
-        if(matches&&!returned->inserted&&returned->node==replay.node) {
-            // Duplicate insertion does not move from entry. Use the native
-            // deep assignment for every string, vector, and scalar member;
-            // neither the tree key nor the original name is changed.
-            native_mod_assign(&node_mod(returned->node),&entry->mod);
-            scan->replay->assigned=true;
+        auto& replay=*scan->replay;
+        // The verified parser ignores this duplicate-insertion result and
+        // destroys the unconsumed entry. Replays may only update this node;
+        // forwarding a changed name to insertion could create a new node.
+        result->node=replay.node;result->inserted=false;
+        if(replay.status!=ReplayStatus::not_registered) return result;
+        if(text(entry->key)!=replay.name||text(entry->mod.name)!=replay.name||
+           text(entry->mod.descriptor)!=replay.descriptor) {
+            replay.status=ReplayStatus::rejected;
+            report_rejection(replay,*entry);
+            return result;
         }
-        return returned;
+        try {
+            native_mod_assign(&node_mod(replay.node),&entry->mod);
+            replay.status=ReplayStatus::assigned;
+        } catch(...) {
+            replay.status=ReplayStatus::assignment_failed;
+            scan->failed=true;
+        }
+        return result;
     }
-    Group* group=nullptr;
+    auto* returned=original_mod_insert(tree,result,entry);
+    // Successful insertion moves entry into the returned node. On duplicate
+    // insertion entry is untouched, so capture metadata only for collisions.
+    if(returned->inserted) return returned;
     if(!scan->failed) {
         try {
-            // First insertion moves from entry, so record bytes beforehand.
-            auto& found=scan->groups[std::string(text(entry->key))];
             const auto path=text(entry->mod.descriptor);
-            if(std::none_of(found.candidates.begin(),found.candidates.end(),
+            const auto first=text(node_mod(returned->node).descriptor);
+            if(path==first) return returned;
+            const auto name=text(entry->key);
+            auto found=scan->groups.find(name);
+            if(found==scan->groups.end()) {
+                Group group{returned->node};
+                group.candidates.reserve(2);
+                group.candidates.push_back({std::string(first)});
+                found=scan->groups.emplace(std::string(name),std::move(group)).first;
+            }
+            auto& candidates=found->second.candidates;
+            if(std::none_of(candidates.begin(),candidates.end(),
                 [path](const auto& value) { return value.descriptor==path; }))
-                found.candidates.push_back({std::string(path)});
-            group=&found;
+                candidates.push_back({std::string(path)});
         } catch(...) {
             scan->failed=true;
             log("Mod collision metadata allocation failed; native registration retained.");
         }
     }
-    auto* returned=original_mod_insert(tree,result,entry);
-    if(group) group->node=returned->node;
     return returned;
 }
 }

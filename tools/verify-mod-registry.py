@@ -22,6 +22,8 @@ import zipfile
 EXE_HASH = '9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a'
 MAIN = 'Chinese Language Mod for 1.37'
 SUPPLEMENT = 'Chinese Language Supplementary Mod for 1.37'
+PROBE = 'ZZZ Registry Dependency Probe'
+PROBE_RIVAL = '宿敌（依赖覆盖验证）'
 IDS = ['3813976975', '3813977176', '2976470733', '3290499798', '3301109455', '3467086805']
 
 
@@ -93,7 +95,8 @@ class Reader:
             paths.append(name.value)
         base = modules[0]
         app = self.pointer(base + 0x242bf50)
-        state = {'modules': paths, 'frida_loaded': any('frida' in path.lower() for path in paths),
+        state = {'schema_version': 2, 'reader_sha256': sha(Path(__file__)),
+                 'modules': paths, 'frida_loaded': any('frida' in path.lower() for path in paths),
                  'checksum_ready': bool(app and self.read(app + 0x328, 1)[0])}
         if app:
             idler = self.pointer(app + 0x40)
@@ -160,6 +163,27 @@ def prepare(args):
                                     'descriptor_sha256': sha(descriptor)}
     snapshot['font_files'] = {name: sha(sources['3813976975'] / name)
                               for name in ['gfx/fonts/zh-hans-map.fnt', 'gfx/fonts/zh-hans-map.dds']}
+    # All descriptor edits below belong to these new fixtures. Source mods
+    # remain read-only, including their original names and dependencies.
+    assets = root / 'fixture-assets'
+    assets.mkdir()
+    archive = assets / 'main.zip'
+    with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=1) as package:
+        for file in sorted(sources['3813976975'].rglob('*')):
+            if file.is_file():
+                package.write(file, file.relative_to(sources['3813976975']).as_posix())
+    probe = assets / 'dependency-probe'
+    localisation = Path('localisation/diplomacy_l_english.yml')
+    source_text = (sources['3813976975'] / localisation).read_text(encoding='utf-8-sig')
+    probe_text, replacements = re.subn(r'(?m)^(\s*rival:\d*\s*)"[^"]*"',
+                                      lambda match: match[1] + '"' + PROBE_RIVAL + '"', source_text)
+    assert replacements == 1, 'The dependency probe needs exactly one rival translation'
+    (probe / localisation).parent.mkdir(parents=True)
+    (probe / localisation).write_text(probe_text, encoding='utf-8-sig')
+    snapshot['fixture_assets'] = {'archive_sha256': sha(archive),
+                                  'probe_sha256': sha(probe / localisation),
+                                  'probe_source_sha256': sha(sources['3813976975'] / localisation)}
+    snapshot['preparer_sha256'] = sha(Path(__file__))
     save(root / 'sources-before.json', snapshot)
     common = [('supplement.mod', '3813977176', SUPPLEMENT),
               ('proper2k.mod', '3290499798', 'Proper 2K UI Enhanced'),
@@ -175,6 +199,11 @@ def prepare(args):
         'none-enabled': [('a_old.mod', '2976470733', False), ('z_utf8.mod', '3813976975', False)],
         'multiple-enabled': [('a_old.mod', '2976470733', True), ('z_utf8.mod', '3813976975', True)],
         'multiple-enabled-inactive-first': [('a_local.mod', 'local', False), ('m_old.mod', '2976470733', True), ('z_utf8.mod', '3813976975', True)],
+        'archive-disabled-first': [('a_old.mod', '2976470733', False), ('z_archive.mod', 'archive', True)],
+        'archive-enabled-first': [('a_archive.mod', 'archive', True), ('z_old.mod', '2976470733', False)],
+        'dependency-forward': [('a_old.mod', '2976470733', False), ('z_utf8.mod', '3813976975', True)],
+        'dependency-reversed': [('a_old.mod', '2976470733', False), ('z_utf8.mod', '3813976975', True)],
+        'dependency-control': [('main.mod', '3813976975', True)],
     }
     settings = args.settings.read_text(encoding='utf-8')
     settings = settings.replace('x=2560', 'x=1280').replace('y=1440', 'y=720')
@@ -184,16 +213,29 @@ def prepare(args):
         (userdir / 'mod').mkdir(parents=True)
         enabled = [f'mod/{file}' for file, _, _ in common]
         for file, key, label in common + [(file, key, MAIN) for file, key, _ in candidates]:
-            source = sources[key]
+            source = sources['3813976975' if key == 'archive' else key]
             text = (source / 'descriptor.mod').read_text(encoding='utf-8-sig')
             text = re.sub(r'(?m)^name\s*=.*$', f'name="{label}"', text)
             text = re.sub(r'(?m)^(path|archive)\s*=.*\n?', '', text)
-            text += f'\npath="{source.as_posix()}"\n'
+            for original, target in [(f'[UTF8] {MAIN}', MAIN), (f'[UTF8] {SUPPLEMENT}', SUPPLEMENT),
+                                     ('Chinese Mod - 2K UI Project Enhanced', 'P2KE Patch - Chinese Language Mod')]:
+                text = text.replace(f'"{original}"', f'"{target}"')
+            text += f'\narchive="{archive.as_posix()}"\n' if key == 'archive' else f'\npath="{source.as_posix()}"\n'
             (userdir / 'mod' / file).write_text(text, encoding='utf-8')
         enabled += [f'mod/{file}' for file, _, active in candidates if active]
+        expected_rival = None
+        if name.startswith('dependency-'):
+            dependency = f'dependencies={{"{MAIN}"}}\n' if name != 'dependency-control' else ''
+            (userdir / 'mod/probe.mod').write_text(
+                f'name="{PROBE}"\npath="{probe.as_posix()}"\n{dependency}', encoding='utf-8')
+            enabled.insert(0, 'mod/probe.mod')
+            if name == 'dependency-reversed':
+                enabled.reverse()
+            expected_rival = PROBE_RIVAL if dependency else '宿敌'
         save(userdir / 'dlc_load.json', {'enabled_mods': enabled, 'disabled_dlcs': []})
         (userdir / 'settings.txt').write_text(settings, encoding='utf-8')
-        save(userdir / 'test.json', {'name': name, 'candidates': candidates, 'enabled_mods': enabled})
+        save(userdir / 'test.json', {'name': name, 'candidates': candidates, 'enabled_mods': enabled,
+                                   'expected_rival': expected_rival})
     print(f'Prepared {len(cases)} fixtures in {root}', flush=True)
 
 
@@ -214,6 +256,7 @@ def run(args):
         path.unlink()  # This directory belongs only to this new runtime.
     (runtime / 'userdir.txt').write_text(str(userdir), encoding='utf-8')
     save(result_dir / 'launch.json', {'exe': str(runtime / 'eu4.exe'), 'exe_sha256': EXE_HASH,
+                                    'runner_sha256': sha(Path(__file__)), 'snapshot_schema_version': 2,
                                     'package': str(args.package), 'package_sha256': sha(args.package),
                                     'dll_sha256': sha(runtime / 'plugins/eu4_unicode_patch.dll'),
                                     'loader_sha256': sha(runtime / 'VERSION.dll'), 'userdir': str(userdir),
@@ -271,6 +314,8 @@ def run(args):
                'map_font_missing': b'zh-hans-map.fnt' in error,
                'map_font_retained': 'Mod font retained: gfx/fonts/zh-hans-map' in patch,
                'collisions': [line for line in patch.splitlines() if 'Mod name collision:' in line],
+               'repair_errors': [line for line in patch.splitlines() if 'Mod collision' in line and
+                                 ('failed' in line or 'rejected' in line)],
                'dll_sha256': sha(runtime / 'plugins/eu4_unicode_patch.dll')}
     save(result_dir / 'result.json', summary)
     print(json.dumps(summary, ensure_ascii=False), flush=True)
@@ -292,10 +337,14 @@ def compare(args):
         baseline = json.loads((before_dir / 'native-state.json').read_text(encoding='utf-8'))
         patched = json.loads((after_dir / 'native-state.json').read_text(encoding='utf-8'))
         assert before['menu_ready'] and after['menu_ready'], fixture.name
+        assert baseline['schema_version'] == patched['schema_version'] == 2, fixture.name
         assert baseline['enabled_mods'] == patched['enabled_mods'] == definition['enabled_mods'], fixture.name
-        assert before['selected'] == first and after['selected'] == selected, fixture.name
+        assert before['selected'] == (selected if args.before_fixed else first) and after['selected'] == selected, fixture.name
         normal = len(enabled) == 1 or (len(enabled) > 1 and candidates[0][2])
         assert after['chinese'] == normal and after['map_font_missing'] != normal, fixture.name
+        assert not after['repair_errors'], fixture.name
+        if definition['expected_rival']:
+            assert any(line.endswith('name = ' + definition['expected_rival']) for line in after['opinion']), fixture.name
         if len(enabled) != 1:
             assert (before['selected'], before['opinion'], before['map_font_missing']) == (
                 after['selected'], after['opinion'], after['map_font_missing']), fixture.name
@@ -314,10 +363,17 @@ def compare(args):
         assert MAIN in adapter['dependencies'] and SUPPLEMENT in adapter['dependencies'], fixture.name
         for name in [MAIN, SUPPLEMENT]:
             assert name in names(patched) and names(patched)[name][0] == name, fixture.name
+        assert all(dependency in names(patched) for item in patched['registry']
+                   for dependency in item['dependencies']), fixture.name
         main = next(item for item in patched['registry'] if item['name'] == MAIN)
         descriptor = (after_dir / 'userdir' / selected).read_text(encoding='utf-8')
-        directory = re.search(r'(?m)^path="([^"]+)"', descriptor).group(1)
-        assert Path(main['directory']).resolve() == Path(directory).resolve(), fixture.name
+        resource = re.search(r'(?m)^(path|archive)="([^"]+)"', descriptor)
+        field = 'directory' if resource[1] == 'path' else 'archive'
+        assert Path(main[field]).resolve() == Path(resource[2]).resolve(), fixture.name
+        assert not main['archive' if field == 'directory' else 'directory'], fixture.name
+        if args.before_fixed:
+            assert (before['selected'], before['opinion'], before['map_font_missing']) == (
+                after['selected'], after['opinion'], after['map_font_missing']), fixture.name
         assert not baseline['frida_loaded'] and not patched['frida_loaded'], fixture.name
         rows.append({'case': fixture.name, 'before': before, 'after': after, 'passed': True})
     save(root / 'comparison.json', {'passed': True, 'groups': len(rows), 'rows': rows})
@@ -343,6 +399,8 @@ def main():
     compare_parser.add_argument('--root', type=Path, required=True)
     compare_parser.add_argument('--before', required=True)
     compare_parser.add_argument('--after', required=True)
+    compare_parser.add_argument('--before-fixed', action='store_true',
+                                help='Compare against a CI package that already includes the collision fix')
     args = parser.parse_args()
     {'prepare': prepare, 'run': run, 'compare': compare}[args.command](args)
 
