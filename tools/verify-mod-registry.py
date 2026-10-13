@@ -31,6 +31,9 @@ def sha(path):
     return hashlib.file_digest(path.open('rb'), 'sha256').hexdigest()
 
 
+SCRIPT_SHA256 = sha(Path(__file__))
+
+
 def save(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
 
@@ -97,7 +100,7 @@ class Reader:
             paths.append(name.value)
         base = modules[0]
         app = self.pointer(base + 0x242bf50)
-        state = {'schema_version': 2, 'reader_sha256': sha(Path(__file__)),
+        state = {'schema_version': 2, 'reader_sha256': SCRIPT_SHA256,
                  'modules': paths, 'frida_loaded': any('frida' in path.lower() for path in paths),
                  'checksum_ready': bool(app and self.read(app + 0x328, 1)[0])}
         if app:
@@ -185,7 +188,7 @@ def prepare(args):
     snapshot['fixture_assets'] = {'archive_sha256': sha(archive),
                                   'probe_sha256': sha(probe / localisation),
                                   'probe_source_sha256': sha(sources['3813976975'] / localisation)}
-    snapshot['preparer_sha256'] = sha(Path(__file__))
+    snapshot['preparer_sha256'] = SCRIPT_SHA256
     save(root / 'sources-before.json', snapshot)
     common = [('supplement.mod', '3813977176', SUPPLEMENT),
               ('proper2k.mod', '3290499798', 'Proper 2K UI Enhanced'),
@@ -213,8 +216,11 @@ def prepare(args):
     for name, candidates in cases.items():
         userdir = root / 'fixtures' / name
         (userdir / 'mod').mkdir(parents=True)
-        enabled = [f'mod/{file}' for file, _, _ in common]
-        for file, key, label in common + [(file, key, MAIN) for file, key, _ in candidates]:
+        # Keep the order probe independent of UI/font mods that themselves
+        # depend on MAIN and would raise its rank even in the no-dependency control.
+        case_common = [] if name.startswith('dependency-') else common
+        enabled = [f'mod/{file}' for file, _, _ in case_common]
+        for file, key, label in case_common + [(file, key, MAIN) for file, key, _ in candidates]:
             source = sources['3813976975' if key == 'archive' else key]
             text = (source / 'descriptor.mod').read_text(encoding='utf-8-sig')
             text = re.sub(r'(?m)^name\s*=.*$', f'name="{label}"', text)
@@ -258,7 +264,7 @@ def run(args):
         path.unlink()  # This directory belongs only to this new runtime.
     (runtime / 'userdir.txt').write_text(str(userdir), encoding='utf-8')
     save(result_dir / 'launch.json', {'exe': str(runtime / 'eu4.exe'), 'exe_sha256': EXE_HASH,
-                                    'runner_sha256': sha(Path(__file__)), 'snapshot_schema_version': 2,
+                                    'runner_sha256': SCRIPT_SHA256, 'snapshot_schema_version': 2,
                                     'package': str(args.package), 'package_sha256': sha(args.package),
                                     'dll_sha256': sha(runtime / 'plugins/eu4_unicode_patch.dll'),
                                     'loader_sha256': sha(runtime / 'VERSION.dll'), 'userdir': str(userdir),
@@ -361,9 +367,13 @@ def compare(args):
             assert positions == sorted(positions), fixture.name
         names = lambda state: {item['name']: (item['key'], item['dependencies']) for item in state['registry']}
         assert names(baseline) == names(patched), fixture.name
-        adapter = next(item for item in patched['registry'] if item['name'] == 'P2KE Patch - Chinese Language Mod')
-        assert MAIN in adapter['dependencies'] and SUPPLEMENT in adapter['dependencies'], fixture.name
-        for name in [MAIN, SUPPLEMENT]:
+        if fixture.name.startswith('dependency-'):
+            probe = next(item for item in patched['registry'] if item['name'] == PROBE)
+            assert probe['dependencies'] == ([] if fixture.name == 'dependency-control' else [MAIN]), fixture.name
+        else:
+            adapter = next(item for item in patched['registry'] if item['name'] == 'P2KE Patch - Chinese Language Mod')
+            assert MAIN in adapter['dependencies'] and SUPPLEMENT in adapter['dependencies'], fixture.name
+        for name in [MAIN] + ([SUPPLEMENT] if not fixture.name.startswith('dependency-') else []):
             assert name in names(patched) and names(patched)[name][0] == name, fixture.name
         assert all(dependency in names(patched) for item in patched['registry']
                    for dependency in item['dependencies']), fixture.name
