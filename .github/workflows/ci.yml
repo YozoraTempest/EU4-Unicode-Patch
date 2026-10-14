@@ -48,6 +48,8 @@ jobs:
             build/*_tests
             build/libeu4_unicode.so
             build/linux-package/**
+            build/EU4UnicodePatch-linux-*.tar.gz
+            build/linux-package-sha256.txt
             build/elf-evidence/*.txt
   build:
     runs-on: windows-2022

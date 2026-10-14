@@ -24,3 +24,8 @@ readelf -d build/libeu4_unicode.so > build/linux-package/dynamic.txt
 ldd build/libeu4_unicode.so > build/linux-package/dependencies.txt
 LD_PRELOAD="$PWD/build/libeu4_unicode.so" /usr/bin/true
 (cd build/linux-package && sha256sum libeu4_unicode.so launch-linux.sh > SHA256SUMS)
+# GitHub artifact ZIP downloads discard executable permissions. The player
+# archive preserves the launcher mode and its relative library/notice paths.
+linux_archive="EU4UnicodePatch-linux-x86_64-v$(cat VERSION).tar.gz"
+tar -C build/linux-package -czf "build/$linux_archive" .
+(cd build && sha256sum "$linux_archive" > linux-package-sha256.txt)

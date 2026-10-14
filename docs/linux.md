@@ -18,7 +18,7 @@ CI 在同一次运行中构建 Windows 与 Arch，保存核心测试、Linux 预
 
 ## 加载
 
-将 Linux 包完整解压到独立目录，保留 `.so` 与 `launch-linux.sh` 的相邻位置。Steam 启动选项可使用：
+将 CI 的 Linux `tar.gz` 包完整解压到独立目录，保留 `.so` 与 `launch-linux.sh` 的相邻位置。tar 包保存启动脚本的执行权限；GitHub 的原始 artifact ZIP 不保存该权限。Steam 启动选项可使用：
 
 ```sh
 "/absolute/path/to/patch/launch-linux.sh" %command%
