@@ -251,7 +251,7 @@ def run(args):
     root = args.root.resolve()
     runtime = root / 'runtime'
     owner = json.loads((root / 'owned-runtime.json').read_text())
-    assert Path(owner['runtime']) == runtime and sha(runtime / 'eu4.exe') == EXE_HASH
+    assert Path(owner['runtime']).resolve() == runtime and sha(runtime / 'eu4.exe') == EXE_HASH
     result_dir = root / args.label / args.case
     if result_dir.exists():
         raise ValueError('Preserve evidence: choose a new result label')
