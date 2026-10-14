@@ -263,16 +263,20 @@ def run(args):
     for path in (runtime / 'plugins').glob('*.log'):
         path.unlink()  # This directory belongs only to this new runtime.
     (runtime / 'userdir.txt').write_text(str(userdir), encoding='utf-8')
+    # Direct launches need the App ID; automated runs keep native errors in logs.
+    (runtime / 'steam_appid.txt').write_text('236850\n', encoding='ascii')
     save(result_dir / 'launch.json', {'exe': str(runtime / 'eu4.exe'), 'exe_sha256': EXE_HASH,
                                     'runner_sha256': SCRIPT_SHA256, 'snapshot_schema_version': 2,
                                     'package': str(args.package), 'package_sha256': sha(args.package),
                                     'dll_sha256': sha(runtime / 'plugins/eu4_unicode_patch.dll'),
-                                    'loader_sha256': sha(runtime / 'VERSION.dll'), 'userdir': str(userdir),
+                                    'loader_sha256': sha(runtime / 'VERSION.dll'),
+                                    'steam_appid_sha256': sha(runtime / 'steam_appid.txt'), 'userdir': str(userdir),
                                     'enabled_mods': json.loads((userdir / 'dlc_load.json').read_text())})
     startup = subprocess.STARTUPINFO()
     startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     startup.wShowWindow = 0
-    process = subprocess.Popen([str(runtime / 'eu4.exe'), '-debug', '-nointro', '-skiplauncher'],
+    process = subprocess.Popen([str(runtime / 'eu4.exe'), '-debug', '-nointro', '-skiplauncher',
+                                '-suppresserrormessages'],
                                cwd=runtime, startupinfo=startup, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     reader, state = None, {}
     began = time.monotonic()

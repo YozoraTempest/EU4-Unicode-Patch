@@ -11,3 +11,11 @@ pacman -Q > build/arch-packages.txt
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure --output-junit ctest-arch-results.xml
+mkdir -p build/linux-package
+cp build/libeu4_unicode.so tools/launch-linux.sh build/linux-package/
+cp LICENSE build/linux-package/
+file build/libeu4_unicode.so > build/linux-package/elf.txt
+readelf -d build/libeu4_unicode.so > build/linux-package/dynamic.txt
+ldd build/libeu4_unicode.so > build/linux-package/dependencies.txt
+LD_PRELOAD="$PWD/build/libeu4_unicode.so" /usr/bin/true
+(cd build/linux-package && sha256sum libeu4_unicode.so launch-linux.sh > SHA256SUMS)
