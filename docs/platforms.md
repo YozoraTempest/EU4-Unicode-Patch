@@ -8,7 +8,7 @@
 
 - `cmake/shared-core.cmake` 集中定义八个共享库、依赖和拼音数据生成。
 - `cmake/windows.cmake` 配置 Windows ICU 导入、MASM、原生适配、DLL、现有工具与测试。
-- `cmake/linux-core.cmake` 配置上游 ICU、PIC、Arch 核心测试。当前不生成 Linux 游戏插件。
+- `cmake/linux-core.cmake` 配置上游 ICU、PIC、Arch 核心测试及 Linux ELF 游戏插件。
 
 Windows 的 `native_editor_text.cpp` 和 `native_search.cpp` 通过 `target_sources` 加入现有目标；共享构建定义不包含这两个原生适配实现。现有 CMake 目标名称及使用这些实现的 Windows 消费者保持原有链接契约。
 
@@ -29,19 +29,19 @@ Windows 的 `native_editor_text.cpp` 和 `native_search.cpp` 通过 `target_sour
 
 | 接口 | Windows 现有实现 | Linux 原生目标 |
 | --- | --- | --- |
-| 加载入口与指令挂钩 | version API 代理、MinHook、MASM | ELF 共享库加载与已验证的原生挂钩，待实现 |
-| 可执行文件校验 | PE 映像、代码及内存权限检查 | Linux ELF 与目标函数校验，待实现 |
-| 字体布局与栅格化 | DirectWrite | 原生字体后端，待实现 |
-| 图集、纹理与绘制 | D3D9 与 Windows 游戏调用 | Linux 游戏图形调用，待实现 |
-| 输入法与控件接入 | IMM、Windows 消息及已验证的 SDL 事件入口 | Linux 文本提交、预编辑及控件接入，待实现 |
-| 模组登记 | Windows 原生容器、字符串和登记上下文 | Linux 容器与调用顺序单独复核后实现 |
+| 加载入口与指令挂钩 | version API 代理、MinHook、MASM | LD_PRELOAD、SafetyHook、main 之前安装 |
+| 可执行文件校验 | PE 映像、代码及内存权限检查 | ELF ABI、完整 SHA256、每个原生位置的指令 |
+| 字体布局与栅格化 | DirectWrite | 模组 BMFont 字库；动态字体后端尚未接入 |
+| 图集、纹理与绘制 | D3D9 与 Windows 游戏调用 | Linux 原生 UI、缓存纹理、顶点及地图字形调用 |
+| 输入法与控件接入 | IMM、Windows 消息及 SDL 事件入口 | SDL 文本提交、原生 CEditBox、字素移动与删除；预编辑尚未接入 |
+| 模组登记 | Windows 原生容器、字符串和登记上下文 | 独立 Linux 扫描上下文及原生描述符赋值 |
 
 共享 Unicode 语义，平台层负责转换原生参数和资源。指令地址、引擎字符串、容器成员偏移与析构规则不跨平台复用；不得用现有 Windows 数据样例代替 Linux ABI 验证。
 
 ## 当前支持状态
 
-Windows 构建能够生成游戏补丁。Linux 当前通过 CI 编译并测试八个共享库及九个测试程序，尚无能够在 EU4 中提供 Unicode 功能的 `.so`。
+Windows 构建生成 DLL，Linux 构建生成 `libeu4_unicode.so`。Arch CI 验证八个共享库、拼音模糊搜索及真实预加载入口的转发与未知 ELF 拒绝行为；原生游戏实测另外进行。
 
-两平台共用核心构建后，继续从已安装的 EU4 1.37.5 Linux 原生程序调查接口。发布插件的依赖 ABI 必须对照实际 Steam Linux Runtime；Arch 核心程序的测试结果不等于游戏插件可加载。
+Linux 接口依据来自已安装的 Steam EU4 1.37.5 原生程序，详见 [Linux 接口表](linux-native-profile.md)。插件以 Arch 为当前依赖 ABI 基准，其他发行版、完整 IME 和功能覆盖不能由核心测试结果推断。
 
-同一次 CI 运行同时验证 Windows 与 Arch。未来 Linux 游戏插件完成后，可由同一发布流程提供两个系统的原生产物；当前发布流程仍只提供 Windows 游戏补丁，不包装尚未实现的 Linux 插件。
+同一次 CI 运行同时验证 Windows 与 Arch 并保存两平台产物。当前 Linux 包为 CI 测试产物；Release 发布流程没有随本次适配自动发布。

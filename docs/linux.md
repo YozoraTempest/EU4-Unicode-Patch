@@ -1,23 +1,43 @@
 # Linux 原生适配
 
-目标为 Steam 的 EU4 1.37.5 Linux x86_64 原生程序，测试基准为 Arch Linux。
+目标为 Steam EU4 1.37.5 Linux x86_64 原生游戏，基准环境为 Arch Linux。Windows 与 Linux 共用同一项目、版本及八个 Unicode 核心库，分别生成 Windows DLL 和 Linux `libeu4_unicode.so`。平台构建边界见 [platforms.md](platforms.md)，原生接口依据见 [linux-native-profile.md](linux-native-profile.md)。
 
-Windows 与 Linux 共用同一项目、版本和核心构建定义，原生接口由各自平台实现，见[共用结构](platforms.md)。八个共享库集中定义于 `cmake/shared-core.cmake`；Windows 与 Linux 构建入口分别配置平台依赖和原生源码。
+Linux 插件接入原生 YAML 本地化、BMFont 字库解析、UI 与地图字形绘制、SDL 文本提交及编辑控件，并处理未启用的同名模组抢占登记。它使用汉化模组已有的字体资源。共享拼音搜索算法能够在 Linux 编译，但 Linux 搜索控件、动态字体排版后端和 IME 预编辑尚未接入；不要把核心测试通过解释为与 Windows 全部功能等同。
 
-当前 Linux 构建只提供共享 Unicode 核心库与自动测试，不生成能够加载到 EU4 的插件。UTF-8、字素和换行边界、格式化文本、编辑、拼音搜索、字形登记和绘制批次逻辑使用 Linux ICU 编译。测试中沿用的原生事件数据样例仍属于已有 Windows ABI 契约，不能据此认为 Linux 游戏接口已经适配。
-
-在 Arch Linux 中运行：
+## 构建和依赖
 
 ```sh
-sudo pacman -Syu --needed base-devel cmake ninja python git icu
+sudo pacman -Syu --needed base-devel cmake ninja python git icu openssl file binutils sdl2-compat
 git submodule update --init --recursive
 bash tools/ci-arch-core.sh
 ```
 
-CI 使用 Arch 用户空间并记录发行版、内核和全部软件包版本。图形、输入法和原生游戏实测需要独立 Arch 桌面环境，容器内的核心测试不能替代它们。
+CI 在同一次运行中构建 Windows 与 Arch，保存核心测试、Linux 预加载入口测试和产物依赖信息。`build/linux-package` 包含 `.so`、启动脚本、许可证、SHA256 和动态依赖清单。SafetyHook 与 Zydis 使用固定版本；挂钩只在游戏 `main` 之前、单线程状态下安装，失败时撤销本次安装并拒绝启动游戏。
 
-桌面安装使用 Arch 的 `steam` 包和 Steam 默认 Linux 运行环境。原生游戏与 `steam-native-runtime` 包是不同概念，不通过替换 Steam 运行环境来定义本项目的目标。插件发布构建的 glibc、libstdc++ 和 ICU ABI 必须根据 EU4 实际使用的运行环境确定；当前在滚动版 Arch 上编译的核心测试程序不是可分发的游戏插件，也没有验证它们能载入 Steam 的游戏运行环境。
+当前插件在滚动版 Arch 上构建，依赖系统 glibc、libstdc++、ICU 和 OpenSSL。Steam 默认 Linux 运行环境负责游戏原有依赖。其他发行版及旧 ABI 的兼容性需要另外验证；本项目没有把它们标为支持环境。
 
-取得 Linux 游戏程序后，先记录 ELF 架构、Build ID、哈希、动态依赖、符号及本机实际版本，再调查函数边界、调用约定、引擎字符串和容器所有权。Windows RVA、PE 检查和 MSVC 对象布局不能直接用于 Linux。字体排版、绘制、加载与输入法接口在对应原生调用调查完成后实现。
+## 加载
 
-实测使用独立游戏 runtime 与 userdir，保留原版和补丁日志、测试描述符和启用列表。首先建立原生无补丁对照，再验证中文 UI 与地图、搜索、输入、存档路径、目录／压缩包模组及同名登记。虚拟机的软件渲染只能用于功能验证，帧率和设备性能需要真实 GPU 的 Arch 环境另行检查。
+将 Linux 包完整解压到独立目录，保留 `.so` 与 `launch-linux.sh` 的相邻位置。Steam 启动选项可使用：
+
+```sh
+"/absolute/path/to/patch/launch-linux.sh" %command%
+```
+
+此脚本通过 `LD_PRELOAD` 加载插件，再运行 Steam 给出的原生命令。其他启动器辅助程序直接转发。插件只处理文件名为 `eu4` 的主程序，首先校验 ELF ABI 和完整 SHA256，随后校验每个挂钩及原生调用位置的指令。未知版本拒绝安装挂钩，原因写入游戏工作目录中的 `eu4_unicode_linux.log`。
+
+启动脚本同时使用 SDL 官方 `SDL_DYNAMIC_API` 入口加载 Arch 的 `/usr/lib/libSDL2-2.0.so.0`，保留用户显式设置的 SDL_DYNAMIC_API。游戏内嵌 SDL 2.0.4 在已调查配置中没有建立可用的输入法上下文；Arch `sdl2-compat` 提供受维护的 SDL2 ABI。实测使用 Fcitx5 拼音、X11/XIM 和本地输入法服务。桌面必须先正确配置输入法；候选窗位置和游戏内预编辑显示仍不属于已完成接口。
+
+已调查的游戏是原生 Linux ELF64 x86_64、ET_EXEC，完整 SHA256 为：
+
+```text
+af115d3b0e54a05eca0198ed569db90ca225728afda03b5ac4ded251520a7ce3
+```
+
+无需修改汉化名称或 dependencies。存在同名登记时，只有一个候选在原生启用列表中，插件才选择它；没有启用项或多个候选同时启用时保留原生选择并记录冲突。日志包含名称、描述符路径、启用状态与选择结果。
+
+## 实测范围
+
+游戏验证使用独立 runtime 和显式 `-userdir=/absolute/test/path`，保留可执行文件与插件哈希、描述符、启用列表、原版与补丁日志。Linux 的 `userdir.txt` 不能代替已验证的命令行参数。测试素材使用本地汉化副本，无需订阅或下载创意工坊内容。
+
+测试必须检查原生登记、实际中文本地化、字体挂载及游戏画面；单独测试选择算法或启动器状态不够。虚拟机的软件渲染用于功能验证，真实 GPU 性能、完整战役、存档往返、压缩模组和多字库格式仍需要各自的验证证据。游戏运行时诊断只读，保留失败记录，不能以进入前端对象的时间代替主菜单完成渲染或持续运行。
