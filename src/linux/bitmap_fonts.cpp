@@ -8,6 +8,8 @@ namespace eu4unicode::linux_native {
 namespace {
 SafetyHookInline* parse_hook=nullptr;
 SafetyHookInline* destroy_hook=nullptr;
+SafetyHookInline* initialize_hook=nullptr;
+thread_local void* initializing_font=nullptr;
 template<class T> T read(std::uintptr_t address) noexcept {
     T result;std::memcpy(&result,reinterpret_cast<void*>(address),sizeof(T));return result;
 }
@@ -26,20 +28,27 @@ NativeGlyph* glyph(std::uintptr_t table,std::uint32_t code) noexcept {
     auto found=code<=255?entries[code]:find_unicode_glyph(entries,code);
     return static_cast<NativeGlyph*>(found);
 }
-void parse(void* font) {
-    const auto address=reinterpret_cast<std::uintptr_t>(font);
-    if(read<int>(address+0x950)<=0||read<int>(address+0x954)<=0) {
-        const auto graphics=read<std::uintptr_t>(address+0x40);
-        auto manager=reinterpret_cast<void*>(read<std::uintptr_t>(graphics+0x458));
-        const auto id=read<int>(address+0x948);
-        const auto texture=reinterpret_cast<void*(*)(void*,int)>(0x22a8a2e)(manager,id);
-        if(texture) {
-            const auto size=reinterpret_cast<std::uint64_t(*)(void*,int)>(0x22a8d92)(manager,id);
-            std::memcpy(reinterpret_cast<void*>(address+0x950),&size,sizeof(size));
-            log("Font texture initialized asset=%s width=%d height=%d",
-                reinterpret_cast<String*>(address+0xc0)->bytes,read<int>(address+0x950),read<int>(address+0x954));
-        } else log("Font texture unavailable asset=%s id=%d",reinterpret_cast<String*>(address+0xc0)->bytes,id);
+void initialize(void* font) {
+    struct Scope {
+        void* previous=initializing_font;
+        explicit Scope(void* font) {initializing_font=font;}
+        ~Scope() {initializing_font=previous;}
+    } scope(font);
+    initialize_hook->call<void>(font);
+}
+void font_texture_limit(safetyhook::Context& c) {
+    // LoadTexture has allocated the native file buffer, but rejects every
+    // texture file >=16 MiB before reading it. Unicode bitmap atlases exceed
+    // that limit. Keep this change scoped to CBitmapFont::InitPostRead; native
+    // DDS validation, GPU allocation and native buffer cleanup remain intact.
+    const auto size=static_cast<std::uint32_t>(c.rbx);
+    if(initializing_font&&size>=0x1000000&&size<=0x7fffffff) {
+        log("Font atlas accepted asset=%s bytes=%u",
+            reinterpret_cast<String*>(static_cast<char*>(initializing_font)+0xc0)->bytes,size);
+        c.rip=0x22a7efc;
     }
+}
+void parse(void* font) {
     parse_hook->call<void>(font);
     const auto table=reinterpret_cast<void* const*>(reinterpret_cast<std::uintptr_t>(font)+0x100);
     bind_unicode_font(table);
@@ -208,7 +217,9 @@ void texture_draw(safetyhook::Context& c) {
 }
 }
 void prepare_bitmap_fonts(Hooks& hooks) {
-    verify_site(0x22a8a2e);verify_site(0x22a8d92);
+    verify_site(0x22a7efc);
+    initialize_hook=&hooks.add_inline(0x204dbb8,reinterpret_cast<void*>(initialize));
+    hooks.add_mid(0x22a7edb,font_texture_limit);
     parse_hook=&hooks.add_inline(0x204de66,reinterpret_cast<void*>(parse));
     destroy_hook=&hooks.add_inline(0x204d114,reinterpret_cast<void*>(destroy));
     hooks.add_mid(0x204e366,load_glyph);
