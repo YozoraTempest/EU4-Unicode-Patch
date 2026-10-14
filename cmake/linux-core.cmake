@@ -24,11 +24,11 @@ add_subdirectory(vendor/safetyhook EXCLUDE_FROM_ALL)
 add_library(EU4UnicodePatchLinux SHARED
     src/linux/bootstrap.cpp src/linux/profile.cpp
     src/linux/localization.cpp src/linux/bitmap_fonts.cpp
-    src/linux/mod_registry.cpp src/legacy_text.cpp)
+    src/linux/mod_registry.cpp src/linux/editor_input.cpp src/legacy_text.cpp)
 target_include_directories(EU4UnicodePatchLinux PRIVATE include)
 target_compile_features(EU4UnicodePatchLinux PRIVATE cxx_std_23)
 target_compile_options(EU4UnicodePatchLinux PRIVATE -Wall -Wextra -Wpedantic)
-target_link_libraries(EU4UnicodePatchLinux PRIVATE unicode_text glyph_registry
+target_link_libraries(EU4UnicodePatchLinux PRIVATE unicode_text unicode_services glyph_registry
     safetyhook::safetyhook OpenSSL::Crypto ${CMAKE_DL_LIBS})
 set_target_properties(EU4UnicodePatchLinux PROPERTIES OUTPUT_NAME eu4_unicode)
 message(STATUS "Building the native EU4 1.37.5 Linux x86_64 plugin.")
