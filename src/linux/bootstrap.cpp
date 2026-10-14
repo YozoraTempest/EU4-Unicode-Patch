@@ -25,6 +25,7 @@ int patched_main(int argc,char** argv,char** envp) {
         hooks=new Hooks;
         prepare_localization(*hooks);
         prepare_bitmap_fonts(*hooks);
+        prepare_mod_registry(*hooks);
         hooks->enable();
         log("Linux native hooks enabled; profile=EU4-1.37.5-x86_64");
     } catch(const std::exception& error) {

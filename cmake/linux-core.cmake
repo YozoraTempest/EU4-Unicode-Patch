@@ -19,10 +19,12 @@ find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 set(SAFETYHOOK_BUILD_TEST OFF CACHE BOOL "" FORCE)
 set(SAFETYHOOK_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SAFETYHOOK_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(SAFETYHOOK_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 add_subdirectory(vendor/safetyhook EXCLUDE_FROM_ALL)
 add_library(EU4UnicodePatchLinux SHARED
     src/linux/bootstrap.cpp src/linux/profile.cpp
-    src/linux/localization.cpp src/linux/bitmap_fonts.cpp src/legacy_text.cpp)
+    src/linux/localization.cpp src/linux/bitmap_fonts.cpp
+    src/linux/mod_registry.cpp src/legacy_text.cpp)
 target_include_directories(EU4UnicodePatchLinux PRIVATE include)
 target_compile_features(EU4UnicodePatchLinux PRIVATE cxx_std_23)
 target_compile_options(EU4UnicodePatchLinux PRIVATE -Wall -Wextra -Wpedantic)

@@ -33,5 +33,6 @@ private:
 };
 void prepare_localization(Hooks&);
 void prepare_bitmap_fonts(Hooks&);
+void prepare_mod_registry(Hooks&);
 void report_text_counts() noexcept;
 }
