@@ -2,6 +2,8 @@
 
 目标为 Steam 的 EU4 1.37.5 Linux x86_64 原生程序，测试基准为 Arch Linux。
 
+Windows 与 Linux 共用同一项目、版本和核心构建定义，原生接口由各自平台实现，见[共用结构](platforms.md)。八个共享库集中定义于 `cmake/shared-core.cmake`；Windows 与 Linux 构建入口分别配置平台依赖和原生源码。
+
 当前 Linux 构建只提供共享 Unicode 核心库与自动测试，不生成能够加载到 EU4 的插件。UTF-8、字素和换行边界、格式化文本、编辑、拼音搜索、字形登记和绘制批次逻辑使用 Linux ICU 编译。测试中沿用的原生事件数据样例仍属于已有 Windows ABI 契约，不能据此认为 Linux 游戏接口已经适配。
 
 在 Arch Linux 中运行：
