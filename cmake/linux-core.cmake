@@ -1,5 +1,6 @@
 # Native Linux adaptation starts with the shared Unicode algorithms. Game
 # loading, ABI hooks, rendering and IME require the Linux executable profile.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(ICU REQUIRED COMPONENTS uc i18n)
 find_package(Threads REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
