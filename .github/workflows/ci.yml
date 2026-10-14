@@ -20,6 +20,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  arch-core:
+    runs-on: ubuntu-24.04
+    container: archlinux:base
+    timeout-minutes: 20
+    steps:
+      - name: Install Arch build dependencies
+        run: pacman -Syu --noconfirm --needed base-devel cmake ninja python git icu
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Build and test Linux shared core
+        run: bash tools/ci-arch-core.sh
+      - name: Save Arch environment and test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: arch-core-${{ github.sha }}
+          retention-days: 14
+          path: |
+            build/arch-*.txt
+            build/ctest-arch-results.xml
+            build/Testing/Temporary/LastTest.log
   build:
     runs-on: windows-2022
     timeout-minutes: 30
