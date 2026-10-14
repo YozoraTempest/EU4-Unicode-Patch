@@ -20,6 +20,7 @@ static_assert(offsetof(String,size)==8);
 void log(const char* format, ...) noexcept;
 bool verify_executable();
 void verify_site(std::uintptr_t address);
+void verify_profile();
 
 class Hooks {
 public:

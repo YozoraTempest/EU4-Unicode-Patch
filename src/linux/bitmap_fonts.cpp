@@ -31,8 +31,10 @@ void parse(void* font) {
     const auto table=reinterpret_cast<void* const*>(reinterpret_cast<std::uintptr_t>(font)+0x100);
     bind_unicode_font(table);
     const auto usage=unicode_glyph_usage();
-    if(usage.glyphs) log("Font parsed asset=%s unicode-fonts=%zu unicode-glyphs=%zu",
+    if(usage.glyphs) log("Font parsed asset=%s width=%d height=%d unicode-fonts=%zu unicode-glyphs=%zu",
         reinterpret_cast<String*>(reinterpret_cast<std::uintptr_t>(font)+0xc0)->bytes,
+        read<int>(reinterpret_cast<std::uintptr_t>(font)+0x950),
+        read<int>(reinterpret_cast<std::uintptr_t>(font)+0x954),
         usage.fonts,usage.glyphs);
 }
 void destroy(void* table) {
@@ -155,6 +157,42 @@ void nudged_count(safetyhook::Context& c) {
     c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.r12+0x100,unit.value));
     c.rip=0x1b5fe4c;
 }
+void texture_format(safetyhook::Context& c) {
+    const auto string=reinterpret_cast<String*>(c.rdi);
+    auto text=string->view();
+    std::string normalized;bool changed=false;
+    while(!text.empty()) {
+        const auto unit=scalar(text.data(),text.size());
+        if(unit.bytes>1&&(unit.value==0xa3||unit.value==0xa4||unit.value==0xa7)) {
+            normalized.push_back(static_cast<char>(unit.value));changed=true;
+        } else normalized.append(text.data(),unit.bytes);
+        text.remove_prefix(unit.bytes);
+    }
+    if(changed) reinterpret_cast<void*(*)(void*,std::size_t,std::size_t,const char*,std::size_t)>(
+        0x25a3f30)(string,0,string->size,normalized.data(),normalized.size());
+}
+void texture_copy(safetyhook::Context& c) {
+    const auto source=reinterpret_cast<char*>(c.rax);
+    const auto unit=scalar_z(source);
+    if(unit.bytes==1) return;
+    const std::string text(source,unit.bytes);
+    reinterpret_cast<void(*)(void*,const char*)>(0x254b1c2)(
+        reinterpret_cast<void*>(c.rsp+0x2f0),text.c_str());
+    c.rip=0x204ea29;
+}
+void texture_measure(safetyhook::Context& c) {
+    const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
+    if(unit.bytes==1) return;
+    c.r14+=unit.bytes-1;c.rcx=read<std::uintptr_t>(c.rsp+0x38);
+    c.rbp=reinterpret_cast<std::uintptr_t>(glyph(c.rcx+0x100,unit.value));
+    c.rip=0x204ef61;
+}
+void texture_draw(safetyhook::Context& c) {
+    const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
+    if(unit.bytes==1) return;
+    c.r14+=unit.bytes-1;c.r11=reinterpret_cast<std::uintptr_t>(glyph(c.r13+0x100,unit.value));
+    c.rip=0x2051090;
+}
 }
 void prepare_bitmap_fonts(Hooks& hooks) {
     parse_hook=&hooks.add_inline(0x204de66,reinterpret_cast<void*>(parse));
@@ -174,5 +212,10 @@ void prepare_bitmap_fonts(Hooks& hooks) {
     // AddNudgedNames sizes a stack vertex buffer with a separate glyph pass.
     // Its count must use the same scalars as FillVertexBuffer.
     hooks.add_mid(0x1b5fe41,nudged_count);
+    verify_site(0x25a3f30);
+    hooks.add_mid(0x204e9a4,texture_format);
+    hooks.add_mid(0x204ea1e,texture_copy);
+    hooks.add_mid(0x204ef51,texture_measure);
+    hooks.add_mid(0x2051085,texture_draw);
 }
 }

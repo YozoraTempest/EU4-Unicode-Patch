@@ -22,6 +22,7 @@ FILE* logfile=nullptr;
 int patched_main(int argc,char** argv,char** envp) {
     if(!verify_executable()) return 1;
     try {
+        verify_profile();
         hooks=new Hooks;
         prepare_localization(*hooks);
         prepare_bitmap_fonts(*hooks);
