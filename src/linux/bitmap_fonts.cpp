@@ -97,11 +97,23 @@ void screen_measure(safetyhook::Context& c) {
     const auto source=reinterpret_cast<char*>(c.r14+i);
     const auto unit=scalar(source,n-i);
     if(unit.bytes==1) return;
-    const auto destination=static_cast<std::uint32_t>(c.rbx);
+    auto destination=static_cast<std::uint32_t>(c.rbx);
     const auto count=unit.value>255?unit.bytes:1;
     if(destination+count>=256) {
-        // Retain the native scratch-buffer bound without splitting a scalar.
-        c.r13=n-1;c.r12=destination;c.rbp=0;c.rcx=0;c.rip=0x2052191;return;
+        // Flush a complete UTF-8 chunk into the native output buffer. Width
+        // accumulators stay intact, so this does not introduce a line break.
+        // The native source length is capped at 32000 bytes; preserve its
+        // output buffer bound as well as the smaller word scratch bound.
+        auto output=reinterpret_cast<char*>(0x333d450);
+        constexpr std::size_t capacity=0x7d3c;
+        const auto used=strnlen(output,capacity);
+        if(used+destination>=capacity) {
+            c.r13=n-1;c.r12=destination;c.rbp=0;c.rcx=0;c.rip=0x2052191;return;
+        }
+        std::memcpy(output+used,reinterpret_cast<void*>(0x3345190),destination);
+        output[used+destination]=0;
+        std::memset(reinterpret_cast<void*>(0x3345190),0,256);
+        destination=0;c.rbx=0;
     }
     auto buffer=reinterpret_cast<char*>(0x3345190+destination);
     if(unit.value>255) std::memcpy(buffer,source,count);

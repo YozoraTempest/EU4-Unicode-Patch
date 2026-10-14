@@ -51,7 +51,10 @@ bool input_is_any(const void* input,const String* characters) {
 bool edit(void* editor,const void* input) {
     try {
         const auto result=edit_input->call<bool>(editor,input);
-        if(input==text_event) edited.fetch_add(1,std::memory_order_relaxed);
+        if(input==text_event) {
+            const auto count=edited.fetch_add(1,std::memory_order_relaxed)+1;
+            if(count<=4) log("Unicode editor event handled scalar=U+%04X accepted=%d",text_scalar,result);
+        }
         text_event=nullptr;
         return result;
     } catch(...) {text_event=nullptr;throw;}
