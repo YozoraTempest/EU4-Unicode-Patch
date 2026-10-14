@@ -27,6 +27,19 @@ NativeGlyph* glyph(std::uintptr_t table,std::uint32_t code) noexcept {
     return static_cast<NativeGlyph*>(found);
 }
 void parse(void* font) {
+    const auto address=reinterpret_cast<std::uintptr_t>(font);
+    if(read<int>(address+0x950)<=0||read<int>(address+0x954)<=0) {
+        const auto graphics=read<std::uintptr_t>(address+0x40);
+        auto manager=reinterpret_cast<void*>(read<std::uintptr_t>(graphics+0x458));
+        const auto id=read<int>(address+0x948);
+        const auto texture=reinterpret_cast<void*(*)(void*,int)>(0x22a8a2e)(manager,id);
+        if(texture) {
+            const auto size=reinterpret_cast<std::uint64_t(*)(void*,int)>(0x22a8d92)(manager,id);
+            std::memcpy(reinterpret_cast<void*>(address+0x950),&size,sizeof(size));
+            log("Font texture initialized asset=%s width=%d height=%d",
+                reinterpret_cast<String*>(address+0xc0)->bytes,read<int>(address+0x950),read<int>(address+0x954));
+        } else log("Font texture unavailable asset=%s id=%d",reinterpret_cast<String*>(address+0xc0)->bytes,id);
+    }
     parse_hook->call<void>(font);
     const auto table=reinterpret_cast<void* const*>(reinterpret_cast<std::uintptr_t>(font)+0x100);
     bind_unicode_font(table);
@@ -195,6 +208,7 @@ void texture_draw(safetyhook::Context& c) {
 }
 }
 void prepare_bitmap_fonts(Hooks& hooks) {
+    verify_site(0x22a8a2e);verify_site(0x22a8d92);
     parse_hook=&hooks.add_inline(0x204de66,reinterpret_cast<void*>(parse));
     destroy_hook=&hooks.add_inline(0x204d114,reinterpret_cast<void*>(destroy));
     hooks.add_mid(0x204e366,load_glyph);
