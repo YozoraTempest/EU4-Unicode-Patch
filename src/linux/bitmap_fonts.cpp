@@ -148,6 +148,13 @@ void map_draw(safetyhook::Context& c) {
     c.r14+=unit.bytes-1;c.rax=unit.value;
     c.r13=reinterpret_cast<std::uintptr_t>(glyph(c.r12,unit.value));c.rip=0x1b5f46a;
 }
+void nudged_count(safetyhook::Context& c) {
+    const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
+    if(unit.bytes==1) return;
+    c.rbx+=unit.bytes-1;
+    c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.r12+0x100,unit.value));
+    c.rip=0x1b5fe4c;
+}
 }
 void prepare_bitmap_fonts(Hooks& hooks) {
     parse_hook=&hooks.add_inline(0x204de66,reinterpret_cast<void*>(parse));
@@ -164,5 +171,8 @@ void prepare_bitmap_fonts(Hooks& hooks) {
     hooks.add_mid(0x205552b,vertices_copy);
     hooks.add_mid(0x2055ac1,vertices_draw);
     hooks.add_mid(0x1b5f463,map_draw);
+    // AddNudgedNames sizes a stack vertex buffer with a separate glyph pass.
+    // Its count must use the same scalars as FillVertexBuffer.
+    hooks.add_mid(0x1b5fe41,nudged_count);
 }
 }
