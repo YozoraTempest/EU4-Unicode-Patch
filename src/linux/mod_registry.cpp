@@ -35,27 +35,13 @@ struct NativeString {
     }
     ~NativeString() {reinterpret_cast<void(*)(void*)>(0xd95742)(data);}
 };
-struct NativeParts {
-    const String* begin=nullptr;
-    const String* end=nullptr;
-    const String* capacity=nullptr;
-    NativeParts(const String& text,char separator) {
-        reinterpret_cast<void(*)(void*,const String*,char)>(0x254c9b6)(this,&text,separator);
-    }
-    ~NativeParts() {reinterpret_cast<void(*)(void*)>(0xd965e6)(this);}
-    std::size_t size() const {return begin?static_cast<std::size_t>(end-begin):0;}
-};
-static_assert(sizeof(NativeParts)==24);
-// GetActiveModNames splits on backslash first and slash second, then compares
-// the complete final two components to descriptor+0x90 by length and bytes.
-// Invoke the engine Split implementation so empty-component handling is exact.
-std::string enabled_path(const String& text) {
-    NativeParts backslash(text,'\\');
-    if(backslash.size()>1)
-        return std::string(backslash.end[-2].view())+"/"+std::string(backslash.end[-1].view());
-    NativeParts slash(text,'/');
-    if(slash.size()<2) return {};
-    return std::string(slash.end[-2].view())+"/"+std::string(slash.end[-1].view());
+bool enabled(void* manager,const Candidate& candidate) {
+    NativeString path(candidate.path.c_str());
+    // AppendVerifiedToPath uses this exact CPdxArray::FindIndex call before
+    // mounting a descriptor. GetActiveModNames normalizes path components for
+    // its display list, but that is not the resource loader's matching rule.
+    return reinterpret_cast<int(*)(const void*,const void*)>(0xeb5704)(
+        static_cast<char*>(manager)+0x88,path.data)!=-1;
 }
 void* registered(void* manager,const String& name) {
     return reinterpret_cast<void*(*)(void*,const String*)>(0x1fddea0)(manager,&name);
@@ -87,29 +73,29 @@ void capture_candidate(safetyhook::Context& c) {
 }
 void repair(Scan& scan) {
     if(scan.candidates.empty()) return;
-    std::vector<std::string> enabled;
     const auto count=member<int>(scan.manager,0x9c);
     const auto entries=member<const String*>(scan.manager,0x90);
     if(count<0||count>100000||(!entries&&count)) throw std::runtime_error("Invalid native enabled-mod array");
-    for(int i=0;i<count;++i) enabled.push_back(enabled_path(entries[i]));
     std::map<std::string,std::vector<const Candidate*>> groups;
     for(const auto& candidate:scan.candidates) groups[candidate.name].push_back(&candidate);
     for(const auto& [name,candidates]:groups) {
         if(candidates.size()<2) continue;
         const Candidate* selected=nullptr;
         unsigned int active=0;
-        for(const auto candidate:candidates)
-            if(std::find(enabled.begin(),enabled.end(),candidate->path)!=enabled.end()) {
+        std::vector<bool> states;
+        for(const auto candidate:candidates) {
+            states.push_back(enabled(scan.manager,*candidate));
+            if(states.back()) {
                 selected=candidate;++active;
             }
+        }
         const auto choice=active==1?selected:candidates.front();
         log("Mod collision name=\"%s\" candidates=%zu enabled=%u action=%s choice=\"%s\"",
             name.c_str(),candidates.size(),active,
             active==1?"unique-enabled":active?"native-multiple-enabled":"native-none-enabled",
             choice->path.c_str());
-        for(const auto candidate:candidates) log("Mod candidate name=\"%s\" descriptor=\"%s\" enabled=%d",
-            name.c_str(),candidate->path.c_str(),
-            std::find(enabled.begin(),enabled.end(),candidate->path)!=enabled.end());
+        for(std::size_t i=0;i<candidates.size();++i) log("Mod candidate name=\"%s\" descriptor=\"%s\" enabled=%d",
+            name.c_str(),candidates[i]->path.c_str(),static_cast<int>(states[i]));
         if(active!=1||selected==candidates.front()) continue;
         Capture capture(scan);
         scan.replacement=selected;
@@ -142,7 +128,7 @@ void initialize(void* manager,const void* settings) {
 }
 }
 void prepare_mod_registry(Hooks& hooks) {
-    for(const auto address:{0x254b1c2,0xd95742,0x254c9b6,0xd965e6,0x1fddea0,0x1fe5468,0x1fe03a0})
+    for(const auto address:{0x254b1c2,0xd95742,0xeb5704,0x1fddea0,0x1fe5468,0x1fe03a0})
         verify_site(address);
     initialize_hook=&hooks.add_inline(0x1fdee14,reinterpret_cast<void*>(initialize));
     reload_hook=&hooks.add_inline(0x1fdf3ca,reinterpret_cast<void*>(reload));
