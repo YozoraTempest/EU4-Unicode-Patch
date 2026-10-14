@@ -53,7 +53,8 @@ bool edit(void* editor,const void* input) {
         const auto result=edit_input->call<bool>(editor,input);
         if(input==text_event) {
             const auto count=edited.fetch_add(1,std::memory_order_relaxed)+1;
-            if(count<=4) log("Unicode editor event handled scalar=U+%04X accepted=%d",text_scalar,result);
+            if(count<=4) log("Unicode editor event handled count=%llu accepted=%d",
+                static_cast<unsigned long long>(count),result);
         }
         text_event=nullptr;
         return result;

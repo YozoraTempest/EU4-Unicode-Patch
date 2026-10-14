@@ -1,5 +1,4 @@
-# Native Linux adaptation starts with the shared Unicode algorithms. Game
-# loading, ABI hooks, rendering and IME require the Linux executable profile.
+# Shared algorithms and the separately verified native Linux ELF adapter.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(ICU REQUIRED COMPONENTS uc i18n)
 set(EU4_UNICODE_ICU_LIBRARIES ICU::uc ICU::i18n)
@@ -31,4 +30,12 @@ target_compile_options(EU4UnicodePatchLinux PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(EU4UnicodePatchLinux PRIVATE unicode_text unicode_services glyph_registry
     safetyhook::safetyhook OpenSSL::Crypto ${CMAKE_DL_LIBS})
 set_target_properties(EU4UnicodePatchLinux PROPERTIES OUTPUT_NAME eu4_unicode)
+add_executable(linux_loader_fixture tests/linux_loader_fixture.cpp)
+target_compile_options(linux_loader_fixture PRIVATE -fno-pie)
+target_link_options(linux_loader_fixture PRIVATE -no-pie)
+set_target_properties(linux_loader_fixture PROPERTIES OUTPUT_NAME eu4
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/loader-fixture")
+add_test(NAME linux_loader COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_SOURCE_DIR}/tests/linux_loader_test.py"
+    "$<TARGET_FILE:EU4UnicodePatchLinux>" "$<TARGET_FILE:linux_loader_fixture>")
 message(STATUS "Building the native EU4 1.37.5 Linux x86_64 plugin.")

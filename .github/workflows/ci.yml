@@ -31,7 +31,7 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - name: Build and test Linux shared core
+      - name: Build and test native Linux plugin and shared core
         run: bash tools/ci-arch-core.sh
       - name: Check native ELF evidence collection
         run: bash tools/inspect-linux-game.sh build/unicode_text_tests build/elf-evidence
@@ -47,7 +47,7 @@ jobs:
             build/Testing/Temporary/LastTest.log
             build/*_tests
             build/libeu4_unicode.so
-            build/linux-package/*
+            build/linux-package/**
             build/elf-evidence/*.txt
   build:
     runs-on: windows-2022
