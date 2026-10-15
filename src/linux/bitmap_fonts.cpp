@@ -1,6 +1,7 @@
 #include "linux/native.hpp"
 #include "unicode_text.hpp"
 #include "glyph_registry.hpp"
+#include "linux/font_pages.hpp"
 #include <algorithm>
 #include <cstring>
 
@@ -24,9 +25,7 @@ Scalar scalar_z(const char* text) noexcept {
     return bytes?scalar(text,bytes):Scalar{0,1,true};
 }
 NativeGlyph* glyph(std::uintptr_t table,std::uint32_t code) noexcept {
-    auto entries=reinterpret_cast<void* const*>(table);
-    auto found=code<=255?entries[code]:find_unicode_glyph(entries,code);
-    return static_cast<NativeGlyph*>(found);
+    return find_font_glyph(reinterpret_cast<void* const*>(table),code);
 }
 void initialize(void* font) {
     struct Scope {
@@ -52,6 +51,7 @@ void parse(void* font) {
     parse_hook->call<void>(font);
     const auto table=reinterpret_cast<void* const*>(reinterpret_cast<std::uintptr_t>(font)+0x100);
     bind_unicode_font(table);
+    register_font_pages(font);
     const auto usage=unicode_glyph_usage();
     if(usage.glyphs) log("Font parsed asset=%s width=%d height=%d unicode-fonts=%zu unicode-glyphs=%zu",
         reinterpret_cast<String*>(reinterpret_cast<std::uintptr_t>(font)+0xc0)->bytes,
@@ -60,6 +60,7 @@ void parse(void* font) {
         usage.fonts,usage.glyphs);
 }
 void destroy(void* table) {
+    release_font_pages(static_cast<void* const*>(table));
     release_unicode_font(static_cast<void* const*>(table));
     destroy_hook->call<void>(table);
 }

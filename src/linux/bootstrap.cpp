@@ -1,4 +1,5 @@
 #include "linux/native.hpp"
+#include "linux/font_pages.hpp"
 #include <dlfcn.h>
 #include <elf.h>
 #include <picosha2.h>
@@ -27,6 +28,8 @@ int patched_main(int argc,char** argv,char** envp) {
         prepare_localization(*hooks);
         prepare_script_bom(*hooks);
         prepare_bitmap_fonts(*hooks);
+        prepare_font_pages(*hooks);
+        prepare_font_draw(*hooks);
         prepare_text_layout(*hooks);
         prepare_map_names(*hooks);
         prepare_mod_registry(*hooks);
@@ -46,6 +49,7 @@ int patched_main(int argc,char** argv,char** envp) {
     const int result=game_main(argc,argv,envp);
     report_text_counts();
     report_layout_counts();
+    report_font_page_counts();
     report_map_counts();
     report_script_counts();
     report_input_counts();
