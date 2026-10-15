@@ -45,3 +45,9 @@ SDL 事件入口为 `0x1ff50b0`，文本分支为 `0x1ff52d7`。原生分支只�
 原生 `GetTextInputEvent` 解析标量后，`GetString` 使用游戏 CString 构造完整 UTF-8。CEditBox 的原生过滤、插入及通知保持原样。文本缓冲区主字符串在 +0x30，光标在 +0x54/+0x56；左移、右移、退格和删除使用共享 ICU 字素边界，已有选择由原生处理。
 
 SDL 提交不等于 IME 预编辑。候选窗、组合态定位、鼠标命中精度、拼音搜索和动态字体排版需要独立验证或适配，不能由上述 ABI 推断支持。
+
+## 多人游戏名称
+
+`PdxSteamGetUserName`（`0x2391b99`）和 `CSteamMatchmakingContext::GetLocalUserName`（`0x2218700`）返回原始 UTF-8。`CFrontendMultiplayerView::Show` 复制名称后，在 `0x1c6e747` 调用 `CString::RemoveControllerCharacters`，在 `0x1c6e751` 调用 `RemoveSpecialCharacters`。前者把单字节 `0xA7` 改为 `s`，会破坏包含该续字节的 Unicode 字符；后者逐字节执行 Latin-1 转写，会破坏完整 UTF-8 名称。
+
+`src/linux/multiplayer_name.cpp` 只拦截这两个调用点。有效 UTF-8 按标量替换 `@`→`a`、`$`→`S`、`§`→`s`，保留其余 Unicode；需要改变长度时调用已验证的原生 `_M_replace`（`0x25a3f30`）更新已构造的 CString。后续对引号及斜杠的原生替换保持原样。非 UTF-8 输入继续经过原生清理。通用 CString 清理函数以及其他调用方不变，日志不记录账户名称。
