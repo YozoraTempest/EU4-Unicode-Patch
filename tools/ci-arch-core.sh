@@ -16,6 +16,7 @@ cp build/libeu4_unicode.so tools/launch-linux.sh build/linux-package/
 cp LICENSE build/linux-package/
 mkdir -p build/linux-package/licenses
 cp vendor/safetyhook/LICENSE build/linux-package/licenses/SafetyHook.txt
+cp vendor/picosha2/LICENSE build/linux-package/licenses/PicoSHA2.txt
 cp build/_deps/zydis-src/LICENSE build/linux-package/licenses/Zydis.txt
 cp build/_deps/zydis-src/dependencies/zycore/LICENSE build/linux-package/licenses/Zycore.txt
 chmod +x build/linux-package/launch-linux.sh

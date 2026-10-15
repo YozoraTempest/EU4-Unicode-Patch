@@ -47,6 +47,7 @@ jobs:
             build/Testing/Temporary/LastTest.log
             build/*_tests
             build/libeu4_unicode.so
+            build/loader-fixture/eu4
             build/linux-package/**
             build/EU4UnicodePatch-linux-*.tar.gz
             build/linux-package-sha256.txt

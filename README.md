@@ -6,6 +6,8 @@
 
 适用于 **EU4 1.37.5.0 Inca / Windows x64**。
 
+另有 **Steam Linux 原生版 / Arch Linux x86_64 测试适配**，与 Windows 共用 Unicode 核心并分别构建原生插件。安装方法、严格的游戏版本校验及功能范围见 [Linux 原生适配](docs/linux.md)。下列功能和安装说明以 Windows 发布包为准；Linux 的 IME 预编辑、拼音搜索控件和动态字体排版尚未接入。
+
 [正式版与可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/latest) · [Nightly 测试版](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
 
 ## 功能
@@ -89,7 +91,7 @@ UTF-8 import, UI, format, map and bitmap iterators enabled.
 
 ## 构建
 
-源码使用 C++17、MSVC、MASM 和 Windows SDK。构建、保护检查和打包命令见[构建说明](docs/build.md)。
+Windows 构建使用 C++17、MSVC、MASM 和 Windows SDK，命令见[构建说明](docs/build.md)。Linux 原生插件使用 C++23、SafetyHook、PicoSHA2 和系统 ICU，构建与依赖见 [Linux 原生适配](docs/linux.md)；两平台的共享边界见 [platforms.md](docs/platforms.md)。
 
 ## 许可证
 

@@ -1,7 +1,7 @@
 #include "linux/native.hpp"
 #include <dlfcn.h>
 #include <elf.h>
-#include <openssl/evp.h>
+#include <picosha2.h>
 #include <array>
 #include <cstdarg>
 #include <cstdio>
@@ -61,16 +61,19 @@ bool verify_executable() {
        header.e_ident[EI_CLASS]!=ELFCLASS64||header.e_machine!=EM_X86_64||
        header.e_type!=ET_EXEC) {log("Refused: unsupported ELF ABI");return false;}
     file.seekg(0);
-    const auto context=std::unique_ptr<EVP_MD_CTX,decltype(&EVP_MD_CTX_free)>(
-        EVP_MD_CTX_new(),EVP_MD_CTX_free);
-    if(!context||EVP_DigestInit_ex(context.get(),EVP_sha256(),nullptr)!=1) return false;
+    // The executable exports legacy OpenSSL functions. Do not mix their
+    // context ABI with a system crypto library through ELF interposition.
+    picosha2::hash256_one_by_one context;
     std::array<char,65536> bytes{};
     while(file.read(bytes.data(),bytes.size())||file.gcount())
-        if(EVP_DigestUpdate(context.get(),bytes.data(),file.gcount())!=1) return false;
-    unsigned char digest[EVP_MAX_MD_SIZE];unsigned int size=0;
-    if(!file.eof()||EVP_DigestFinal_ex(context.get(),digest,&size)!=1||size!=32) return false;
+        context.process(bytes.begin(),bytes.begin()+file.gcount());
+    if(!file.eof()) return false;
+    context.finish();
+    std::array<unsigned char,picosha2::k_digest_size> digest{};
+    context.get_hash_bytes(digest.begin(),digest.end());
     char hash[65]{};
-    for(unsigned int i=0;i<size;++i) std::snprintf(hash+i*2,3,"%02x",digest[i]);
+    for(std::size_t i=0;i<digest.size();++i)
+        std::snprintf(hash+i*2,3,"%02x",static_cast<unsigned int>(digest[i]));
     log("Executable SHA256=%s",hash);
     if(std::strcmp(hash,"af115d3b0e54a05eca0198ed569db90ca225728afda03b5ac4ded251520a7ce3")) {
         log("Refused: unsupported executable");return false;

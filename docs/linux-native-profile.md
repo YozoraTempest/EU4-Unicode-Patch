@@ -2,6 +2,10 @@
 
 本接口表只适用于 `docs/linux.md` 中完整哈希匹配的 Steam ELF。地址是 ET_EXEC 虚拟地址，不复用 Windows RVA 或 MSVC 对象布局。`src/linux/profile.cpp` 保存各位置的 16 字节原始指令；插件校验完整文件后，在创建任何挂钩前复核全部位置。
 
+## 加载与符号边界
+
+可执行文件导出旧 OpenSSL 接口，包括 `EVP_DigestInit_ex`（`0x24589f0`）和 `CRYPTO_free`（`0x241d920`）。插件通过固定版本 PicoSHA2 在自有上下文中计算完整 SHA-256，避免动态链接不同 OpenSSL 版本的上下文 API。ELF 导出表只保留 `__libc_start_main`，实现与静态依赖采用局部符号；CI 使用导出冲突 EVP 函数的真实 ELF 夹具，核对完整文件哈希和拒绝未知 ELF 的行为。
+
 ## 字符串与本地化
 
 游戏的 GNU C++11 `CString` / `CUTF8String` 为 32 字节，数据指针在 +0、字节长度在 +8。本地化入口 `LocalizeYmlAddKey` 为 `0x23671a1`；原生 `SLanguageData::AddKeyValuePair` 为 `0x236b7f8`。插件保留有效 UTF-8，并通过原生插入函数复制键值；字符串成员及引擎容器不由插件释放。
