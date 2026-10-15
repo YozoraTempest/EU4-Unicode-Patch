@@ -128,7 +128,8 @@ int main() {
         }
         const std::string colored_line=u8"中文。§!\n下一段";
         check(!FormattedText(colored_line).line_before(9),"test requires UAX14 to prohibit a break before the newline");
-        check(!native_wrap_after(FormattedText(colored_line,false),colored_line,8,false),
+        const FormattedText literal_line(colored_line,false);
+        check(native_wrap_after(literal_line,colored_line,8,false)==literal_line.line_before(9),
               "unformatted color-like bytes were skipped");
         check(!native_wrap_after(wrapped,punctuation,8),"word submission split closing punctuation");
         const FormattedText cluster(u8"中e§R\u0301§!文");
