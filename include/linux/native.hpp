@@ -36,6 +36,7 @@ void prepare_localization(Hooks&);
 void prepare_bitmap_fonts(Hooks&);
 void prepare_mod_registry(Hooks&);
 void prepare_editor_input(Hooks&);
+void prepare_multiplayer_name(Hooks&);
 void report_input_counts() noexcept;
 void report_text_counts() noexcept;
 }
