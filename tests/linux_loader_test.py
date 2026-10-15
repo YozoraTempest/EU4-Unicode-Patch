@@ -54,4 +54,11 @@ with tempfile.TemporaryDirectory(prefix="eu4-linux-loader-") as directory:
     direct=subprocess.run([str(package/"launch-linux.sh"),"/usr/bin/true"],
         cwd=package,capture_output=True,timeout=10)
     assert direct.returncode==0,direct.stderr
+    for locale in ["C","POSIX","C.UTF-8"]:
+        locale_env=os.environ.copy()
+        locale_env["LC_ALL"]=locale
+        locale_probe=subprocess.run([str(package/"launch-linux.sh"),"/usr/bin/locale","charmap"],
+            cwd=package,env=locale_env,capture_output=True,text=True,timeout=10)
+        assert locale_probe.returncode==0,(locale,locale_probe.stderr)
+        assert locale_probe.stdout.strip()=="UTF-8",(locale,locale_probe.stdout)
 print("Native preload forwarding, crypto-symbol isolation and exact file-hash refusal passed")
