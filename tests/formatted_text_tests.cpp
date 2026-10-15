@@ -119,6 +119,19 @@ int main() {
         for(std::size_t last_byte=6;last_byte<9;++last_byte)
             check(!native_wrap_before(plain_boundaries,plain,last_byte),"measurement split closing punctuation from preceding Chinese text");
         check(!native_wrap_before(FormattedText("word word"),"word word",5),"measurement changed the native Latin word path");
+        for(const std::string source:{u8"中文。\n下一段",u8"中文。\r\n下一段",
+                                      u8"中文。§!\n下一段",u8"中文。§Y§!\n下一段",
+                                      u8"中文。",u8"中文。§!"}) {
+            const FormattedText boundaries(source);
+            check(native_wrap_after(boundaries,source,8),"pending word was not measured before a hard break/end");
+            check(!native_wrap_after(boundaries,source,source.size()),"past-end offset created a word submission");
+        }
+        const std::string colored_line=u8"中文。§!\n下一段";
+        check(!FormattedText(colored_line).line_before(9),"test requires UAX14 to prohibit a break before the newline");
+        check(!native_wrap_after(FormattedText(colored_line,false),colored_line,8,false),
+              "unformatted color-like bytes were skipped");
+        check(!native_wrap_after(wrapped,punctuation,8),"word submission split closing punctuation");
+        check(!native_wrap_after(cluster,u8"中e§R\u0301§!文",3),"word submission split a combining sequence");
         const FormattedText cluster(u8"中e§R\u0301§!文");
         check(!cluster.line_before(4)&&!cluster.line_before(7),"line break split a colored combining sequence");
         check(!native_wrap_before(cluster,u8"中e§R\u0301§!文",8),"measurement split a colored combining sequence");

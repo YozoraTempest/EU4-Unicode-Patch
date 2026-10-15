@@ -193,6 +193,10 @@ void graphics_destroy(void* graphics) {
     graphics_destroy_hook->call<void>(graphics);
 }
 }
+void report_font_draw_counts() noexcept {
+    std::lock_guard lock(mutex);
+    log("Linux paged font batches=%llu shadow-bytes=%zu",static_cast<unsigned long long>(batches_drawn.load()),cached_bytes);
+}
 void prepare_font_draw(Hooks& hooks) {
     verify_site(0x22ad49b);
     for(const auto caller:callers) verify_site(caller-5);

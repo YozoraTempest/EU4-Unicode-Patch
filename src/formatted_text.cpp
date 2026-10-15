@@ -95,6 +95,17 @@ bool native_wrap_before(const FormattedText& boundaries,std::string_view text,st
     const auto offset=native_scalar_start(text,last_byte);
     return native_measure_scalar(text.substr(offset)).value>255&&boundaries.line_before(offset);
 }
+bool native_wrap_after(const FormattedText& boundaries,std::string_view text,std::size_t last_byte,bool formatted) {
+    if(last_byte>=text.size()) return false;
+    auto next=native_scalar_next(text,native_scalar_start(text,last_byte));
+    if(boundaries.line_before(next)) return true;
+    while(next<text.size()) {
+        const auto unit=native_text_unit(text,next,formatted);
+        if(unit.kind!=TextUnitKind::color) return unit.scalar=='\n'||unit.scalar=='\r';
+        next=unit.end;
+    }
+    return true;
+}
 std::size_t FormattedText::memory_size() const noexcept {
     return sizeof(*this)+visible_.capacity()+
         (prefixes_.capacity()+lines_.capacity())*sizeof(std::size_t);

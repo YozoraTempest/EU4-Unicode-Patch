@@ -33,5 +33,8 @@ private:
     std::vector<std::size_t> prefixes_,lines_;
 };
 bool native_wrap_before(const FormattedText& boundaries,std::string_view text,std::size_t last_byte) noexcept;
+// Submit the pending native word before a hard newline/end, even though UAX14
+// only exposes the mandatory boundary after the newline itself.
+bool native_wrap_after(const FormattedText& boundaries,std::string_view text,std::size_t last_byte,bool formatted=true);
 bool layout_substring_caller(std::uintptr_t caller) noexcept;
 }

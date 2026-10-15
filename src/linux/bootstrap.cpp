@@ -50,6 +50,7 @@ int patched_main(int argc,char** argv,char** envp) {
     report_text_counts();
     report_layout_counts();
     report_font_page_counts();
+    report_font_draw_counts();
     report_map_counts();
     report_script_counts();
     report_input_counts();

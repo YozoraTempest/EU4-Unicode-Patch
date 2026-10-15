@@ -26,8 +26,8 @@ struct Text {
     std::string_view value;
     String native{};
     std::shared_ptr<const FormattedText> boundaries;
-    bool unicode=false;
-    explicit Text(const String* source,bool formatted,bool own=false):value(source->view()) {
+    bool unicode=false,formatted;
+    explicit Text(const String* source,bool formatted,bool own=false):value(source->view()),formatted(formatted) {
         if(formatted&&value.find('\xc2')!=std::string_view::npos) {
             normalized.reserve(value.size());
             for(std::size_t offset=0;offset<value.size();) {
@@ -50,12 +50,13 @@ struct Text {
         if(unicode) boundaries=formatted?cache.get(value):
             std::make_shared<const FormattedText>(value,false);
     }
-    bool after(std::size_t last_byte) const noexcept {
-        return boundaries&&last_byte<value.size()&&boundaries->line_before(last_byte+1);
+    bool after(std::size_t last_byte) const {
+        return boundaries&&native_wrap_after(*boundaries,value,last_byte,formatted);
     }
     bool wide(std::size_t last_byte) const noexcept {
-        return unicode&&last_byte<value.size()&&
-            decode(value.substr(native_scalar_start(value,last_byte))).value>255;
+        if(!unicode||last_byte>=value.size()) return false;
+        const auto unit=decode(value.substr(native_scalar_start(value,last_byte)));
+        return unit.valid&&unit.value>255;
     }
 };
 // Stack-owned scopes restore the enclosing call on nested native rendering.
