@@ -181,7 +181,7 @@ void vertices_draw(safetyhook::Context& c) {
 void map_draw(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
     if(unit.bytes==1) return;
-    c.r14+=unit.bytes-1;c.rax=unit.value;
+    c.rax=unit.value;
     c.r13=reinterpret_cast<std::uintptr_t>(glyph(c.r12,unit.value));c.rip=0x1b5f46a;
 }
 void nudged_count(safetyhook::Context& c) {

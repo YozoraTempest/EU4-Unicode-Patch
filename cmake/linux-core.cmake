@@ -39,7 +39,7 @@ set(SAFETYHOOK_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 add_subdirectory(vendor/safetyhook EXCLUDE_FROM_ALL)
 add_library(EU4UnicodePatchLinux SHARED
     src/linux/bootstrap.cpp src/linux/profile.cpp
-    src/linux/localization.cpp src/linux/script_bom.cpp src/linux/bitmap_fonts.cpp
+    src/linux/localization.cpp src/linux/script_bom.cpp src/linux/bitmap_fonts.cpp src/linux/map_names.cpp
     src/linux/mod_registry.cpp src/linux/editor_input.cpp
     src/linux/multiplayer_name.cpp src/linux/search.cpp src/linux/ime.cpp src/linux/name_presence.cpp src/legacy_text.cpp)
 target_include_directories(EU4UnicodePatchLinux PRIVATE include vendor/picosha2)

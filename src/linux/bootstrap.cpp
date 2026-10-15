@@ -27,6 +27,7 @@ int patched_main(int argc,char** argv,char** envp) {
         prepare_localization(*hooks);
         prepare_script_bom(*hooks);
         prepare_bitmap_fonts(*hooks);
+        prepare_map_names(*hooks);
         prepare_mod_registry(*hooks);
         prepare_editor_input(*hooks);
         prepare_multiplayer_name(*hooks);
