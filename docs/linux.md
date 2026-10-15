@@ -1,15 +1,17 @@
 # Linux 原生适配
 
-目标为 Steam EU4 1.37.5 Linux x86_64 原生游戏，基准环境为 Arch Linux。Windows 与 Linux 共用同一项目、版本及八个 Unicode 核心库，分别生成 Windows DLL 和 Linux `libeu4_unicode.so`。平台构建边界见 [platforms.md](platforms.md)，原生接口依据见 [linux-native-profile.md](linux-native-profile.md)。
+目标为 Steam EU4 1.37.5 Linux x86_64 原生游戏，基准环境为 Arch Linux。Windows 与 Linux 共用同一项目、版本及九个 Unicode 核心库，分别生成 Windows DLL 和 Linux `libeu4_unicode.so`。平台构建边界见 [platforms.md](platforms.md)，原生接口依据见 [linux-native-profile.md](linux-native-profile.md)。
 
-Linux 插件接入原生 YAML 本地化、BMFont 字库解析、UI 与地图字形绘制、SDL 文本提交及编辑控件，并处理未启用的同名模组抢占登记。它使用汉化模组已有的字体资源。共享拼音搜索算法能够在 Linux 编译，但 Linux 搜索控件、动态字体与复杂文字排版、IME 预编辑尚未接入；Windows 的姓名顺序与 Steam 状态扩展也未移植。当前功能范围以本页为准。
+Linux 插件接入原生 YAML 本地化、脚本 BOM、BMFont 字库解析、UI 与地图字形绘制、SDL 文本提交及编辑控件，并处理未启用的同名模组抢占登记。它使用汉化模组已有的字体资源；正文换行复用共享 ICU 边界，保持原生字宽、颜色和行距。
+
+后续四组功能仍在完善：搜索控件已接入共享中文和拼音匹配，输入法已接入焦点、SDL 预编辑事件及候选位置，姓名策略和 Steam UTF-8 状态转换已有原生挂钩。预编辑选区及下划线、完整搜索矩阵、真实生成姓名和状态载荷仍需完善或验证。Pango 字体与段落后端通过共享检查，但尚未完成游戏 GPU 动态字库及复杂段落绘制集成。不能将这些组别统称为适配完成。
 
 多人视图从 Steam 填入的名称保留 UTF-8；原生名称清理中的 Latin-1 逐字节转写已在该视图的两个调用点修正。控制字符替换规则保持原意，不修改 Steam 账户名称。
 
 ## 构建和依赖
 
 ```sh
-sudo pacman -Syu --needed base-devel cmake ninja python git icu file binutils sdl2-compat
+sudo pacman -Syu --needed base-devel cmake ninja python git icu file binutils sdl2-compat pango cairo fontconfig noto-fonts noto-fonts-cjk
 git submodule update --init --recursive
 bash tools/ci-arch-core.sh
 ```

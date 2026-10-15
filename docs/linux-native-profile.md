@@ -18,6 +18,12 @@
 
 Linux `CTextureHandler::LoadTexture` 在 `0x22a7edb` 拒绝达到 16 MiB 的文件。修改仅在 `CBitmapFont::InitPostRead` 的线程局部上下文中跳到原生读取流程 `0x22a7efc`。原生分配、DDS 检查、GPU 创建及释放保持原样，其他纹理加载不受影响。没有修改模组字体文件或给特定工坊 ID 特判。
 
+正文换行由独立的 `src/linux/text_layout.cpp` 接入共享 `FormattedText` / ICU 边界及有界缓存。`RenderToScreen`（`0x20519f8`）在 `0x2052239`、`RenderToTexture`（`0x204e886`）在 `0x204f0f6` 判断当前词段是否可以提交。两处均已累计当前字形宽度，使用当前标量最后一个字节之后的断行边界；绘制仍由原生代码执行。屏幕绘制的逐字紧急换行不拆开 ICU 判定不可分割的 Unicode 片段。
+
+`GetActualRequiredSize`（`0x2055f92`）使用相同的词段提交边界；`GetHeightOfString`（`0x2053b88`）同时补齐 Unicode 标量字形查询和词段宽度清零。`GetRequiredSize`（`0x20565aa`）与 `GetActualRealRequiredSizeActually`（`0x2056d66`）的已核实截取调用点只保留完整的格式化字素前缀。绘制和这些测量入口使用相同的临时格式标记规范化：UTF-8 的 `§`、`£`、`¤` 转成原生解析器使用的单字节引导符，原始本地化和编辑文档不变。
+
+上下文由函数调用栈持有，嵌套调用结束后恢复上一层；缓存只持有自有文字和边界数据。传给原生只读函数的 GNU 字符串视图在整个调用期间有效，原生输出字符串继续由引擎赋值和析构。此模块处理已有 bitmap 字库的段落换行，不能视为动态字体或复杂文字 shaping 已完成。
+
 ## 模组登记与依赖
 
 | 原生位置 | 用途 |
