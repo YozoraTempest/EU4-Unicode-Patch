@@ -27,6 +27,23 @@ Scalar scalar_z(const char* text) noexcept {
 NativeGlyph* glyph(std::uintptr_t table,std::uint32_t code) noexcept {
     return find_font_glyph(reinterpret_cast<void* const*>(table),code);
 }
+bool printable_byte(std::uint32_t code) noexcept {
+    return (code>=0x20&&code<0x7f)||(code>=0xa0&&code<=255);
+}
+bool needs_lookup(Scalar unit,std::uintptr_t table) noexcept {
+    return unit.bytes!=1||(printable_byte(unit.value)&&!read<void*>(table+unit.value*8));
+}
+void missing_byte(std::uintptr_t& destination,std::uintptr_t table,std::uint32_t code) noexcept {
+    if(!destination&&printable_byte(code)) destination=reinterpret_cast<std::uintptr_t>(glyph(table,code));
+}
+// These sites are after native format parsing and the fixed-array lookup.
+// Keep control/icon commands in their native branches, and never place our
+// owned glyph records in the native array that its destructor frees.
+void width_missing(safetyhook::Context& c) {missing_byte(c.rbp,c.rdi+0x100,static_cast<std::uint32_t>(c.rsi));}
+void screen_measure_missing(safetyhook::Context& c) {
+    missing_byte(c.rbp,read<std::uintptr_t>(c.rsp+0x30)+0x100,static_cast<std::uint32_t>(c.rcx));
+}
+void screen_draw_missing(safetyhook::Context& c) {missing_byte(c.r13,c.rdi+0x100,static_cast<std::uint32_t>(c.rax));}
 void initialize(void* font) {
     struct Scope {
         void* previous=initializing_font;
@@ -132,6 +149,7 @@ void screen_draw(safetyhook::Context& c) {
     if(unit.bytes==1) return;
     c.r15+=unit.bytes-1;
     c.rdi=read<std::uintptr_t>(c.rsp+0x30);
+    c.rax=unit.value;
     c.r13=reinterpret_cast<std::uintptr_t>(glyph(c.rdi+0x100,unit.value));
     c.rip=0x205308c;
 }
@@ -140,31 +158,31 @@ void screen_draw(safetyhook::Context& c) {
 // native geometry still receives one glyph record for the complete scalar.
 void actual_size(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,read<std::uintptr_t>(c.rsp+0x28)+0x100)) return;
     c.r13+=unit.bytes-1;c.rcx=read<std::uintptr_t>(c.rsp+0x28);
     c.rbp=reinterpret_cast<std::uintptr_t>(glyph(c.rcx+0x100,unit.value));c.rip=0x20561a8;
 }
 void height_size(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,c.rbx+0x100)) return;
     c.rbp+=unit.bytes-1;
     c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.rbx+0x100,unit.value));c.rip=0x2053d5e;
 }
 void required_size(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,c.r13+0x100)) return;
     *reinterpret_cast<int*>(c.rsp+4)+=static_cast<int>(unit.bytes-1);
     c.rbp=reinterpret_cast<std::uintptr_t>(glyph(c.r13+0x100,unit.value));c.rip=0x205687d;
 }
 void real_size(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,c.r15+0x100)) return;
     *reinterpret_cast<int*>(c.rsp)+=static_cast<int>(unit.bytes-1);
     c.rbp=reinterpret_cast<std::uintptr_t>(glyph(c.r15+0x100,unit.value));c.rip=0x20570c1;
 }
 void vertices_measure(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,read<std::uintptr_t>(c.rsp+0x68)+0x100)) return;
     c.r14+=unit.bytes-1;c.rcx=read<std::uintptr_t>(c.rsp+0x68);
     c.r15=reinterpret_cast<std::uintptr_t>(glyph(c.rcx+0x100,unit.value));c.rip=0x2055572;
 }
@@ -180,27 +198,27 @@ void vertices_copy(safetyhook::Context& c) {
 }
 void vertices_draw(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,c.r12+0x100)) return;
     c.rbx+=unit.bytes-1;
     c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.r12+0x100,unit.value));
     c.rip=0x2055acc;
 }
 void map_draw(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,c.r12)) return;
     c.rax=unit.value;
     c.r13=reinterpret_cast<std::uintptr_t>(glyph(c.r12,unit.value));c.rip=0x1b5f46a;
 }
 void nudged_count(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,c.r12+0x100)) return;
     c.rbx+=unit.bytes-1;
     c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.r12+0x100,unit.value));
     c.rip=0x1b5fe4c;
 }
 void country_count(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,c.r12+0x100)) return;
     c.rbx+=unit.bytes-1;
     c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.r12+0x100,unit.value));
     c.rip=0x1b5e21e;
@@ -216,14 +234,14 @@ void texture_copy(safetyhook::Context& c) {
 }
 void texture_measure(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,read<std::uintptr_t>(c.rsp+0x38)+0x100)) return;
     c.r14+=unit.bytes-1;c.rcx=read<std::uintptr_t>(c.rsp+0x38);
     c.rbp=reinterpret_cast<std::uintptr_t>(glyph(c.rcx+0x100,unit.value));
     c.rip=0x204ef61;
 }
 void texture_draw(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
-    if(unit.bytes==1) return;
+    if(!needs_lookup(unit,c.r13+0x100)) return;
     c.r14+=unit.bytes-1;c.r11=reinterpret_cast<std::uintptr_t>(glyph(c.r13+0x100,unit.value));
     c.rip=0x2051090;
 }
@@ -236,8 +254,11 @@ void prepare_bitmap_fonts(Hooks& hooks) {
     destroy_hook=&hooks.add_inline(0x204d114,reinterpret_cast<void*>(destroy));
     hooks.add_mid(0x204e366,load_glyph);
     hooks.add_mid(0x2053fd9,width);
+    hooks.add_mid(0x205402f,width_missing);
     hooks.add_mid(0x2052112,screen_measure);
+    hooks.add_mid(0x2052191,screen_measure_missing);
     hooks.add_mid(0x2052ed5,screen_draw);
+    hooks.add_mid(0x205308c,screen_draw_missing);
     hooks.add_mid(0x2056198,actual_size);
     verify_site(0x2053d5e);
     hooks.add_mid(0x2053d53,height_size);
