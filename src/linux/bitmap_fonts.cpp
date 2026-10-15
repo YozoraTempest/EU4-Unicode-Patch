@@ -143,6 +143,12 @@ void actual_size(safetyhook::Context& c) {
     c.r13+=unit.bytes-1;c.rcx=read<std::uintptr_t>(c.rsp+0x28);
     c.rbp=reinterpret_cast<std::uintptr_t>(glyph(c.rcx+0x100,unit.value));c.rip=0x20561a8;
 }
+void height_size(safetyhook::Context& c) {
+    const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
+    if(unit.bytes==1) return;
+    c.rbp+=unit.bytes-1;
+    c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.rbx+0x100,unit.value));c.rip=0x2053d5e;
+}
 void required_size(safetyhook::Context& c) {
     const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
     if(unit.bytes==1) return;
@@ -198,20 +204,6 @@ void country_count(safetyhook::Context& c) {
     c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.r12+0x100,unit.value));
     c.rip=0x1b5e21e;
 }
-void texture_format(safetyhook::Context& c) {
-    const auto string=reinterpret_cast<String*>(c.rdi);
-    auto text=string->view();
-    std::string normalized;bool changed=false;
-    while(!text.empty()) {
-        const auto unit=scalar(text.data(),text.size());
-        if(unit.bytes>1&&(unit.value==0xa3||unit.value==0xa4||unit.value==0xa7)) {
-            normalized.push_back(static_cast<char>(unit.value));changed=true;
-        } else normalized.append(text.data(),unit.bytes);
-        text.remove_prefix(unit.bytes);
-    }
-    if(changed) reinterpret_cast<void*(*)(void*,std::size_t,std::size_t,const char*,std::size_t)>(
-        0x25a3f30)(string,0,string->size,normalized.data(),normalized.size());
-}
 void texture_copy(safetyhook::Context& c) {
     const auto source=reinterpret_cast<char*>(c.rax);
     const auto unit=scalar_z(source);
@@ -246,6 +238,8 @@ void prepare_bitmap_fonts(Hooks& hooks) {
     hooks.add_mid(0x2052112,screen_measure);
     hooks.add_mid(0x2052ed5,screen_draw);
     hooks.add_mid(0x2056198,actual_size);
+    verify_site(0x2053d5e);
+    hooks.add_mid(0x2053d53,height_size);
     hooks.add_mid(0x2056872,required_size);
     hooks.add_mid(0x20570b6,real_size);
     hooks.add_mid(0x2055562,vertices_measure);
@@ -257,8 +251,6 @@ void prepare_bitmap_fonts(Hooks& hooks) {
     // Its count must use the same scalars as FillVertexBuffer.
     hooks.add_mid(0x1b5fe41,nudged_count);
     hooks.add_mid(0x1b5e213,country_count);
-    verify_site(0x25a3f30);
-    hooks.add_mid(0x204e9a4,texture_format);
     hooks.add_mid(0x204ea1e,texture_copy);
     hooks.add_mid(0x204ef51,texture_measure);
     hooks.add_mid(0x2051085,texture_draw);

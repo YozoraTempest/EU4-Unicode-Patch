@@ -42,6 +42,8 @@ void prepare_localization(Hooks&);
 void prepare_script_bom(Hooks&);
 void report_script_counts() noexcept;
 void prepare_bitmap_fonts(Hooks&);
+void prepare_text_layout(Hooks&);
+void report_layout_counts() noexcept;
 void prepare_map_names(Hooks&);
 void report_map_counts() noexcept;
 void prepare_mod_registry(Hooks&);

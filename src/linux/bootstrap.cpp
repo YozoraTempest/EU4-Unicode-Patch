@@ -27,6 +27,7 @@ int patched_main(int argc,char** argv,char** envp) {
         prepare_localization(*hooks);
         prepare_script_bom(*hooks);
         prepare_bitmap_fonts(*hooks);
+        prepare_text_layout(*hooks);
         prepare_map_names(*hooks);
         prepare_mod_registry(*hooks);
         prepare_editor_input(*hooks);
@@ -44,6 +45,7 @@ int patched_main(int argc,char** argv,char** envp) {
     }
     const int result=game_main(argc,argv,envp);
     report_text_counts();
+    report_layout_counts();
     report_map_counts();
     report_script_counts();
     report_input_counts();
