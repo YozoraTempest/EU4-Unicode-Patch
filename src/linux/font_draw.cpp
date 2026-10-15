@@ -27,6 +27,7 @@ std::unordered_map<void*,Texture> textures;
 std::unordered_map<void*,Scratch> scratch_buffers;
 std::size_t cached_bytes=0;
 std::atomic<std::uint64_t> batches_drawn=0;
+std::atomic<std::uint64_t> indexed_batches=0;
 thread_local std::uint32_t map_page=0;
 bool logged_error=false;
 constexpr std::array callers{0x1b5e4dcu,0x1b6027du,0x205163cu,0x20533a6u,0x20539b3u,0x2053a3du,0x20552a6u};
@@ -105,11 +106,11 @@ struct Restore {
         textures_hook->call<void>(context,1,&texture.texture,1u,0u,&texture.sampler);
     }
 };
-template<class Vertex> void submit(void* context,void* state,const std::byte* data,unsigned count,const std::vector<FontPage>& pages) {
+template<class Vertex> void submit(void* context,void* state,const std::byte* data,unsigned count,const std::vector<FontPage>& pages,bool indexed) {
     std::vector<Vertex> physical(count);std::memcpy(physical.data(),data,count*sizeof(Vertex));
     std::vector<FontPageSize> sizes;for(const auto& page:pages) sizes.push_back(page.size);
     const auto batches=[&] {
-        if constexpr(sizeof(Vertex)==20) return split_font_triangles(physical,sizes);
+        if constexpr(sizeof(Vertex)==20) return indexed?split_font_quads(physical,sizes):split_font_triangles(physical,sizes);
         else return split_popup_glyphs(physical,sizes);
     }();
     auto& scratch=scratch_buffers[state];
@@ -127,10 +128,12 @@ template<class Vertex> void submit(void* context,void* state,const std::byte* da
     for(const auto& batch:batches) {
         auto texture=pages.at(batch.page).texture;
         textures_hook->call<void>(context,1,&texture,1u,0u,&sampler);
-        // Both verified Linux font formats contain six triangle-list vertices
-        // per glyph. DrawArrays also preserves this geometry for indexed map
-        // labels, without assuming a Windows quad index-buffer layout.
-        draw_hook->call<void>(context,static_cast<int>(batch.quad_count*6),static_cast<int>(batch.first_quad*6));
+        // Native map upload compacts CurveText's six temporary vertices into
+        // four corners. Preserve the engine's bound index buffer and winding.
+        if(indexed) {
+            indexed_hook->call<void>(context,static_cast<int>(batch.quad_count*6),0,static_cast<int>(batch.first_quad*4));
+            ++indexed_batches;
+        } else draw_hook->call<void>(context,static_cast<int>(batch.quad_count*6),static_cast<int>(batch.first_quad*6));
         ++batches_drawn;
     }
 }
@@ -146,12 +149,14 @@ bool draw_paged(void* context,int count,int first,bool indexed) {
     const auto stride=read<unsigned>(state_address+0x160),offset=read<unsigned>(state_address+0x150);
     if(count<=0) count=read<int>(state_address+(indexed?0x68:0x64));
     if(count<=0||count%6||stride!=found->second.stride) return false;
+    if(indexed&&stride!=20) return false;
+    const auto vertices=indexed?static_cast<unsigned>(count)/6*4:static_cast<unsigned>(count);
     const auto begin=static_cast<std::size_t>(offset)+static_cast<std::size_t>(first)*stride;
     if(begin>UINT_MAX) return true;
     auto range=found->second.ranges.upper_bound(static_cast<unsigned>(begin));
     if(range==found->second.ranges.begin()) return false;
     --range;
-    const auto relative=begin-range->first,bytes=static_cast<std::size_t>(count)*stride;
+    const auto relative=begin-range->first,bytes=static_cast<std::size_t>(vertices)*stride;
     if(relative>range->second.bytes.size()||bytes>range->second.bytes.size()-relative) return false;
     const auto data=range->second.bytes.data()+relative;
     if(!tags(data,bytes,stride)) return false;
@@ -160,8 +165,8 @@ bool draw_paged(void* context,int count,int first,bool indexed) {
         if(found->second.rejected) throw std::runtime_error("Rejected Linux font vertex upload");
         const auto pages=font_pages(texture->second.texture);
         if(pages.size()<2) throw std::runtime_error("Linux dynamic font pages are unavailable");
-        if(stride==20) submit<MapFontVertex>(context,state,data,count,pages);
-        else submit<PopupFontVertex>(context,state,data,count,pages);
+        if(stride==20) submit<MapFontVertex>(context,state,data,vertices,pages,indexed);
+        else submit<PopupFontVertex>(context,state,data,vertices,pages,false);
     } catch(const std::exception& error) {
         if(!logged_error) {log("Linux paged font draw rejected: %s",error.what());logged_error=true;}
     }
@@ -195,7 +200,8 @@ void graphics_destroy(void* graphics) {
 }
 void report_font_draw_counts() noexcept {
     std::lock_guard lock(mutex);
-    log("Linux paged font batches=%llu shadow-bytes=%zu",static_cast<unsigned long long>(batches_drawn.load()),cached_bytes);
+    log("Linux paged font batches=%llu indexed-batches=%llu shadow-bytes=%zu",
+        static_cast<unsigned long long>(batches_drawn.load()),static_cast<unsigned long long>(indexed_batches.load()),cached_bytes);
 }
 void prepare_font_draw(Hooks& hooks) {
     verify_site(0x22ad49b);
