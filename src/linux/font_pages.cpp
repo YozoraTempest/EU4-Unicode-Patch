@@ -72,6 +72,7 @@ ScalarGlyph raster(std::uint32_t scalar,int size) {
 }
 void discard_gpu(Atlas& atlas) {
     for(auto& page:atlas.pages) if(page->texture) {
+        check_graphics_thread();
         destroy_texture_hook->call<void>(page->texture);page->texture=nullptr;page->dirty=true;
     }
 }
@@ -105,12 +106,10 @@ Record pack(Atlas& atlas,ScalarGlyph glyph) {
     glyph.metrics.x=static_cast<std::int16_t>(x);glyph.metrics.y=static_cast<std::int16_t>(y);
     return {glyph.metrics,static_cast<std::uint32_t>(index+1)};
 }
-void sync(Atlas& atlas,void* original) {
+void sync(Atlas& atlas) {
+    // Establish the owner from a real font draw, never a resource lookup or
+    // CPU-only measurement that may run while the engine prepares assets.
     check_graphics_thread();
-    if(atlas.original_texture!=original) {
-        if(atlas.original_texture) texture_bindings.erase(atlas.original_texture);
-        atlas.original_texture=original;
-    }
     for(auto& page:atlas.pages) {
         if(!page->texture) {
             // Verified format 11: GL_RGBA8, BGRA, GL_UNSIGNED_BYTE; type 0: 2D.
@@ -130,9 +129,13 @@ void* lookup(void* manager,int id) {
     try {
         std::lock_guard lock(mutex);
         for(const auto& [key,atlas]:bindings) if(atlas->manager==manager&&atlas->id==id) {
-            sync(*atlas,texture);texture_bindings[texture]=atlas;break;
+            if(atlas->original_texture!=texture) {
+                if(atlas->original_texture) texture_bindings.erase(atlas->original_texture);
+                atlas->original_texture=texture;
+            }
+            texture_bindings[texture]=atlas;break;
         }
-    } catch(const std::exception& error) {log("Linux font upload failed: %s",error.what());}
+    } catch(const std::exception& error) {log("Linux font binding failed: %s",error.what());}
     return texture;
 }
 void destroy_texture(void* texture) {
@@ -140,7 +143,7 @@ void destroy_texture(void* texture) {
         std::lock_guard lock(mutex);
         const auto found=texture_bindings.find(texture);
         if(found!=texture_bindings.end()) {
-            if(const auto atlas=found->second.lock()) {check_graphics_thread();discard_gpu(*atlas);atlas->original_texture=nullptr;}
+            if(const auto atlas=found->second.lock()) {discard_gpu(*atlas);atlas->original_texture=nullptr;}
             texture_bindings.erase(found);
         }
     }
@@ -174,7 +177,7 @@ void release_font_pages(void* const* table) noexcept {
             auto& atlas=*found->second;
             for(auto i=locations.begin();i!=locations.end();) if(i->second.atlas==&atlas) i=locations.erase(i);else ++i;
             if(atlas.original_texture) texture_bindings.erase(atlas.original_texture);
-            if(!atlas.pages.empty()) {check_graphics_thread();discard_gpu(atlas);}
+            discard_gpu(atlas);
             reserved_total-=atlas.reserved_bytes;
         }
         bindings.erase(found);
@@ -208,7 +211,7 @@ std::vector<FontPage> font_pages(void* original) {
     std::lock_guard lock(mutex);const auto found=texture_bindings.find(original);
     if(found==texture_bindings.end()) return {};
     const auto atlas=found->second.lock();if(!atlas) return {};
-    sync(*atlas,original);
+    sync(*atlas);
     std::vector<FontPage> result{{original,atlas->original_size}};
     for(const auto& page:atlas->pages) result.push_back({page->texture,page->size});
     return result;
