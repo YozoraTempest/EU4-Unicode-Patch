@@ -3,6 +3,8 @@
 #include "glyph_registry.hpp"
 #include "linux/font_pages.hpp"
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cstring>
 #include <source_location>
 
@@ -41,7 +43,20 @@ void missing_byte(std::uintptr_t& destination,std::uintptr_t table,std::uint32_t
 // These sites are after native format parsing and the fixed-array lookup.
 // Keep control/icon commands in their native branches, and never place our
 // owned glyph records in the native array that its destructor frees.
-void width_missing(safetyhook::Context& c) {missing_byte(c.rbp,c.rdi+0x100,static_cast<std::uint32_t>(c.rsi));}
+void width_missing(safetyhook::Context& c) {
+    const auto code=static_cast<std::uint32_t>(c.rsi);
+    if(!c.rbp&&printable_byte(code)) {
+        static std::array<std::atomic<bool>,256> reported{};
+        if(!reported[code].exchange(true)) {
+            const auto bytes=static_cast<std::uint32_t>(c.rdx);
+            log("Linux native byte width U+%X source-bytes=%u offset=%u caller=0x%llx utf8=%d",
+                code,bytes,static_cast<std::uint32_t>(c.r14),
+                static_cast<unsigned long long>(read<std::uintptr_t>(c.rsp+0xd8)),
+                bytes<=32000&&valid_utf8({reinterpret_cast<const char*>(c.rbx),bytes}));
+        }
+    }
+    missing_byte(c.rbp,c.rdi+0x100,code);
+}
 void screen_measure_missing(safetyhook::Context& c) {
     missing_byte(c.rbp,read<std::uintptr_t>(c.rsp+0x30)+0x100,static_cast<std::uint32_t>(c.rcx));
 }
