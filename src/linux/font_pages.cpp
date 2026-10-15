@@ -180,7 +180,7 @@ void release_font_pages(void* const* table) noexcept {
         bindings.erase(found);
     } catch(const std::exception& error) {log("Linux font release failed: %s",error.what());}
 }
-NativeGlyph* find_font_glyph(void* const* table,std::uint32_t scalar) noexcept {
+NativeGlyph* find_font_glyph(void* const* table,std::uint32_t scalar,const char* origin) noexcept {
     if(!table) return nullptr;
     if(scalar<=255&&table[scalar]) return static_cast<NativeGlyph*>(table[scalar]);
     if(auto existing=static_cast<NativeGlyph*>(find_unicode_glyph(table,scalar))) return existing;
@@ -193,7 +193,7 @@ NativeGlyph* find_font_glyph(void* const* table,std::uint32_t scalar) noexcept {
             auto record=atlas.glyphs.find(scalar);
             if(record==atlas.glyphs.end()) {
                 record=atlas.glyphs.emplace(scalar,pack(atlas,raster(scalar,atlas.size))).first;
-                ++queued;log("Linux dynamic glyph U+%X size=%d page=%u",scalar,atlas.size,record->second.page);
+                ++queued;log("Linux dynamic glyph U+%X size=%d page=%u origin=%s",scalar,atlas.size,record->second.page,origin);
             }
             auto result=&record->second.glyph;locations[result]={&atlas,record->second.page};return result;
         } catch(const std::domain_error& error) {atlas.rejected.insert(scalar);log("Linux font missing U+%X: %s",scalar,error.what());}

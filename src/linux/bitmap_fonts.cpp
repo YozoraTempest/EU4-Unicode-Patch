@@ -4,6 +4,7 @@
 #include "linux/font_pages.hpp"
 #include <algorithm>
 #include <cstring>
+#include <source_location>
 
 namespace eu4unicode::linux_native {
 namespace {
@@ -24,8 +25,8 @@ Scalar scalar_z(const char* text) noexcept {
     while(bytes<4&&text[bytes]) ++bytes;
     return bytes?scalar(text,bytes):Scalar{0,1,true};
 }
-NativeGlyph* glyph(std::uintptr_t table,std::uint32_t code) noexcept {
-    return find_font_glyph(reinterpret_cast<void* const*>(table),code);
+NativeGlyph* glyph(std::uintptr_t table,std::uint32_t code,std::source_location source=std::source_location::current()) noexcept {
+    return find_font_glyph(reinterpret_cast<void* const*>(table),code,source.function_name());
 }
 bool printable_byte(std::uint32_t code) noexcept {
     return (code>=0x20&&code<0x7f)||(code>=0xa0&&code<=255);
@@ -33,8 +34,9 @@ bool printable_byte(std::uint32_t code) noexcept {
 bool needs_lookup(Scalar unit,std::uintptr_t table) noexcept {
     return unit.bytes!=1||(printable_byte(unit.value)&&!read<void*>(table+unit.value*8));
 }
-void missing_byte(std::uintptr_t& destination,std::uintptr_t table,std::uint32_t code) noexcept {
-    if(!destination&&printable_byte(code)) destination=reinterpret_cast<std::uintptr_t>(glyph(table,code));
+void missing_byte(std::uintptr_t& destination,std::uintptr_t table,std::uint32_t code,
+                  std::source_location source=std::source_location::current()) noexcept {
+    if(!destination&&printable_byte(code)) destination=reinterpret_cast<std::uintptr_t>(glyph(table,code,source));
 }
 // These sites are after native format parsing and the fixed-array lookup.
 // Keep control/icon commands in their native branches, and never place our
