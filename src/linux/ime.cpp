@@ -15,6 +15,9 @@ void* focused=nullptr;
 std::string preedit;
 std::size_t preedit_cursor=0,preedit_selection=0;
 bool refreshing=false;
+bool input_active=false;
+std::array<std::uint8_t,3> previous_events{};
+constexpr std::array<std::uint32_t,3> text_events{0x302,0x303,0x305};
 std::atomic<unsigned long long> compositions{0},commits{0},previews{0};
 template<class T> T read(const void* address) {
     T value;std::memcpy(&value,address,sizeof(value));return value;
@@ -87,12 +90,23 @@ void destroy(void* editor) {
 }
 void begin(void* events,const Rect* rect) {
     begin_hook->call<void>(events,rect);
+    if(!input_active) {
+        const auto state=reinterpret_cast<std::uint8_t(*)(std::uint32_t,int)>(0x2120340);
+        for(std::size_t i=0;i<text_events.size();++i) previous_events[i]=state(text_events[i],-1);
+        input_active=true;
+    }
     reinterpret_cast<void(*)()>(0x2120930)();
     if(rect) set_rect(*rect);
 }
 void end(void* events) {
     clear();end_hook->call<void>(events);
+    if(!input_active) return;
     reinterpret_cast<void(*)()>(0x2120950)();
+    // EU4 also uses character events for ordinary game shortcuts. Restore
+    // their subscriptions after ending the focused editor's IME session.
+    const auto state=reinterpret_cast<std::uint8_t(*)(std::uint32_t,int)>(0x2120340);
+    for(std::size_t i=0;i<text_events.size();++i) state(text_events[i],previous_events[i]);
+    input_active=false;
 }
 void cursor(void* editor) {
     cursor_hook->call<void>(editor);
@@ -146,7 +160,7 @@ void preview(safetyhook::Context& context) {
 }
 }
 void prepare_ime(Hooks& hooks) {
-    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x207c56c,0x2067386,0x2066f62,0x2066944}) verify_site(address);
+    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x2120340,0x207c56c,0x2067386,0x2066f62,0x2066944}) verify_site(address);
     poll_hook=&hooks.add_inline(0x21202b0,reinterpret_cast<void*>(poll));
     focus_hook=&hooks.add_inline(0x206731a,reinterpret_cast<void*>(focus));
     blur_hook=&hooks.add_inline(0x2067420,reinterpret_cast<void*>(blur));
