@@ -23,11 +23,11 @@ add_library(EU4UnicodePatchLinux SHARED
     src/linux/bootstrap.cpp src/linux/profile.cpp
     src/linux/localization.cpp src/linux/bitmap_fonts.cpp
     src/linux/mod_registry.cpp src/linux/editor_input.cpp
-    src/linux/multiplayer_name.cpp src/legacy_text.cpp)
+    src/linux/multiplayer_name.cpp src/linux/search.cpp src/linux/ime.cpp src/legacy_text.cpp)
 target_include_directories(EU4UnicodePatchLinux PRIVATE include vendor/picosha2)
 target_compile_features(EU4UnicodePatchLinux PRIVATE cxx_std_23)
 target_compile_options(EU4UnicodePatchLinux PRIVATE -Wall -Wextra -Wpedantic)
-target_link_libraries(EU4UnicodePatchLinux PRIVATE unicode_text unicode_services glyph_registry
+target_link_libraries(EU4UnicodePatchLinux PRIVATE unicode_text unicode_services unicode_search glyph_registry
     safetyhook::safetyhook ${CMAKE_DL_LIBS})
 set_target_properties(EU4UnicodePatchLinux PROPERTIES OUTPUT_NAME eu4_unicode)
 target_link_options(EU4UnicodePatchLinux PRIVATE

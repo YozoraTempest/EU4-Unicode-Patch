@@ -37,6 +37,8 @@ void prepare_bitmap_fonts(Hooks&);
 void prepare_mod_registry(Hooks&);
 void prepare_editor_input(Hooks&);
 void prepare_multiplayer_name(Hooks&);
+void prepare_search(Hooks&);
+void prepare_ime(Hooks&);
 void report_input_counts() noexcept;
 void report_text_counts() noexcept;
 }

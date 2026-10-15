@@ -29,6 +29,8 @@ int patched_main(int argc,char** argv,char** envp) {
         prepare_mod_registry(*hooks);
         prepare_editor_input(*hooks);
         prepare_multiplayer_name(*hooks);
+        prepare_search(*hooks);
+        prepare_ime(*hooks);
         hooks->enable();
         log("Linux native hooks enabled; profile=EU4-1.37.5-x86_64");
     } catch(const std::exception& error) {
