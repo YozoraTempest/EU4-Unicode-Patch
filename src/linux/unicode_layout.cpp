@@ -96,10 +96,11 @@ struct TextLayout::Impl {
     Object<PangoContext> context;
     Object<PangoLayout> layout;
     TextLayoutOptions options;
+    float em_size;
     bool application_drawing=false;
     Impl(std::string_view value,float size,float width,float height,std::wstring_view family,
          std::shared_ptr<const TextFonts> custom,TextLayoutOptions settings):
-        text(value),boundaries(grapheme_boundaries(value)),fonts(std::move(custom)),options(std::move(settings)) {
+        text(value),boundaries(grapheme_boundaries(value)),fonts(std::move(custom)),options(std::move(settings)),em_size(size) {
         if(!valid_utf8(value)||!std::isfinite(size)||!std::isfinite(width)||!std::isfinite(height)||size<=0||width<=0||height<=0||
            !std::isfinite(options.line_height)||options.line_height<0) throw std::invalid_argument("Invalid UTF-8 layout or dimensions");
         if(value.size()>INT_MAX) throw std::length_error("Text exceeds Pango analysis range");
@@ -158,6 +159,18 @@ struct TextLayout::Impl {
         for(const auto& range:options.styles) if(offset>=range.text_start&&offset<range.text_start+range.text_length) result=range.style;
         return result;
     }
+    int line_number(PangoLayoutLine* line) const {
+        int index=0;
+        for(auto list=pango_layout_get_lines_readonly(layout.get());list;list=list->next,++index)
+            if(list->data==line) return index;
+        throw std::logic_error("Pango run lost its owning line");
+    }
+    float run_baseline(PangoLayoutIter* iter) const {
+        const auto native=pango_layout_iter_get_run_baseline(iter)/unit;
+        if(options.line_height==0) return native;
+        return native-pango_layout_iter_get_baseline(iter)/unit+
+            line_number(pango_layout_iter_get_line_readonly(iter))*options.line_height+em_size*.8f;
+    }
 };
 TextLayout::TextLayout(std::string_view text,float size,float width,float height,std::wstring_view family,
     std::shared_ptr<const TextFonts> fonts,TextLayoutOptions options):impl_(std::make_unique<Impl>(text,size,width,height,family,std::move(fonts),std::move(options))) {}
@@ -166,7 +179,8 @@ TextLayout::TextLayout(TextLayout&&) noexcept=default;
 TextLayout& TextLayout::operator=(TextLayout&&) noexcept=default;
 LayoutMetrics TextLayout::metrics() const {
     PangoRectangle logical{};pango_layout_get_extents(impl_->layout.get(),nullptr,&logical);
-    return {logical.width/unit,logical.height/unit,static_cast<std::uint32_t>(pango_layout_get_line_count(impl_->layout.get()))};
+    const auto count=static_cast<std::uint32_t>(pango_layout_get_line_count(impl_->layout.get()));
+    return {logical.width/unit,impl_->options.line_height>0?count*impl_->options.line_height:logical.height/unit,count};
 }
 std::vector<LayoutLine> TextLayout::lines() const {
     std::vector<LayoutLine> result;
@@ -177,6 +191,10 @@ std::vector<LayoutLine> TextLayout::lines() const {
         int top=0,bottom=0;pango_layout_iter_get_line_yrange(iter.get(),&top,&bottom);
         result.push_back({static_cast<std::size_t>(line->start_index),static_cast<std::size_t>(line->length),0,
             logical.width/unit,top/unit,(bottom-top)/unit,(pango_layout_iter_get_baseline(iter.get())-top)/unit});
+        if(impl_->options.line_height>0) {
+            auto& value=result.back();value.top=(result.size()-1)*impl_->options.line_height;
+            value.height=impl_->options.line_height;value.baseline=impl_->em_size*.8f;
+        }
     } while(pango_layout_iter_next_line(iter.get()));
     for(std::size_t index=0;index<result.size();++index) {
         auto& line=result[index];
@@ -193,7 +211,7 @@ LayoutDrawing TextLayout::drawing() const {
         if(!native||!native->glyphs->num_glyphs) continue;
         const auto item=native->item;
         PangoRectangle logical{};pango_layout_iter_get_run_extents(iter.get(),nullptr,&logical);
-        const auto baseline=pango_layout_iter_get_run_baseline(iter.get())/unit;
+        const auto baseline=impl_->run_baseline(iter.get());
         const auto object=std::find_if(impl_->options.objects.begin(),impl_->options.objects.end(),
             [&](const auto& value) { return value.text_start==static_cast<std::size_t>(item->offset); });
         if(object!=impl_->options.objects.end()) {
@@ -233,6 +251,15 @@ LayoutDrawing TextLayout::drawing() const {
 }
 std::vector<GlyphRun> TextLayout::glyph_runs() const { return drawing().runs; }
 HitPosition TextLayout::hit_test(float x,float y) const {
+    const bool vertical_inside=y>=0&&y<metrics().height;
+    if(impl_->options.line_height>0&&std::isfinite(y)) {
+        const auto count=pango_layout_get_line_count(impl_->layout.get());
+        const int line=std::clamp(static_cast<int>(std::floor(y/impl_->options.line_height)),0,count-1);
+        Iterator iter(pango_layout_get_iter(impl_->layout.get()),pango_layout_iter_free);
+        for(int index=0;index<line;++index) pango_layout_iter_next_line(iter.get());
+        int top=0,bottom=0;pango_layout_iter_get_line_yrange(iter.get(),&top,&bottom);
+        y=(top+bottom)/(2*unit);
+    }
     int index=0,trailing=0;
     const auto inside=pango_layout_xy_to_index(impl_->layout.get(),units(x),units(y),&index,&trailing);
     std::size_t offset=std::clamp<std::size_t>(index,0,impl_->text.size());
@@ -240,7 +267,7 @@ HitPosition TextLayout::hit_test(float x,float y) const {
     auto boundary=std::lower_bound(impl_->boundaries.begin(),impl_->boundaries.end(),offset);
     if(boundary==impl_->boundaries.end()) offset=impl_->text.size();
     else if(*boundary!=offset) offset=trailing?*boundary:*(boundary-1);
-    return {offset,inside!=FALSE,trailing!=0};
+    return {offset,inside!=FALSE&&vertical_inside,trailing!=0};
 }
 CaretPosition TextLayout::caret(std::size_t offset,bool trailing) const {
     const auto& boundaries=impl_->boundaries;
@@ -249,6 +276,10 @@ CaretPosition TextLayout::caret(std::size_t offset,bool trailing) const {
     auto index=offset;
     if(trailing&&found!=boundaries.begin()) index=*std::prev(found);else trailing=false;
     PangoRectangle position{};pango_layout_index_to_pos(impl_->layout.get(),static_cast<int>(index),&position);
+    if(impl_->options.line_height>0) {
+        int line=0,x=0;pango_layout_index_to_line_x(impl_->layout.get(),static_cast<int>(index),FALSE,&line,&x);
+        position.y=units(line*impl_->options.line_height);position.height=units(impl_->options.line_height);
+    }
     return {offset,(position.x+(trailing?position.width:0))/unit,position.y/unit,position.height/unit,trailing};
 }
 std::vector<SelectionRegion> TextLayout::selection(std::size_t begin,std::size_t end) const {
@@ -270,6 +301,10 @@ std::vector<SelectionRegion> TextLayout::selection(std::size_t begin,std::size_t
         pango_layout_line_get_x_ranges(pango_layout_iter_get_line_readonly(iter.get()),first,last,&ranges,&count);
         std::unique_ptr<int,decltype(&g_free)> owned(ranges,g_free);
         pango_layout_iter_get_line_yrange(iter.get(),&top,&bottom);
+        if(impl_->options.line_height>0) {
+            top=units(impl_->line_number(pango_layout_iter_get_line_readonly(iter.get()))*impl_->options.line_height);
+            bottom=top+units(impl_->options.line_height);
+        }
         for(int index=0;index<count;++index) if(ranges[index*2+1]>ranges[index*2])
             result.push_back({first,last-first,ranges[index*2]/unit,top/unit,(ranges[index*2+1]-ranges[index*2])/unit,
                 (bottom-top)/unit,item->analysis.level});
@@ -306,17 +341,21 @@ GlyphBitmap rasterize_glyph_run(const GlyphRun& run) {
         resized.reset(cairo_scaled_font_create(cairo_scaled_font_get_font_face(font),&matrix,&ctm,options.get()));font=resized.get();
     }
     checked(cairo_scaled_font_status(font));cairo_set_scaled_font(canvas.get(),font);
-    cairo_text_extents_t extent{};cairo_glyph_extents(canvas.get(),glyphs.data(),glyphs.size(),&extent);
-    if(extent.width==0||extent.height==0) return {};
-    const auto left=std::floor(extent.x_bearing),top=std::floor(extent.y_bearing);
-    const auto width=std::ceil(extent.x_bearing+extent.width)-left,height=std::ceil(extent.y_bearing+extent.height)-top;
+    cairo_set_source_rgba(canvas.get(),1,1,1,1);cairo_show_glyphs(canvas.get(),glyphs.data(),glyphs.size());
+    checked(cairo_status(canvas.get()));
+    double x=0,y=0,ink_width=0,ink_height=0;
+    cairo_recording_surface_ink_extents(measure.get(),&x,&y,&ink_width,&ink_height);
+    if(ink_width==0||ink_height==0) return {};
+    const auto left=std::floor(x),top=std::floor(y);
+    const auto width=std::ceil(x+ink_width)-left,height=std::ceil(y+ink_height)-top;
     if(!std::isfinite(width)||!std::isfinite(height)||width<0||height<0||width>16384||height>16384||width*height>64*1024*1024||
        std::abs(left)>INT_MAX||std::abs(top)>INT_MAX) throw std::length_error("Shaped glyph bitmap exceeds raster budget");
     GlyphBitmap result{static_cast<std::uint32_t>(width),static_cast<std::uint32_t>(height),static_cast<int>(left),static_cast<int>(top),{}};
     Surface surface(cairo_image_surface_create(CAIRO_FORMAT_A8,result.width,result.height),cairo_surface_destroy);
     checked(cairo_surface_status(surface.get()));
     Canvas raster(cairo_create(surface.get()),cairo_destroy);
-    cairo_set_scaled_font(raster.get(),font);cairo_set_source_rgba(raster.get(),1,1,1,1);cairo_translate(raster.get(),-left,-top);
+    cairo_set_scaled_font(raster.get(),font);cairo_set_source_rgba(raster.get(),1,1,1,1);
+    for(auto& glyph:glyphs) { glyph.x-=left;glyph.y-=top; }
     cairo_show_glyphs(raster.get(),glyphs.data(),glyphs.size());checked(cairo_status(raster.get()));cairo_surface_flush(surface.get());
     result.alpha.resize(static_cast<std::size_t>(result.width)*result.height);
     const auto stride=cairo_image_surface_get_stride(surface.get());const auto data=cairo_image_surface_get_data(surface.get());
@@ -333,7 +372,16 @@ RasterImage TextLayout::rasterize() const {
     Surface surface(cairo_image_surface_create(CAIRO_FORMAT_ARGB32,result.width,result.height),cairo_surface_destroy);
     Canvas canvas(cairo_create(surface.get()),cairo_destroy);
     cairo_translate(canvas.get(),16,16);cairo_set_source_rgba(canvas.get(),1,1,1,1);
-    pango_cairo_show_layout(canvas.get(),impl_->layout.get());checked(cairo_status(canvas.get()));cairo_surface_flush(surface.get());
+    if(impl_->options.line_height==0) pango_cairo_show_layout(canvas.get(),impl_->layout.get());
+    else {
+        int index=0;
+        for(auto list=pango_layout_get_lines_readonly(impl_->layout.get());list;list=list->next,++index) {
+            cairo_move_to(canvas.get(),0,index*impl_->options.line_height+impl_->em_size*.8f);
+            pango_cairo_show_layout_line(canvas.get(),static_cast<PangoLayoutLine*>(list->data));
+        }
+        result.baseline=impl_->em_size*.8f;
+    }
+    checked(cairo_status(canvas.get()));cairo_surface_flush(surface.get());
     result.pixels.resize(static_cast<std::size_t>(result.width)*result.height*4);
     const auto data=cairo_image_surface_get_data(surface.get());const auto stride=cairo_image_surface_get_stride(surface.get());
     for(std::size_t row=0;row<result.height;++row) std::memcpy(result.pixels.data()+row*result.width*4,data+row*stride,result.width*4);
