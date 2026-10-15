@@ -4,6 +4,7 @@
 #include <atomic>
 #include <climits>
 #include <cstring>
+#include <dlfcn.h>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -17,6 +18,10 @@ template<class T> T read(std::uintptr_t address) {
 SafetyHookInline *create_hook=nullptr,*update_hook=nullptr,*destroy_hook=nullptr;
 SafetyHookInline *textures_hook=nullptr,*draw_hook=nullptr,*indexed_hook=nullptr;
 SafetyHookInline *graphics_destroy_hook=nullptr;
+using GetInteger=void(*)(unsigned,int*);
+using ActiveTexture=void(*)(unsigned);
+GetInteger get_integer=nullptr;
+ActiveTexture active_texture=nullptr;
 struct Upload {std::vector<std::byte> bytes;};
 struct Buffer {unsigned stride;std::map<unsigned,Upload> ranges;bool rejected=false;};
 struct Texture {void* texture;void* sampler;};
@@ -100,10 +105,11 @@ void set_textures(void* context,int count,void* const* values,unsigned stages,un
     }
 }
 struct Restore {
-    void* context;void* buffer;unsigned offset,stride;Texture texture;
+    void* context;void* buffer;unsigned offset,stride;Texture texture;int active;
     ~Restore() {
         reinterpret_cast<void(*)(void*,int,void* const*,unsigned,const unsigned*,const unsigned*)>(0x22ad49b)(context,1,&buffer,0,&offset,&stride);
         textures_hook->call<void>(context,1,&texture.texture,1u,0u,&texture.sampler);
+        active_texture(static_cast<unsigned>(active));
     }
 };
 template<class Vertex> void submit(void* context,void* state,const std::byte* data,unsigned count,const std::vector<FontPage>& pages,bool indexed) {
@@ -160,9 +166,14 @@ bool draw_paged(void* context,int count,int first,bool indexed) {
     if(relative>range->second.bytes.size()||bytes>range->second.bytes.size()-relative) return false;
     const auto data=range->second.bytes.data()+relative;
     if(!tags(data,bytes,stride)) return false;
-    Restore restore{context,buffer,offset,stride,texture->second};
+    int active=0;get_integer(0x84e0,&active); // GL_ACTIVE_TEXTURE
+    if(active<0x84c0) return true;
+    Restore restore{context,buffer,offset,stride,texture->second,active};
     try {
         if(found->second.rejected) throw std::runtime_error("Rejected Linux font vertex upload");
+        // The native upload routines bind the currently active texture unit.
+        // Select unit0 before upload, keeping map fog samplers1/2 untouched.
+        textures_hook->call<void>(context,1,&texture->second.texture,1u,0u,&texture->second.sampler);
         const auto pages=font_pages(texture->second.texture);
         if(pages.size()<2) throw std::runtime_error("Linux dynamic font pages are unavailable");
         if(stride==20) submit<MapFontVertex>(context,state,data,vertices,pages,indexed);
@@ -204,6 +215,11 @@ void report_font_draw_counts() noexcept {
         static_cast<unsigned long long>(batches_drawn.load()),static_cast<unsigned long long>(indexed_batches.load()),cached_bytes);
 }
 void prepare_font_draw(Hooks& hooks) {
+    // The verified ELF already links libGL.so.1. Resolve its standard state
+    // APIs without adding another graphics loader or initializing a context.
+    get_integer=reinterpret_cast<GetInteger>(dlsym(RTLD_DEFAULT,"glGetIntegerv"));
+    active_texture=reinterpret_cast<ActiveTexture>(dlsym(RTLD_DEFAULT,"glActiveTexture"));
+    if(!get_integer||!active_texture) throw std::runtime_error("Native Linux font GL state API unavailable");
     verify_site(0x22ad49b);
     for(const auto caller:callers) verify_site(caller-5);
     create_hook=&hooks.add_inline(0x22ad267,reinterpret_cast<void*>(create));
