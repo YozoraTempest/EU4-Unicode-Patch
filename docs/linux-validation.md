@@ -83,4 +83,18 @@ path-backslash和path-absolute故意提供与扫描登记路径不同的启用�
 
 本轮使用 softpipe。另行完成的无补丁原版对照确认：VM 的 llvmpipe 路径也会出现逐省杂色，softpipe 对照恢复一致国色；本轮段落修改没有根治该驱动问题。硬件 GPU、Wayland、其他发行版及其他游戏版本不属于本轮验证范围，动态字体/GPU 复杂段落集成仍未完成。
 
+## 动态缺字与强制换行补测
+
+功能提交 `6942ee0` 加入独立 Linux 字体分页与 GPU 批次模块。CI `38780257678` 通过 Windows26/Arch14，SO SHA256 `7b2e49cd04c387903823f8318e49ed79e343a05e9ef415f94b3031a8a4fef002`。真实隔离运行 `fonts-native-6942ee0`、PID9807 显示了原界面字库缺少的 Ω、Ж、𠮷，彩色文本正常，但混排长段落在强制换行前仍出现句尾越框。该失败画面、完整日志和退出0记录保留，默认 userdir 内容和 mtime 未变。
+
+`a5492ec` 修正原生 CR/LF 分支跳过最后待测词段的问题，所有 Linux 绘制/测量入口使用相同的词段提交判断。最后功能树 `1fe273b8d74c6c7bb0f83adffb267740d35933d9` 的 CI `38784338280` 通过 Windows26/Arch14，SO SHA256 `d3c691a245172c995a75684f008c2857c2a8902ecd6559fe8cf36a7c808713e9`。CI `38783396300` 的测试预期失败也保留；修正后不再错误禁止未格式化 section sign 前的普通 ICU 边界。
+
+最终原生测试 `fonts-native-2912636`、PID10086 的标签在前一 CI 时分配，实际部署的是上述成功 CI 的 1fe273b SO，按完整哈希核对。显式独立 userdir、新增 probe mod、原主/补充包本地素材、softpipe 和私有 Mesa cache。实际通过：Ω/Ж/𠮷 混排、颜色和空行、强制换行前句尾不越框、东方王朝说明、明朝五段介绍、开局事件及右侧提示。最终日志记录6个动态字形、4次页上传、497个原生 GPU 字体绘制批次，未出现字体上传/捕获/绘制失败。本地化253548条，拒绝0条。
+
+国家侧栏、顶部名称、介绍标题和提示框已显示 probe 的“明𠮷”；地图字库为缺失的𠮷生成字号88的页并上传。完整曲线地图标签的无遮挡截图尚未取得，这一项保留为未验证，不能仅凭上传计数宣布曲线几何通过。普通中文国名和省名仍可见。softpipe 国色一致，111个明朝省份的 CPU 颜色缓冲均为 `6880b3ff`。
+
+采集器在1800秒时收集了一次游戏仍运行的记录，随后另存 `post-exit-evidence.tar.gz`、最终日志及 `post-harness-exit.json`，不覆盖原始采集结果。游戏正常退出0，默认 userdir 文件内容和 mtime 未变；临时 Steam 选项恢复为空，专用离线服务已停止。完整证据见 `artifacts/linux-four-features-2026-10-15/NATIVE-FONT-PAGES-VALIDATION.md`、`dynamic-font-hardbreak-comparison.png`、`dynamic-font-hardbreak-result.json` 和 `artifacts/linux-native-arch-2026-10-14/native-implementation/tests/fonts-native-2912636`。
+
+独立标量缺字分页已进入真实界面，完整复杂段落 shaping/bidi 仍未接入；Latin-1 缺字的部分原生直接查表、曲线缺字完整画面、生命周期压力及硬件 GPU 仍待补齐。四组功能的发布目标保持未完成。
+
 本次没有更新工坊、改订阅/日常播放集/存档或自动发布Release。草稿PR9保留待审阅。
