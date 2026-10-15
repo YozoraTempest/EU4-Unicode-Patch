@@ -18,11 +18,13 @@ void skip_signature(void* lexer) {
     if(position(input)!=0) return;
     std::array<unsigned char,3> header{};
     const auto read=reinterpret_cast<bool(*)(void*,void*,int)>(table[0x20/8]);
-    // The native raw read is all-or-nothing, including short memory files.
-    if(!read(input,header.data(),static_cast<int>(header.size()))) return;
-    if(header==std::array<unsigned char,3>{0xef,0xbb,0xbf}) {
+    const bool complete=read(input,header.data(),static_cast<int>(header.size()));
+    if(complete&&header==std::array<unsigned char,3>{0xef,0xbb,0xbf}) {
         consumed.fetch_add(1,std::memory_order_relaxed);return;
     }
+    // Restore every non-signature probe, including a short/failed stream read.
+    // The memory stream is all-or-nothing; other CFile implementations may
+    // advance their cursor before reporting an incomplete read.
     reinterpret_cast<bool(*)(void*,int)>(table[0x68/8])(input,0);
 }
 void file(void* lexer,String* path) {

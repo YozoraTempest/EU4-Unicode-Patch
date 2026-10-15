@@ -46,10 +46,8 @@ int distance(const String* name,const String* query) {
     const auto matched=display_search_distance(name->view(),query->view());
     if(matched>=0) return matched;
     const auto keys=display_search_latin_keys(name->view(),query->view());
-    // GNU CString is the same 32-byte std::string ABI; borrow local strings
-    // only for this read-only native call. No game object owns these buffers.
-    return distance_hook->call<int>(reinterpret_cast<const String*>(&keys.first),
-                                    reinterpret_cast<const String*>(&keys.second));
+    const auto name_key=borrowed_string(keys.first),query_key=borrowed_string(keys.second);
+    return distance_hook->call<int>(&name_key,&query_key);
 }
 }
 void prepare_search(Hooks& hooks) {

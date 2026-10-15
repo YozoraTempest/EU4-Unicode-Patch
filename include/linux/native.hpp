@@ -14,6 +14,12 @@ struct String {
     union { std::uint64_t capacity; char local[16]; } storage;
     std::string_view view() const noexcept { return {bytes, size}; }
 };
+// A borrowed native view is passed only to verified read-only engine methods.
+// It is never assigned to an engine owner or passed to a native destructor.
+inline String borrowed_string(std::string_view text) noexcept {
+    String value{};value.bytes=text.empty()?"":text.data();value.size=text.size();
+    value.storage.capacity=text.size();return value;
+}
 static_assert(sizeof(String)==32);
 static_assert(offsetof(String,size)==8);
 
@@ -43,6 +49,8 @@ void prepare_editor_input(Hooks&);
 void prepare_multiplayer_name(Hooks&);
 void prepare_search(Hooks&);
 void prepare_ime(Hooks&);
+void configure_ime();
+void report_ime_counts() noexcept;
 void prepare_name_presence(Hooks&);
 void report_name_presence_counts() noexcept;
 void report_input_counts() noexcept;

@@ -2,6 +2,7 @@
 #include "unicode_text.hpp"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstring>
 #include <string>
 
@@ -14,6 +15,7 @@ void* focused=nullptr;
 std::string preedit;
 std::size_t preedit_cursor=0,preedit_selection=0;
 bool refreshing=false;
+std::atomic<unsigned long long> compositions{0},commits{0},previews{0};
 template<class T> T read(const void* address) {
     T value;std::memcpy(&value,address,sizeof(value));return value;
 }
@@ -41,15 +43,16 @@ void update_rect() {
     reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&xy[0],&xy[1]);
     // Native cursor dimensions are GUI coordinates; use the same conversion
     // as CEditBox::GiveFocus, preserving game UI scaling independently of VNC.
-    const std::string sample="M";
+    const auto sample=borrowed_string("M");
     const auto size=reinterpret_cast<std::uint32_t(*)(void*,const String*)>(buffer_table[0x1d0/8])(
-        buffer,reinterpret_cast<const String*>(&sample));
+        buffer,&sample);
     int wh[2]={1,static_cast<std::uint16_t>(size>>16)};
     reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&wh[0],&wh[1]);
     if(!preedit.empty()) {
-        const std::string prefix=preedit.substr(0,preedit_cursor);
+        const auto prefix_text=preedit.substr(0,preedit_cursor);
+        const auto prefix=borrowed_string(prefix_text);
         const auto advance=reinterpret_cast<std::uint32_t(*)(void*,const String*)>(buffer_table[0x1d0/8])(
-            buffer,reinterpret_cast<const String*>(&prefix));
+            buffer,&prefix);
         int delta[2]={static_cast<std::uint16_t>(advance),static_cast<std::uint16_t>(advance>>16)};
         reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&delta[0],&delta[1]);
         xy[0]+=delta[0];
@@ -98,20 +101,26 @@ void cursor(void* editor) {
 int poll(void* event) {
     while(poll_hook->call<int>(event)) {
         const auto type=read<std::uint32_t>(event);
-        if(type==0x302) {
-            const auto text=static_cast<const char*>(event)+12;
-            const auto zero=static_cast<const char*>(std::memchr(text,0,32));
-            if(focused&&zero&&valid_utf8({text,static_cast<std::size_t>(zero-text)})) {
-                preedit.assign(text,zero);
-                const auto start=read<int>(static_cast<const char*>(event)+44);
-                const auto length=read<int>(static_cast<const char*>(event)+48);
-                preedit_cursor=scalar_offset(preedit,std::max(0,start));
-                preedit_selection=scalar_offset(preedit.substr(preedit_cursor),std::max(0,length));
-                refresh();
-            }
+        if(type==0x302||type==0x305) {
+            const bool extended=type==0x305;
+            const auto text=extended?read<const char*>(static_cast<const char*>(event)+16):static_cast<const char*>(event)+12;
+            const auto limit=extended?32768u:32u;
+            try {
+                const auto bytes=text?strnlen(text,limit):limit;
+                const auto zero=bytes<limit?text+bytes:nullptr;
+                if(focused&&zero&&valid_utf8({text,static_cast<std::size_t>(zero-text)})) {
+                    preedit.assign(text,zero);
+                    const auto start=read<int>(static_cast<const char*>(event)+(extended?24:44));
+                    const auto length=read<int>(static_cast<const char*>(event)+(extended?28:48));
+                    preedit_cursor=scalar_offset(preedit,std::max(0,start));
+                    preedit_selection=scalar_offset(preedit.substr(preedit_cursor),std::max(0,length));
+                    compositions.fetch_add(1,std::memory_order_relaxed);refresh();
+                }
+            } catch(...) { log("SDL composition update failed");clear(); }
+            if(extended&&text) reinterpret_cast<void(*)(void*)>(0x21212a0)(const_cast<char*>(text));
             continue;
         }
-        if(type==0x303) clear();
+        if(type==0x303) { commits.fetch_add(1,std::memory_order_relaxed);clear(); }
         if(type==0x300&&!preedit.empty()) {
             // The IME owns navigation and cancellation until commit. Its SDL
             // editing/commit events still pass through the ordinary poll queue.
@@ -126,17 +135,18 @@ void preview(safetyhook::Context& context) {
     if(preedit.empty()||reinterpret_cast<void*>(context.r14)!=focused||member<bool>(focused,0x262)) return;
     auto row=reinterpret_cast<String*>(context.rsp+0x38);
     const auto column=member<std::uint16_t>(focused,0xc8+0x54);
-    if(column>row->size||!valid_utf8(row->view())) return;
+    if(column>row->size||row->size>32000||preedit.size()>32000-row->size||!valid_utf8(row->view())) return;
     auto text=std::string(row->view());
     text.insert(column,preedit);
     // Only the native draw call's owned scratch string is changed. The document,
     // undo state, search query and save data never receive uncommitted text.
     reinterpret_cast<void*(*)(void*,std::size_t,std::size_t,const char*,std::size_t)>(
         0x25a3f30)(row,0,row->size,text.data(),text.size());
+    previews.fetch_add(1,std::memory_order_relaxed);
 }
 }
 void prepare_ime(Hooks& hooks) {
-    for(const auto address:{0x2120930,0x2120950,0x2120960,0x207c56c,0x2067386,0x2066f62,0x2066944}) verify_site(address);
+    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x207c56c,0x2067386,0x2066f62,0x2066944}) verify_site(address);
     poll_hook=&hooks.add_inline(0x21202b0,reinterpret_cast<void*>(poll));
     focus_hook=&hooks.add_inline(0x206731a,reinterpret_cast<void*>(focus));
     blur_hook=&hooks.add_inline(0x2067420,reinterpret_cast<void*>(blur));
@@ -145,5 +155,16 @@ void prepare_ime(Hooks& hooks) {
     begin_hook=&hooks.add_inline(0x1ff5d22,reinterpret_cast<void*>(begin));
     end_hook=&hooks.add_inline(0x1ff5d28,reinterpret_cast<void*>(end));
     hooks.add_mid(0x20669ff,preview);
+}
+void configure_ime() {
+    // Load and configure SDL only after all startup hooks are enabled. The
+    // maintained SDL2 ABI may initialize its own helper threads on first use.
+    const auto hint=reinterpret_cast<int(*)(const char*,const char*)>(0x21206f0);
+    const auto composition=hint("SDL_IME_INTERNAL_EDITING","0");
+    const auto extended=hint("SDL_IME_SUPPORT_EXTENDED_TEXT","1");
+    log("SDL IME hints: application-composition=%d extended-editing=%d",composition,extended);
+}
+void report_ime_counts() noexcept {
+    log("SDL IME composition-events=%llu previews=%llu commits=%llu",compositions.load(),previews.load(),commits.load());
 }
 }
