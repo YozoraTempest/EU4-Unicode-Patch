@@ -131,8 +131,8 @@ int main() {
         check(!native_wrap_after(FormattedText(colored_line,false),colored_line,8,false),
               "unformatted color-like bytes were skipped");
         check(!native_wrap_after(wrapped,punctuation,8),"word submission split closing punctuation");
-        check(!native_wrap_after(cluster,u8"中e§R\u0301§!文",3),"word submission split a combining sequence");
         const FormattedText cluster(u8"中e§R\u0301§!文");
+        check(!native_wrap_after(cluster,u8"中e§R\u0301§!文",3),"word submission split a combining sequence");
         check(!cluster.line_before(4)&&!cluster.line_before(7),"line break split a colored combining sequence");
         check(!native_wrap_before(cluster,u8"中e§R\u0301§!文",8),"measurement split a colored combining sequence");
         check(FormattedText(u8"§中文").visible_text()==u8"§中文","non-ASCII character consumed as a color code");
