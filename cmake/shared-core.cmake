@@ -5,7 +5,7 @@ find_package(Threads REQUIRED)
 
 set(EU4_UNICODE_CORE_TARGETS
     unicode_text unicode_services formatted_text unicode_editor unicode_search
-    glyph_registry font_draw_batches font_assets)
+    glyph_registry font_draw_batches font_assets name_policy)
 
 add_library(unicode_text STATIC src/unicode_text.cpp src/native_text_event.cpp)
 target_include_directories(unicode_text PUBLIC include PRIVATE vendor/utfcpp/source)
@@ -36,3 +36,6 @@ add_library(font_draw_batches STATIC src/font_draw_batches.cpp)
 target_include_directories(font_draw_batches PUBLIC include)
 add_library(font_assets STATIC src/font_assets.cpp)
 target_include_directories(font_assets PUBLIC include)
+
+add_library(name_policy STATIC src/name_policy.cpp)
+target_link_libraries(name_policy PUBLIC unicode_services)

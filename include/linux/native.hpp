@@ -39,6 +39,8 @@ void prepare_editor_input(Hooks&);
 void prepare_multiplayer_name(Hooks&);
 void prepare_search(Hooks&);
 void prepare_ime(Hooks&);
+void prepare_name_presence(Hooks&);
+void report_name_presence_counts() noexcept;
 void report_input_counts() noexcept;
 void report_text_counts() noexcept;
 }

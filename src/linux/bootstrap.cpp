@@ -31,6 +31,7 @@ int patched_main(int argc,char** argv,char** envp) {
         prepare_multiplayer_name(*hooks);
         prepare_search(*hooks);
         prepare_ime(*hooks);
+        prepare_name_presence(*hooks);
         hooks->enable();
         log("Linux native hooks enabled; profile=EU4-1.37.5-x86_64");
     } catch(const std::exception& error) {
@@ -41,6 +42,7 @@ int patched_main(int argc,char** argv,char** envp) {
     const int result=game_main(argc,argv,envp);
     report_text_counts();
     report_input_counts();
+    report_name_presence_counts();
     return result;
 }
 }
