@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <iterator>
 #include <string>
 
 namespace eu4unicode::linux_native {
@@ -15,8 +16,14 @@ struct Vector { int x,y; };
 static_assert(sizeof(Rect)==16&&sizeof(Vector)==8);
 SafetyHookInline *screen_hook=nullptr,*texture_hook=nullptr,*actual_hook=nullptr;
 SafetyHookInline *height_hook=nullptr,*required_hook=nullptr,*real_hook=nullptr;
+SafetyHookInline *line_hook=nullptr;
 thread_local FormattedTextCache cache;
 std::atomic<std::uint64_t> screen_breaks=0,texture_breaks=0,measured_breaks=0;
+std::atomic<std::uint64_t> row_breaks=0;
+
+template<class T> T member(const void* object,std::size_t offset) {
+    T result;std::memcpy(&result,static_cast<const char*>(object)+offset,sizeof(result));return result;
+}
 
 // Engine format parsers expect single-byte introducers even when surrounding
 // localization is UTF-8. Normalize only the temporary rendering/measurement
@@ -109,6 +116,52 @@ void real(void* font,const String* source,String* output,int width,int height,
     real_hook->call<void>(font,&text.native,output,width,height,padding,
                          formatted,flag,flag2,lines,clipped);
 }
+int line_size(const void* buffer,const String* source) {
+    auto text=source->view();
+    // GetTextAsRows calls this only when its first explicit line is too wide.
+    // Its original byte bisection can return a UTF-8 continuation byte; that
+    // remainder then becomes the next row's source, permanently losing text.
+    text=text.substr(0,text.find_first_of("\r\n"));
+    bool unicode=false;
+    for(std::size_t offset=0;offset<text.size();) {
+        const auto unit=decode(text.substr(offset));
+        if(unit.valid&&unit.bytes>1) {unicode=true;break;}
+        offset+=unit.bytes;
+    }
+    if(!unicode) return line_hook->call<int>(buffer,source);
+    const bool formatted=member<bool>(buffer,0xe4);
+    const auto boundaries=formatted?cache.get(text):
+        std::make_shared<const FormattedText>(text,false);
+    const auto& prefixes=boundaries->prefixes();
+    auto font=member<void*>(buffer,0x98);
+    const auto table=member<void**>(font,0);
+    const auto measure=reinterpret_cast<int(*)(void*,const char*,int,bool)>(table[0x68/8]);
+    const auto padding=reinterpret_cast<int(*)(void*,bool)>(table[0xb0/8])(font,true);
+    const auto available=std::max(0,static_cast<int>(member<std::uint16_t>(buffer,0x68))-padding);
+    // Search only complete formatted graphemes. Native glyph advances and
+    // kerning remain authoritative, including the mod's bitmap metrics.
+    std::size_t visible_end=0;
+    while(visible_end<text.size()) {
+        const auto unit=native_text_unit(text,visible_end,formatted);
+        visible_end=unit.end;
+        if(unit.kind!=TextUnitKind::color) break;
+    }
+    const auto first=std::lower_bound(prefixes.begin(),prefixes.end(),visible_end);
+    auto low=first,high=prefixes.end();
+    while(low!=high) {
+        const auto middle=low+(high-low)/2;
+        if(measure(font,text.data(),static_cast<int>(*middle),formatted)<=available) low=middle+1;
+        else high=middle;
+    }
+    // A box narrower than its first grapheme must still consume one cluster.
+    auto selected=low==first?first:std::prev(low);
+    if(selected==prefixes.end()) return 0;
+    const auto fitted=selected;
+    while(selected!=first&&!boundaries->line_before(*selected)) --selected;
+    if(!boundaries->line_before(*selected)) selected=fitted;
+    ++row_breaks;
+    return static_cast<int>(*selected);
+}
 void screen_wrap(safetyhook::Context& c) {
     if(!screen_scope||!screen_scope->text.unicode) return;
     const auto index=static_cast<std::uint32_t>(c.r13);
@@ -160,6 +213,7 @@ void prepare_text_layout(Hooks& hooks) {
     height_hook=&hooks.add_inline(0x2053b88,reinterpret_cast<void*>(height));
     required_hook=&hooks.add_inline(0x20565aa,reinterpret_cast<void*>(required));
     real_hook=&hooks.add_inline(0x2056d66,reinterpret_cast<void*>(real));
+    line_hook=&hooks.add_inline(0x20d6b06,reinterpret_cast<void*>(line_size));
     for(const auto target:{0x20523ca,0x2052620,0x204f10a,0x20563a6,0x2053ead})
         verify_site(target);
     hooks.add_mid(0x2052239,screen_wrap);
@@ -172,9 +226,10 @@ void prepare_text_layout(Hooks& hooks) {
         hooks.add_mid(site,substring);
 }
 void report_layout_counts() noexcept {
-    log("Text layout screen-boundaries=%llu texture-boundaries=%llu measured-boundaries=%llu",
+    log("Text layout screen-boundaries=%llu texture-boundaries=%llu measured-boundaries=%llu row-boundaries=%llu",
         static_cast<unsigned long long>(screen_breaks.load()),
         static_cast<unsigned long long>(texture_breaks.load()),
-        static_cast<unsigned long long>(measured_breaks.load()));
+        static_cast<unsigned long long>(measured_breaks.load()),
+        static_cast<unsigned long long>(row_breaks.load()));
 }
 }

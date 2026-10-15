@@ -24,9 +24,11 @@ Linux `CTextureHandler::LoadTexture` 在 `0x22a7edb` 拒绝达到 16 MiB 的文�
 
 上下文由函数调用栈持有，嵌套调用结束后恢复上一层；缓存只持有自有文字和边界数据。传给原生只读函数的 GNU 字符串视图在整个调用期间有效，原生输出字符串继续由引擎赋值和析构。ICU 的强制换行边界在换行符之后，原生换行分支却直接提交剩余词段，因此 `native_wrap_after` 还在 CR/LF 或输入结束前提交待测词段，只跨过实际颜色指令；相同判断用于屏幕、纹理和高度测量，避免最后的中文词组及标点越框。此模块不承担复杂文字 shaping。
 
+提示框与编辑控件的行拆分还经过 `CTextBuffer::GetLineCharSize`（`0x20d6b06`）。其原生二分及线性收尾按字节测量前缀，可能返回 UTF-8 字符中间的位置，后续 `GetTextAsRows` 会从续字节创建下一行。Unicode 输入改为在共享 `FormattedText` 的完整字素/格式指令前缀中搜索，宽度和 padding 仍调用当前原生字体虚表的 `+0x68`、`+0xb0`；保留原控件宽度和格式标志。优先采用已测量范围内的 ICU 断行机会，长词必要时按完整字素拆分，过窄控件至少消耗一个完整字素。原生行对象的构造、空间处理和所有权不变，原始行串未被规范化或复制到插件持久状态。纯单字节输入保留原入口。
+
 动态缺字由独立的 `src/linux/font_pages.cpp` 与 `font_draw.cpp` 处理。`InitPostRead` 在调用 `ParseFontFile` 前写入纹理 ID 和尺寸；解析返回后登记 glyph table、texture manager、ID、原页尺寸和字号。既有 BMFont/Unicode registry 字形优先，缺字通过共享标量栅格化生成自有记录及额外 CPU 页。原模组的纹理像素不变。分页 CPU+GPU 预留共限 256 MiB，顶点影子共限 64 MiB。
 
-已核实原生纹理创建 `0x229f203` 的 format 11 为 RGBA8/BGRA/unsigned byte，type 0 为 2D；更新 `0x22adbb4`、释放 `0x22adc83`。纹理查询 `0x22a8a2e` 返回 TextureGFX 对象本身。`GfxSetTextures`（`0x22ae01b`）第三参数为纹理数组，第六参数为 sampler 数组。字体的普通及曲线几何每字形六顶点，页标签在最终 UV 写完后添加，在自有绘制批次中去掉并缩放到实际页尺寸。只记录核实过的字体上传调用点及已跟踪缓冲的后续更新；原纹理、sampler、stream buffer、stride 和 offset 在绘制后恢复。纹理/字符集/graphics 生命周期分别释放自有页和 scratch buffer。缺字分页不等同于完整 ShapedParagraph 的原生绘制支持。
+已核实原生纹理创建 `0x229f203` 的 format 11 为 RGBA8/BGRA/unsigned byte，type 0 为 2D；更新 `0x22adbb4`、释放 `0x22adc83`。纹理查询 `0x22a8a2e` 返回 TextureGFX 对象本身。`GfxSetTextures`（`0x22ae01b`）第三参数为纹理数组，第六参数为 sampler 数组。屏幕/纹理绘制及普通文字顶点每字形六顶点。地图曲线文字临时也生成六顶点，但原生上传压缩为四角点，使用原生每字形六索引的缓冲绘制；分页必须按四个物理顶点分批，并把首角点作为原生 base vertex，保留原索引绑定及 winding。页标签在临时几何最终 UV 写完后添加，在自有绘制批次中去掉并缩放到实际页尺寸。只记录核实过的字体上传调用点及已跟踪缓冲的后续更新；原纹理、sampler、stream buffer、stride 和 offset 在绘制后恢复。CPU 测量和纹理查询只登记页与关联，GPU 上传仅在真实字体绘制线程执行。上传前通过原生纹理设置选择 unit0，绘制后恢复纹理、sampler、顶点流及原 active texture unit，避免覆盖地图 fog 使用的其他纹理单元。纹理/字符集/graphics 生命周期分别释放自有页和 scratch buffer。缺字分页不等同于完整 ShapedParagraph 的原生绘制支持。
 
 ## 模组登记与依赖
 
