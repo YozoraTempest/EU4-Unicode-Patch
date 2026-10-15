@@ -191,6 +191,13 @@ void nudged_count(safetyhook::Context& c) {
     c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.r12+0x100,unit.value));
     c.rip=0x1b5fe4c;
 }
+void country_count(safetyhook::Context& c) {
+    const auto unit=scalar_z(reinterpret_cast<char*>(c.rax));
+    if(unit.bytes==1) return;
+    c.rbx+=unit.bytes-1;
+    c.rax=reinterpret_cast<std::uintptr_t>(glyph(c.r12+0x100,unit.value));
+    c.rip=0x1b5e21e;
+}
 void texture_format(safetyhook::Context& c) {
     const auto string=reinterpret_cast<String*>(c.rdi);
     auto text=string->view();
@@ -249,6 +256,7 @@ void prepare_bitmap_fonts(Hooks& hooks) {
     // AddNudgedNames sizes a stack vertex buffer with a separate glyph pass.
     // Its count must use the same scalars as FillVertexBuffer.
     hooks.add_mid(0x1b5fe41,nudged_count);
+    hooks.add_mid(0x1b5e213,country_count);
     verify_site(0x25a3f30);
     hooks.add_mid(0x204e9a4,texture_format);
     hooks.add_mid(0x204ea1e,texture_copy);

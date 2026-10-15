@@ -43,6 +43,7 @@ int patched_main(int argc,char** argv,char** envp) {
     }
     const int result=game_main(argc,argv,envp);
     report_text_counts();
+    report_map_counts();
     report_script_counts();
     report_input_counts();
     report_name_presence_counts();
