@@ -2,7 +2,12 @@
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
 #include "formatted_paragraph.hpp"
+#ifdef _WIN32
 #include <icu.h>
+#else
+#include <unicode/uchar.h>
+#include <unicode/uscript.h>
+#endif
 #include <algorithm>
 #include <cmath>
 #include <limits>
