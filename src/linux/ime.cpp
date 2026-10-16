@@ -118,14 +118,13 @@ void clear() {
     preedit.clear();preedit_cursor=preedit_selection=0;refresh();
 }
 void focus(void* editor) {
-    if(focused!=editor) {clear();if(focused) forget_editor_layout(focused);focused=editor;}
+    if(focused!=editor) {clear();focused=editor;}
     focus_hook->call<void>(editor);
     if(!member<bool>(editor,0x260)) focused=nullptr;
     update_rect();
 }
 void blur(void* editor) {
     if(focused==editor) {clear();focused=nullptr;}
-    forget_editor_layout(editor);
     blur_hook->call<void>(editor);
 }
 void destroy(void* editor) {

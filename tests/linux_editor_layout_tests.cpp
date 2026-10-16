@@ -99,6 +99,25 @@ int main() {
     }
     check(!editor_layout_hit(editor.buffer(),&source,origin),"scope destruction drops the borrowed native pointer");
     check(source.view()==editor.text,"geometry never modifies the logical source string");
+    Editor second("A שלום B");
+    const int edge[2]={16,0};
+    float expected_x=0;
+    {
+        EditorLayoutScope scope(editor.data());
+        editor_layout_hit(editor.buffer(),&source,edge);
+        expected_x=*editor_layout_x(editor.buffer(),editor.text);
+    }
+    {
+        EditorLayoutScope scope(second.data());
+        const auto text=borrowed_string(second.text);
+        editor_layout_hit(second.buffer(),&text,edge);
+    }
+    {
+        EditorLayoutScope scope(editor.data());
+        check(*editor_layout_x(editor.buffer(),editor.text)==expected_x,
+            "focus switching and another editor's hit preserve the original visual caret");
+    }
+    forget_editor_layout(second.data());
     forget_editor_layout(editor.data());
     {
         EditorLayoutScope scope(editor.data());

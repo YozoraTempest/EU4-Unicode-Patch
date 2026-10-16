@@ -8,23 +8,23 @@
 #include <cstring>
 #include <mutex>
 #include <stdexcept>
+#include <unordered_map>
 #include <unistd.h>
 
 namespace eu4unicode::linux_native {
 namespace {
 thread_local void* active_buffer=nullptr;
 struct Affinity {
-    void* buffer=nullptr;
     std::string document;
     std::uint16_t row=0,column=0;
     bool trailing=false;
 };
 std::mutex affinity_mutex;
-Affinity affinity;
+std::unordered_map<void*,Affinity> affinities;
 SafetyHookInline *caret_hook=nullptr,*anchor_hook=nullptr,*string_caret_hook=nullptr;
 SafetyHookInline *input_hook=nullptr,*mouse_hook=nullptr;
 std::atomic<std::uint64_t> hits{0},moves{0},carets{0},anchors{0};
-std::atomic<unsigned> hit_caret_logs{0};
+std::atomic<std::uint64_t> hit_caret_logs{0};
 
 template<class T> T member(const void* object,std::size_t offset) {
     T value;std::memcpy(&value,static_cast<const char*>(object)+offset,sizeof(T));return value;
@@ -65,14 +65,15 @@ float scale(void* buffer) {
 }
 bool trailing(void* buffer,std::uint16_t row,std::uint16_t column) {
     const std::lock_guard lock(affinity_mutex);
-    return affinity.buffer==buffer&&affinity.row==row&&affinity.column==column&&
-        affinity.document==document(buffer)&&affinity.trailing;
+    const auto found=affinities.find(buffer);
+    return found!=affinities.end()&&found->second.row==row&&found->second.column==column&&
+        found->second.document==document(buffer)&&found->second.trailing;
 }
 void remember(void* buffer,std::uint16_t row,std::uint16_t column,bool value) {
     // Build the snapshot before modifying any native cursor field.
-    Affinity next{buffer,std::string(document(buffer)),row,column,value};
+    Affinity next{std::string(document(buffer)),row,column,value};
     const std::lock_guard lock(affinity_mutex);
-    affinity=std::move(next);
+    affinities.insert_or_assign(buffer,std::move(next));
 }
 void rejected(const char* operation) noexcept {
     static std::atomic<unsigned> count{0};
@@ -92,7 +93,8 @@ std::uint32_t position(void* buffer,std::uint32_t native,std::string_view text,b
     const auto count=counter.fetch_add(1)+1;
     if(count<=4) log("Linux shaped editor %s row=%u column=%u x=%u trailing=%d",
         anchor?"anchor":"caret",row,column,result&0xffffu,!anchor&&trailing(buffer,row,column));
-    if(!anchor&&hits.load()&&hit_caret_logs.fetch_add(1)<16)
+    const auto hit=hits.load();
+    if(!anchor&&hit&&hit<=16&&hit_caret_logs.exchange(hit)!=hit)
         log("Linux shaped editor hit-caret column=%u x=%u trailing=%d tid=%ld",column,result&0xffffu,
             trailing(buffer,row,column),static_cast<long>(gettid()));
     return result;
@@ -166,7 +168,7 @@ EditorLayoutScope::EditorLayoutScope(void* editor) noexcept:previous_(active_buf
 EditorLayoutScope::~EditorLayoutScope() {active_buffer=previous_;}
 void forget_editor_layout(void* editor) noexcept {
     const std::lock_guard lock(affinity_mutex);
-    if(affinity.buffer==static_cast<char*>(editor)+0xc8) affinity={};
+    affinities.erase(static_cast<char*>(editor)+0xc8);
 }
 std::optional<float> editor_layout_x(void* buffer,std::string_view text,bool anchor) {
     if(!eligible(buffer)) return {};
