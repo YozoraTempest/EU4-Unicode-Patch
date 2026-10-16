@@ -16,30 +16,6 @@ namespace eu4unicode {
 NativeTextWidth original_text_width=nullptr;
 NativeTextHeight original_text_height=nullptr;
 NativeParagraphColor native_paragraph_color=nullptr;
-NativeLineAdvance plan_paragraph_line(const ShapedParagraph& paragraph,std::size_t line,float scale) {
-    if(!std::isfinite(scale)||scale<=0) throw std::invalid_argument("Invalid paragraph advance scale");
-    const auto& metrics=paragraph.lines().at(line);
-    std::vector<const InlinePlacement*> objects;
-    for(const auto& object:paragraph.objects())
-        if(object.text_start>=metrics.text_start&&object.text_start<metrics.text_start+metrics.text_length)
-            objects.push_back(&object);
-    std::stable_sort(objects.begin(),objects.end(),[](const auto* left,const auto* right){return left->x<right->x;});
-    NativeLineAdvance result{};
-    auto advance=[&](float target) {
-        const auto delta=std::round(target-result.pixels/scale);
-        if(!std::isfinite(delta)||delta<-32768||delta>32767)
-            throw std::length_error("Native paragraph advance exceeds capacity");
-        const auto value=static_cast<int>(delta);result.pixels+=value*scale;return value;
-    };
-    for(const auto* object:objects) {
-        result.icons.push_back({object->id,advance(object->x)});
-        // The native font returns integer client pixels for an icon. Retain
-        // that contract at fractional UI scales rather than rounding per run.
-        result.pixels+=std::round(paragraph.content().icons().at(object->id).advance*scale);
-    }
-    result.finish=advance(std::ceil(metrics.width));
-    return result;
-}
 namespace {
 void(*logger)(const char*)=nullptr;
 std::atomic<bool> reported_error{false};

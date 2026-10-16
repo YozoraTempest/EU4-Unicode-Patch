@@ -512,57 +512,17 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
     // Validate the complete transport before consuming any stable atlas slots.
     std::vector<ScalarGlyph> glyphs;
     std::string transport;
-    std::string color;
-    const auto& content=entry.layout->content();
     const auto scale=*reinterpret_cast<const float*>(static_cast<const std::byte*>(font)+0x968);
-    auto select_color=[&](std::uint32_t id) {
-        const auto& next=content.colors().at(id);
-        transport+=paragraph_color_transition(color,next);color=next;
-    };
     auto append_glyph=[&](ScalarGlyph glyph) {
         // Final invocation-local token values are assigned after cache eviction.
         transport+=encode(0xf0000+static_cast<std::uint32_t>(glyphs.size()));
         glyphs.push_back(std::move(glyph));
     };
-    auto advance_glyph=[&](int advance) {
-        ScalarGlyph blank{};blank.metrics.width=blank.metrics.height=1;blank.alpha={0};
-        blank.metrics.advance=static_cast<std::int16_t>(advance);append_glyph(std::move(blank));
-    };
     if(atlas.map) {
         for(auto& glyph:map_cluster_glyphs(*entry.layout,atlas.supplemental_size.width,atlas.supplemental_size.height)) append_glyph(std::move(glyph));
     } else {
-    auto tiles=rasterize_paragraph(*entry.layout,atlas.supplemental_size.width-2,atlas.supplemental_size.height-2);
-    for(std::size_t line=0;line<entry.layout->lines().size();++line) {
-        const auto& metrics=entry.layout->lines()[line];
-        const auto first=glyphs.size(),line_start=transport.size();
-        for(auto& tile:tiles) if(tile.line==line) {
-            if(tile.x<-32768||tile.x>32767||tile.y-metrics.top<-32768||tile.y-metrics.top>32767)
-                throw std::length_error("Native shaped glyph offset exceeds capacity");
-            ScalarGlyph glyph{};
-            glyph.metrics.width=static_cast<std::int16_t>(tile.bitmap.width);
-            glyph.metrics.height=static_cast<std::int16_t>(tile.bitmap.height);
-            glyph.metrics.x_offset=static_cast<std::int16_t>(tile.x);
-            glyph.metrics.y_offset=static_cast<std::int16_t>(tile.y-metrics.top);
-            glyph.alpha=std::move(tile.bitmap.alpha);select_color(tile.style);append_glyph(std::move(glyph));
-        }
-        const auto plan=plan_paragraph_line(*entry.layout,line,scale);
-        for(const auto& icon:plan.icons) {
-            const auto placement=std::find_if(entry.layout->objects().begin(),entry.layout->objects().end(),
-                [&](const auto& object){return object.id==icon.id;});
-            select_color(placement->style);advance_glyph(icon.padding);
-            transport+=content.icons().at(icon.id).command;
-        }
-        if(!plan.icons.empty()||glyphs.size()==first) { select_color(0);advance_glyph(plan.finish); }
-        else glyphs.back().metrics.advance=static_cast<std::int16_t>(plan.finish);
-        if(line+1==entry.layout->lines().size()) {
-            transport+=paragraph_color_transition(color,"");color.clear();
-        }
-        // The native scratch word buffer is 256 bytes. A shaped run is a draw
-        // unit, not an independently wrappable Unicode character.
-        if(transport.size()-line_start>240||std::ceil(metrics.width)>32767)
-            throw std::length_error("Native shaped line exceeds transport capacity");
-        if(line+1<entry.layout->lines().size()) transport+='\n';
-    }
+        auto plan=plan_paragraph_transport(*entry.layout,atlas.supplemental_size,scale);
+        transport=std::move(plan.text);glyphs=std::move(plan.glyphs);
     }
     if(transport.size()>32000||glyphs.size()>0xfffe)
         throw std::length_error("Native paragraph transport exceeds capacity");
