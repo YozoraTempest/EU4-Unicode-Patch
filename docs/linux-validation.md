@@ -132,3 +132,28 @@ CI **38809455419** 对功能树 `2ac7be0f7bfeb84b3a574d61887565b7ac193d88` 的 W
 此轮使用真实 X11/Fcitx 键盘输入及只读原生缓冲快照，没有注入事件或调用运行中的游戏对象。候选位置视觉通过限定在已测查找弹窗、GUI scale1.0。XIM 反选反馈可能令 SDL start/length 表示高亮范围，不能将 start0 或一次 Left 当作内部插入光标正确的证明；预编辑下划线、选区及更多控件/缩放仍待完成。
 
 证据为 `artifacts/linux-four-features-2026-10-15/SEARCH-AND-IME-VALIDATION.md`、`search-ime-native-result.json`、`ime-font-metrics-native-result.json`、原生反汇编、查询快照及对应截图。当前测试结束后已恢复原来的空 Steam LaunchOptions，保留其他当前配置字节，并停止专用离线 Steam 服务，见 `text-row-search-ime-cleanup.json`。完整繁体/混合/英文/外交搜索矩阵、复杂 shaping/bidi、姓名与 Steam 载荷及生命周期压力仍未完成；Linux 发布目标保持进行中。
+
+## 预编辑视口、装饰与中文鼠标命中补测
+
+`62dca27` 接入完整格式字素视口和独立 IME 装饰绘制模块，保留长串的活动尾段；`117fa18` 用实际文字内容起点修正下划线/候选偏移，并清理空预编辑事件。真实多人输入框还复现光标落在汉字内部 byte13 的问题，`415bcdc` 改为完整格式字素命中，`56e6e28` 再扣除控件 border/font padding。
+
+`9163edf699ed2aec94f2faebbd8759b3e53f783e` 修复 1.25 倍缩放下屏幕鼠标坐标与未缩放精灵位置混用的问题，限定 Unicode 非密码输入框，在原生减法前调用游戏自己的整数坐标转换。CI **38887257113** Windows26/Arch14 全部通过；SO SHA256 为 `e56192c2108b0a11ee0e1f74ee4a16780a89c594822837ed626e84f4f9559684`。当前185处 profile 签名均与完整目标 ELF 重新核对一致。
+
+| 原生运行 / 实际 SO | 控件与缩放 | 实测结果 |
+| --- | --- | --- |
+| ime-ranges-native-117fa18 / e90a0d6… | 原生 Instant 多人过滤框，font14，1.0倍 | 短串装饰、取消、54字节长串尾段、2包12汉字提交、失焦清理通过；同时保留 byte13 鼠标缺陷的修复前证据 |
+| editor-hit-native-415bcdc / d87d50c… | 同一原生 Instant 控件，1.0倍 | 相同点击改为完整 byte15，插入结果与捕获字节位置一致；仍有内容起点偏移，后续修正 |
+| ime-texture-native-56e6e28 / f2d9d3d… | 私有 GUI 探针的 CTextSprite 查找框，font16，1.0倍 | 实际虚表方法0x2097208；短串、取消、长串、中文提交、byte9中间插入通过 |
+| editor-origin-native-56e6e28 / f2d9d3d… | 原生 Instant 多人过滤框，1.0倍 | 修复前相同点击[811,205]改为正确 byte9，长串及中间插入通过 |
+| ime-scale125-native-9163edf / e56192c… | 同一 Texture 探针，1920×1080，实际1.25倍 | 相同点击[249,205]由修复前 byte24 改为正确 byte9，缩放装饰、长串、中文提交及中间插入通过 |
+| editor-unit-native-9163edf / e56192c… | 原生 Instant 多人过滤框，1280×720，1.0倍 | 同一最新二进制默认缩放回归通过，点击 byte9，提交后光标15 |
+
+各项验收来自真实 Fcitx/XIM 键盘、游戏原生文档与 sprite 的只读快照、日志和画面。长串为54字节拼音，提交准确得到“北京北京北京北京北京上海”（12标量/36字节、2个SDL包）；最新两个版本在 byte9 预编辑“ce shi”期间原文档不变，Space 后准确得到“北京北测试京北京北京北京上海”（14标量/42字节、光标15）。取消、提交及失焦时装饰与预览快照清空。
+
+每个独立装饰验收进程的最初32次真实绘制均核对 GL program、矩阵、颜色、裁剪、blend 与 legacy texture unit，零不一致；Texture 与 Instant 各自使用新的进程取得这32次记录。最新两轮分别为 PID19508/19838，运行912.90/1125.73秒，正常退出0，默认 userdir 内容哈希和 mtime 不变。本地化导入253544条、拒绝0条，脚本 BOM5756次。已有正文、图标和地图字体继续使用原汉化资源。
+
+失败记录同样保留：第一版装饰因光标图片透明边距偏高；1280×720的1.25倍请求被游戏重置为1.0，不能当作缩放通过；1920×1080下 `56e6e28` 实际复现了 byte24 的缩放命中偏移，`9163edf` 在相同夹具上修正。两种缩放下选国说明的完整段落均在原边框内。
+
+证据为 `artifacts/linux-four-features-2026-10-15/IME-PRESENTATION-AND-MOUSE-VALIDATION.md`、`ime-latest-native-results.json`、`ime-and-hit-builds.json`、`editor-scale-profile-verification.json`、对应截图，以及 `artifacts/linux-native-arch-2026-10-14/native-implementation/tests/` 下各同名运行。临时 Steam LaunchOptions 已恢复为空，保留其他当前VDF字节，专用离线服务已停止；VM显示分辨率已从测试用1920×1200恢复原1280×800。没有残留的隔离游戏进程。
+
+1.25倍验收限定该 Texture 查找框，1.0倍覆盖两种绘制分支。普通文档的真实选区替换、其他缩放/密码框、预编辑期间鼠标行为仍需验证。复杂段落 shaping/bidi、完整搜索矩阵、真实生成姓名及Steam载荷、生命周期/安装压力和最终Windows/Linux回归仍未完成。上述IME回归使用llvmpipe，不代表修复了其原版也会出现的政治地图杂色；早期softpipe的颜色对照保持独立。草稿PR9未合并，Linux发布目标保持进行中。
