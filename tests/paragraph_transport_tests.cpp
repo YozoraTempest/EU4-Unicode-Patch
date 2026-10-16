@@ -42,8 +42,18 @@ int main() {
             actual.paint(pen+glyph.metrics.x_offset,glyph.metrics.y_offset,glyph.metrics.width,glyph.metrics.height,glyph.alpha);
             pen+=glyph.metrics.advance;
         }
-        check(!clusters.empty()&&clusters.size()<grapheme_boundaries(label).size(),"map transport retains contextual clusters");
+        std::size_t cluster_count=0;
+        for(const auto& run:curved.runs()) cluster_count+=run.clusters.size();
+        check(!clusters.empty()&&clusters.size()==cluster_count,"map transport retains every contextual cluster");
         check(pen==static_cast<int>(std::ceil(curved.metrics().width)),"map cluster advances retain the complete shaped width");
+        if(actual.alpha!=expected.alpha) {
+            unsigned long long difference=0,coverage=0;std::size_t changed=0;
+            for(std::size_t i=0;i<actual.alpha.size();++i) {
+                difference+=std::abs(int(actual.alpha[i])-int(expected.alpha[i]));
+                coverage+=expected.alpha[i];changed+=actual.alpha[i]!=expected.alpha[i];
+            }
+            std::cerr<<"map raster comparison changed="<<changed<<" difference="<<difference<<" coverage="<<coverage<<" clusters="<<clusters.size()<<'\n';
+        }
         check(actual.alpha==expected.alpha,"curved map clusters reconstruct the original joined and bidi ink");
     }
     for(const float left:{0.f,15.f,61.f}) {
