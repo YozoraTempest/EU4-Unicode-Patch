@@ -54,22 +54,20 @@ void update_rect() {
     // use its screen position just as GiveFocus uses the text sprite's.
     int xy[2]={static_cast<int>(point.x),static_cast<int>(point.y)};
     auto buffer=static_cast<char*>(focused)+0xc8;
-    auto buffer_table=*reinterpret_cast<void***>(buffer);
+    const auto font=member<void*>(buffer,0x98);
+    const auto font_table=*static_cast<void***>(font);
     const auto graphics=*reinterpret_cast<void**>(0x3349508);
     reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&xy[0],&xy[1]);
-    // Native cursor dimensions are GUI coordinates; use the same conversion
-    // as CEditBox::GiveFocus, preserving game UI scaling independently of VNC.
-    const auto sample=borrowed_string("M");
-    const auto size=reinterpret_cast<std::uint32_t(*)(void*,const String*)>(buffer_table[0x1d0/8])(
-        buffer,&sample);
-    int wh[2]={1,static_cast<std::uint16_t>(size>>16)};
+    // CTextBuffer +0x1d0 returns a cached cursor position, not text metrics.
+    // Query the same font width/height methods as the native cursor code.
+    const auto height=reinterpret_cast<int(*)(void*)>(font_table[0x70/8])(font);
+    int wh[2]={1,std::max(1,height)};
     reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&wh[0],&wh[1]);
     if(!preedit.empty()) {
         const auto prefix_text=preedit.substr(0,preedit_cursor);
-        const auto prefix=borrowed_string(prefix_text);
-        const auto advance=reinterpret_cast<std::uint32_t(*)(void*,const String*)>(buffer_table[0x1d0/8])(
-            buffer,&prefix);
-        int delta[2]={static_cast<std::uint16_t>(advance),static_cast<std::uint16_t>(advance>>16)};
+        const auto advance=reinterpret_cast<int(*)(void*,const char*,int,bool)>(font_table[0x68/8])(
+            font,prefix_text.data(),static_cast<int>(prefix_text.size()),member<bool>(buffer,0xe4));
+        int delta[2]={advance,0};
         reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&delta[0],&delta[1]);
         xy[0]+=delta[0];
     }
@@ -173,7 +171,7 @@ void preview(safetyhook::Context& context) {
 }
 }
 void prepare_ime(Hooks& hooks) {
-    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x2120340,0x207c56c,0x2067386,0x2097208,0x2066944}) verify_site(address);
+    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x2120340,0x207c56c,0x2067386,0x2097208,0x20541d4,0x2066944}) verify_site(address);
     poll_hook=&hooks.add_inline(0x21202b0,reinterpret_cast<void*>(poll));
     focus_hook=&hooks.add_inline(0x206731a,reinterpret_cast<void*>(focus));
     blur_hook=&hooks.add_inline(0x2067420,reinterpret_cast<void*>(blur));
