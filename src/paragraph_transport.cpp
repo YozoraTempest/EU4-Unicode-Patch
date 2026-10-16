@@ -1,5 +1,6 @@
 #include "paragraph_transport.hpp"
 #include "formatted_paragraph.hpp"
+#include "formatted_text.hpp"
 #include "unicode_text.hpp"
 #include <algorithm>
 #include <cmath>
