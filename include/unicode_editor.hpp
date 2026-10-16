@@ -3,6 +3,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace eu4unicode {
 enum class EditKey { left,right,backspace,forward_delete };
@@ -19,6 +20,13 @@ std::size_t grapheme_prefix(std::string_view text,std::size_t byte_limit);
 using PrefixMeasure=std::function<int(std::size_t)>;
 std::size_t fitting_grapheme_prefix(std::string_view text,int pixels,const PrefixMeasure& measure);
 std::size_t nearest_grapheme_boundary(std::string_view text,int pixels,const PrefixMeasure& measure);
+struct TextViewport { std::size_t begin,end; };
+using RangeMeasure=std::function<int(std::size_t,std::size_t)>;
+// Keep the active edge visible using complete supplied text-unit boundaries.
+// Measure each actual substring: subtracting prefix widths loses kerning and
+// can disagree with the native renderer at the viewport's left edge.
+TextViewport text_viewport(const std::vector<std::size_t>& boundaries,
+    std::size_t active,int pixels,const RangeMeasure& measure);
 // Native edit-widget blacklist entries are single Latin-1 bytes, not UTF-8.
 std::string filter_editor_characters(std::string_view text,std::string_view blacklist);
 struct Selection { std::size_t anchor,caret; };

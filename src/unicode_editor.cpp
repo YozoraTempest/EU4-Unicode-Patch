@@ -44,6 +44,35 @@ std::size_t nearest_grapheme_boundary(std::string_view text,int pixels,const Pre
     const auto right=measure(after);
     return static_cast<std::int64_t>(pixels)-left<=static_cast<std::int64_t>(right)-pixels?before:after;
 }
+TextViewport text_viewport(const std::vector<std::size_t>& edges,std::size_t active,
+    int pixels,const RangeMeasure& measure) {
+    if(edges.empty()||edges.front()!=0||!std::is_sorted(edges.begin(),edges.end())||active>edges.back())
+        throw std::invalid_argument("Invalid text viewport boundaries");
+    const auto focus=std::lower_bound(edges.begin(),edges.end(),active);
+    if(focus==edges.end()||*focus!=active)
+        throw std::invalid_argument("Text viewport active edge splits a text unit");
+    pixels=(std::max)(0,pixels);
+    auto low=edges.begin(),high=focus;
+    while(low!=high) {
+        const auto middle=low+(high-low)/2;
+        if(measure(*middle,active)<=pixels) high=middle;
+        else low=middle+1;
+    }
+    // Preserve one oversized grapheme for native clipping rather than making
+    // the entire composition disappear in a box narrower than that grapheme.
+    if(low==focus&&low!=edges.begin()) --low;
+    const auto begin=*low;
+    low=focus;high=edges.end();
+    while(low!=high) {
+        const auto middle=low+(high-low)/2;
+        if(measure(begin,*middle)<=pixels) low=middle+1;
+        else high=middle;
+    }
+    auto end=low==edges.begin()?low:std::prev(low);
+    if(end<focus) end=focus;
+    if(*end==begin&&end+1!=edges.end()) ++end;
+    return {begin,*end};
+}
 std::string filter_editor_characters(std::string_view text,std::string_view blacklist) {
     if(!valid_utf8(text)) throw std::invalid_argument("Editor input is not valid UTF-8");
     std::string output;

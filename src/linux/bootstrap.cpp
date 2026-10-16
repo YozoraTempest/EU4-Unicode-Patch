@@ -1,5 +1,6 @@
 #include "linux/native.hpp"
 #include "linux/font_pages.hpp"
+#include "linux/ime_presentation.hpp"
 #include <dlfcn.h>
 #include <elf.h>
 #include <picosha2.h>
@@ -37,6 +38,7 @@ int patched_main(int argc,char** argv,char** envp) {
         prepare_multiplayer_name(*hooks);
         prepare_search(*hooks);
         prepare_ime(*hooks);
+        prepare_ime_presentation(*hooks);
         prepare_name_presence(*hooks);
         hooks->enable();
         configure_ime();
@@ -55,6 +57,7 @@ int patched_main(int argc,char** argv,char** envp) {
     report_script_counts();
     report_input_counts();
     report_ime_counts();
+    report_ime_presentation_counts();
     report_name_presence_counts();
     return result;
 }

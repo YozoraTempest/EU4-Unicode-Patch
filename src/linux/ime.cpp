@@ -1,4 +1,7 @@
 #include "linux/native.hpp"
+#include "linux/ime_presentation.hpp"
+#include "editor_document.hpp"
+#include "formatted_text.hpp"
 #include "unicode_text.hpp"
 #include <algorithm>
 #include <array>
@@ -19,6 +22,12 @@ SafetyHookInline *begin_hook=nullptr,*end_hook=nullptr,*destroy_hook=nullptr;
 void* focused=nullptr;
 std::string preedit;
 std::size_t preedit_cursor=0,preedit_selection=0;
+struct Projection {
+    void* owner=nullptr;
+    std::string text;
+    int width=0,caret=0,delta=0;
+    int begin=0,end=0,selection_begin=0,selection_end=0;
+} projection;
 bool refreshing=false;
 bool input_active=false;
 std::array<std::uint8_t,3> previous_events{};
@@ -63,25 +72,36 @@ void update_rect() {
     const auto height=reinterpret_cast<int(*)(void*)>(font_table[0x70/8])(font);
     int wh[2]={1,std::max(1,height)};
     reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&wh[0],&wh[1]);
-    if(!preedit.empty()) {
-        const auto prefix_text=preedit.substr(0,preedit_cursor);
-        const auto advance=reinterpret_cast<int(*)(void*,const char*,int,bool)>(font_table[0x68/8])(
-            font,prefix_text.data(),static_cast<int>(prefix_text.size()),member<bool>(buffer,0xe4));
-        int delta[2]={advance,0};
-        reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&delta[0],&delta[1]);
-        xy[0]+=delta[0];
+    if(!preedit.empty()&&projection.owner==focused) {
+        const auto pixels=[&](int value) {
+            int size[2]={value,0};
+            reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&size[0],&size[1]);
+            return size[0];
+        };
+        // The verified cursor-position call site has already applied the
+        // display viewport's advance. Publish values, not an editor pointer,
+        // for whichever thread later draws the native text sprite.
+        ImePresentation display;
+        display.sprite=member<void*>(focused,0x1e8);display.text=projection.text;
+        display.x=xy[0]-pixels(projection.caret);display.y=xy[1];
+        display.width=pixels(projection.width);display.height=std::max(1,wh[1]);
+        display.underline_begin=pixels(projection.begin);display.underline_end=pixels(projection.end);
+        display.selection_begin=pixels(projection.selection_begin);display.selection_end=pixels(projection.selection_end);
+        display.thickness=std::max(1,display.height/16);
+        publish_ime_presentation(std::move(display));
     }
     set_rect({xy[0],xy[1],std::max(1,wh[0]),std::max(1,wh[1])});
 }
 void refresh() {
     if(!focused||refreshing) return;
     refreshing=true;
+    struct Reset {~Reset(){refreshing=false;}} reset;
     reinterpret_cast<void(*)(void*)>(0x2066944)(focused);
     cursor_hook->call<void>(focused);
-    refreshing=false;
     update_rect();
 }
 void clear() {
+    projection={};clear_ime_presentation();
     if(preedit.empty()) return;
     preedit.clear();preedit_cursor=preedit_selection=0;refresh();
 }
@@ -96,7 +116,10 @@ void blur(void* editor) {
     blur_hook->call<void>(editor);
 }
 void destroy(void* editor) {
-    if(focused==editor) {focused=nullptr;preedit.clear();preedit_cursor=preedit_selection=0;}
+    if(focused==editor) {
+        focused=nullptr;preedit.clear();preedit_cursor=preedit_selection=0;
+        projection={};clear_ime_presentation();
+    }
     destroy_hook->call<void>(editor);
 }
 void begin(void* events,const Rect* rect) {
@@ -156,22 +179,94 @@ int poll(void* event) {
     }
     return 0;
 }
-void preview(safetyhook::Context& context) {
+std::string color_at(std::string_view text,std::size_t position,bool formatted) {
+    std::string color;
+    if(formatted) for(std::size_t offset=0;offset<position;) {
+        const auto unit=native_text_unit(text,offset,true);
+        if(unit.kind==TextUnitKind::color) color=text.substr(unit.begin,unit.end-unit.begin);
+        offset=unit.end;
+    }
+    return color;
+}
+void preview_text(safetyhook::Context& context) {
     if(preedit.empty()||reinterpret_cast<void*>(context.r14)!=focused||member<bool>(focused,0x262)) return;
+    projection={};clear_ime_presentation();
     auto row=reinterpret_cast<String*>(context.rsp+0x38);
-    const auto column=member<std::uint16_t>(focused,0xc8+0x54);
-    if(column>row->size||row->size>32000||preedit.size()>32000-row->size||!valid_utf8(row->view())) return;
-    auto text=std::string(row->view());
-    text.insert(column,preedit);
+    auto buffer=static_cast<char*>(focused)+0xc8;
+    const auto column=member<std::uint16_t>(buffer,0x54);
+    const auto source=reinterpret_cast<const String*>(buffer+0x30)->view();
+    if(column>row->size||source.size()>32000||!valid_utf8(source)||!valid_utf8(row->view())) return;
+    const auto cursor=reinterpret_cast<int(*)(void*)>(0x20d602c)(buffer);
+    if(cursor<0||static_cast<std::size_t>(cursor)>source.size()) return;
+    auto anchor=cursor;
+    if(member<std::uint64_t>(buffer,0x78))
+        anchor=reinterpret_cast<int(*)(void*,int,int)>(0x20d55d2)(buffer,
+            member<std::uint16_t>(buffer,0x94),member<std::uint16_t>(buffer,0x92));
+    if(anchor<0||static_cast<std::size_t>(anchor)>source.size()) return;
+    const auto original=align_selection(source,anchor,cursor);
+    const auto selected=align_selection(preedit,preedit_cursor,preedit_cursor+preedit_selection);
+    // SDL's nonempty range denotes highlighted feedback. Keep its active end
+    // visible; a zero-length range is the insertion caret reported by SDL.
+    const auto composed=composition_preview({std::string(source),original},{preedit,selected.caret});
+    const auto insertion=std::min(original.anchor,original.caret);
+    const auto highlighted=align_selection(composed.text,insertion+selected.anchor,insertion+selected.caret);
+    const auto newline=composed.caret?composed.text.find_last_of("\r\n",composed.caret-1):std::string::npos;
+    const auto line_begin=newline==std::string::npos?0:newline+1;
+    const auto newline_end=composed.text.find_first_of("\r\n",composed.caret);
+    const auto line_end=newline_end==std::string::npos?composed.text.size():newline_end;
+    const auto line=std::string_view(composed.text).substr(line_begin,line_end-line_begin);
+    const bool formatted=member<bool>(buffer,0xe4);
+    const auto font=member<void*>(buffer,0x98);
+    const auto table=*static_cast<void***>(font);
+    const auto width=reinterpret_cast<int(*)(void*,const char*,int,bool)>(table[0x68/8]);
+    const auto measure=[&](std::string_view text) {return width(font,text.data(),static_cast<int>(text.size()),formatted);};
+    const auto padding=reinterpret_cast<int(*)(void*,bool)>(table[0xb0/8])(font,true);
+    const auto available=std::max(0,static_cast<int>(member<std::uint16_t>(buffer,0x68))-padding-2);
+    const FormattedText units(line,formatted);
+    const auto& edges=units.prefixes();
+    const auto active=*std::lower_bound(edges.begin(),edges.end(),composed.caret-line_begin);
+    const auto viewport=text_viewport(edges,active,available,[&](std::size_t begin,std::size_t end) {
+        auto text=color_at(line,begin,formatted);text.append(line.substr(begin,end-begin));return measure(text);
+    });
+    auto text=color_at(line,viewport.begin,formatted);
+    const auto style=text.size();text.append(line.substr(viewport.begin,viewport.end-viewport.begin));
+    const auto mapped=[&](std::size_t position) {
+        const auto first=line_begin+viewport.begin,last=line_begin+viewport.end;
+        return style+(std::clamp(position,first,last)-first);
+    };
+    const auto advance=[&](std::size_t position) {return measure(std::string_view(text).substr(0,mapped(position)));};
+    Projection next;
+    next.owner=focused;next.text=text;next.width=available;next.caret=advance(composed.caret);
+    next.delta=next.caret-measure(row->view().substr(0,column));
+    next.begin=advance(composed.begin);next.end=advance(composed.end);
+    if(preedit_selection) {
+        next.selection_begin=advance(highlighted.anchor);next.selection_end=advance(highlighted.caret);
+    }
     // Only the native draw call's owned scratch string is changed. The document,
     // undo state, search query and save data never receive uncommitted text.
     reinterpret_cast<void*(*)(void*,std::size_t,std::size_t,const char*,std::size_t)>(
         0x25a3f30)(row,0,row->size,text.data(),text.size());
+    projection=std::move(next);
     previews.fetch_add(1,std::memory_order_relaxed);
+}
+void preview(safetyhook::Context& context) {
+    try {preview_text(context);} catch(...) {
+        projection={};clear_ime_presentation();
+        static bool logged=false;if(!logged) {log("Linux IME display projection failed");logged=true;}
+    }
+}
+void caret_position(safetyhook::Context& context) {
+    if(preedit.empty()||reinterpret_cast<void*>(context.r12)!=focused||projection.owner!=focused) return;
+    const auto position=reinterpret_cast<int*>(context.rsi);
+    position[0]+=projection.delta;
+}
+void selection_position(safetyhook::Context& context) {
+    if(!preedit.empty()&&reinterpret_cast<void*>(context.r12)==focused&&projection.owner==focused)
+        context.rip=0x2066f16; // Native hide path; the committed selection stays unchanged.
 }
 }
 void prepare_ime(Hooks& hooks) {
-    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x2120340,0x207c56c,0x2067386,0x2097208,0x20541d4,0x2066944}) verify_site(address);
+    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x2120340,0x207c56c,0x2067386,0x2097208,0x20541d4,0x2066944,0x20d602c,0x20d55d2,0x2066f16}) verify_site(address);
     poll_hook=&hooks.add_inline(0x21202b0,reinterpret_cast<void*>(poll));
     focus_hook=&hooks.add_inline(0x206731a,reinterpret_cast<void*>(focus));
     blur_hook=&hooks.add_inline(0x2067420,reinterpret_cast<void*>(blur));
@@ -180,6 +275,8 @@ void prepare_ime(Hooks& hooks) {
     begin_hook=&hooks.add_inline(0x1ff5d22,reinterpret_cast<void*>(begin));
     end_hook=&hooks.add_inline(0x1ff5d28,reinterpret_cast<void*>(end));
     hooks.add_mid(0x20669ff,preview);
+    hooks.add_mid(0x2066df7,caret_position);
+    hooks.add_mid(0x2066e11,selection_position);
 }
 void configure_ime() {
     // Load and configure SDL only after all startup hooks are enabled. The
