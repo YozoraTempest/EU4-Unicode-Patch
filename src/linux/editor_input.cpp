@@ -1,4 +1,5 @@
 #include "linux/native.hpp"
+#include "linux/editor_layout.hpp"
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
 #include "unicode_editor.hpp"
@@ -182,6 +183,7 @@ void hit(void* buffer,const String* source,const int* point) {
     // negative points and performs no selection mutation or notification.
     if(point[0]<0||point[1]<0) return;
     try {
+        if(editor_layout_hit(buffer,source,point)) {++mouse_hits;return;}
         const auto base=reinterpret_cast<std::uintptr_t>(buffer);
         const auto font=read<void*>(base+0x98);
         const bool formatted=read<bool>(base+0xe4);

@@ -1,4 +1,5 @@
 #include "linux/native.hpp"
+#include "linux/editor_layout.hpp"
 #include "linux/ime_presentation.hpp"
 #include "editor_document.hpp"
 #include "formatted_text.hpp"
@@ -107,6 +108,7 @@ void refresh() {
     refreshing=true;
     struct Reset {~Reset(){refreshing=false;}} reset;
     reinterpret_cast<void(*)(void*)>(0x2066944)(focused);
+    EditorLayoutScope scope(focused);
     cursor_hook->call<void>(focused);
     update_rect();
 }
@@ -116,16 +118,18 @@ void clear() {
     preedit.clear();preedit_cursor=preedit_selection=0;refresh();
 }
 void focus(void* editor) {
-    if(focused!=editor) {clear();focused=editor;}
+    if(focused!=editor) {clear();if(focused) forget_editor_layout(focused);focused=editor;}
     focus_hook->call<void>(editor);
     if(!member<bool>(editor,0x260)) focused=nullptr;
     update_rect();
 }
 void blur(void* editor) {
     if(focused==editor) {clear();focused=nullptr;}
+    forget_editor_layout(editor);
     blur_hook->call<void>(editor);
 }
 void destroy(void* editor) {
+    forget_editor_layout(editor);
     if(focused==editor) {
         focused=nullptr;preedit.clear();preedit_cursor=preedit_selection=0;
         projection={};clear_ime_presentation();
@@ -153,6 +157,7 @@ void end(void* events) {
     input_active=false;
 }
 void cursor(void* editor) {
+    EditorLayoutScope scope(editor);
     cursor_hook->call<void>(editor);
     if(editor==focused) update_rect();
 }
