@@ -25,6 +25,7 @@ thread_local FormattedTextCache cache;
 std::atomic<std::uint64_t> screen_breaks=0,texture_breaks=0,measured_breaks=0;
 std::atomic<std::uint64_t> row_breaks=0;
 std::atomic<unsigned> fitted_paragraphs=0;
+std::atomic<std::uint64_t> native_paragraph_textures=0,native_line_mismatches=0;
 
 template<class T> T member(const void* object,std::size_t offset) {
     T result;std::memcpy(&result,static_cast<const char*>(object)+offset,sizeof(result));return result;
@@ -272,6 +273,29 @@ void texture_planned_newline(safetyhook::Context& c) {
 void texture_planned_word(safetyhook::Context& c) {
     if(texture_scope&&texture_scope->text.planned) c.rip=0x204f142;
 }
+void texture_planned_prefix(safetyhook::Context& c) {
+    if(texture_scope&&texture_scope->text.planned) c.rip=0x204edb9;
+}
+void texture_planned_finish(safetyhook::Context& c) {
+    if(texture_scope&&texture_scope->text.planned) c.rip=0x204f6ad;
+}
+void texture_native_lines(safetyhook::Context& c) {
+    if(!texture_scope||!texture_scope->text.planned) return;
+    const auto planned=texture_scope->text.value;
+    const auto expected=1+static_cast<std::size_t>(std::count(planned.begin(),planned.end(),'\n'));
+    const auto rows=static_cast<std::int32_t>(c.rcx)+1;
+    if(rows<0||rows>500) {++native_line_mismatches;return;}
+    if(static_cast<std::size_t>(rows)!=expected) ++native_line_mismatches;
+    if(native_paragraph_textures.fetch_add(1)<4) {
+        std::int64_t pixels=0;int width=0;
+        for(int row=0;row<rows;++row) {
+            pixels+=member<int>(reinterpret_cast<void*>(c.rsp+0x940),row*4);
+            width=std::max(width,member<int>(reinterpret_cast<void*>(c.rsp+0x18e0),row*4));
+        }
+        log("Linux paragraph native renderer=texture planned-lines=%zu actual-lines=%d row-height=%lld row-width=%d",
+            expected,rows,static_cast<long long>(pixels),width);
+    }
+}
 void actual_wrap(safetyhook::Context& c) {
     if(actual_scope&&actual_scope->text.planned) {
         const bool submit=member<std::int16_t>(reinterpret_cast<void*>(c.rbp),6)==0;
@@ -317,12 +341,15 @@ void prepare_text_layout(Hooks& hooks) {
     real_hook=&hooks.add_inline(0x2056d66,reinterpret_cast<void*>(real));
     line_hook=&hooks.add_inline(0x20d6b06,reinterpret_cast<void*>(line_size));
     width_hook=&hooks.add_inline(0x2053f7c,reinterpret_cast<void*>(width));
-    for(const auto target:{0x20523ca,0x20525e6,0x2052620,0x204f10a,0x204f06d,0x204f142,0x20563a6,0x2056418,0x2056463,0x2053ead})
+    for(const auto target:{0x20523ca,0x20525e6,0x2052620,0x204f10a,0x204f06d,0x204f142,0x204edb9,0x204f6ad,0x20563a6,0x2056418,0x2056463,0x2053ead})
         verify_site(target);
     hooks.add_mid(0x2052239,screen_wrap);
     hooks.add_mid(0x204f0f6,texture_wrap);
     hooks.add_mid(0x204f062,texture_planned_newline);
     hooks.add_mid(0x204f137,texture_planned_word);
+    hooks.add_mid(0x204edb2,texture_planned_prefix);
+    hooks.add_mid(0x204f6a8,texture_planned_finish);
+    hooks.add_mid(0x204f846,texture_native_lines);
     hooks.add_mid(0x2056386,actual_wrap);
     hooks.add_mid(0x2053e96,height_boundary);
     for(const auto site:{0x2056be0,0x2056c3b,0x205714b,0x205730f,0x2057363,
@@ -336,5 +363,8 @@ void report_layout_counts() noexcept {
         static_cast<unsigned long long>(texture_breaks.load()),
         static_cast<unsigned long long>(measured_breaks.load()),
         static_cast<unsigned long long>(row_breaks.load()));
+    log("Linux paragraph native textures=%llu line-mismatches=%llu",
+        static_cast<unsigned long long>(native_paragraph_textures.load()),
+        static_cast<unsigned long long>(native_line_mismatches.load()));
 }
 }
