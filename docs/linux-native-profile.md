@@ -94,6 +94,8 @@ CI 中的 `linux_editor_layout` 测试运行实际作用域和命中适配代码
 
 `TryToAppendStringToText`、`AppendTextToString`、`InsertStringInToText` 中五处文档前缀裁切调用分别位于 `0x20d61e4`、`0x20d622d`、`0x20d6722`、`0x20d676b`、`0x20d68f5`。它们传入的 CString 均为 buffer `+0x30`，substring 参数为 `[begin,end)`。插件按现有 FormattedText 的完整字素与格式指令边界向下对齐 end，不改变 max-chars 的原生字节容量，也不接管构造、赋值、析构或后续光标计算。
 
+Write 在行首插入非空文档的分支直接于 `0x20d5f33` 存入原输入字节数，其他分支才调用 CalculateCursorPosition。容量裁切后，原输入可能长于实际文档；该位置在有效 UTF-8 文档上将待存列号限制到实际长度，避免光标指向文档之外。
+
 1.25 倍原生测试又确认事件位置为屏幕像素，而 `GetPositionAtScreen` 返回未缩放的文字精灵坐标。`0x2066869` 位于返回坐标后、原生减法之前；Unicode 非密码输入在这里调用 `CGraphics::ConvertScreenCoordinateTo2d(CPoint<int> const&)`（`0x207c508`），沿用引擎对 `graphics+0x4b0/+0x4b4` 的乘法和整数截断。该函数返回 RAX 内的两个 int，与浮点屏幕位置方法的 SSE ABI 区分。随后执行原生减法和已有内容边距修正，不自行推算 GUI 缩放，也不改变其他鼠标事件。
 
 ## 多人游戏名称

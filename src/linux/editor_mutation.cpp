@@ -68,10 +68,19 @@ void clamp(safetyhook::Context& context) {
         log("Linux editor byte limit rejected: boundary query failed");
     }
 }
+void prepend_cursor(safetyhook::Context& context) {
+    // Write's row-zero prepend branch stores the source byte count directly,
+    // unlike its other branches, which call CalculateCursorPosition. A native
+    // capacity cut can leave that source longer than the resulting document.
+    const auto text=reinterpret_cast<const String*>(context.r14+0x30);
+    if(static_cast<std::uint32_t>(context.rax)>text->size&&valid_utf8(text->view()))
+        context.rax=text->size;
+}
 }
 void prepare_editor_mutation(Hooks& hooks) {
     for(const auto address:{0x25a3f30,0x20d5ce8,0x20d5e75}) verify_site(address);
     hooks.add_mid(0x20d5ce3,filter);
+    hooks.add_mid(0x20d5f33,prepend_cursor);
     for(const auto address:{0x20d61e4,0x20d622d,0x20d6722,0x20d676b,0x20d68f5})
         hooks.add_mid(address,clamp);
 }
