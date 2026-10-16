@@ -151,6 +151,18 @@ bool unicode_source(std::string_view text) {
     }
     return unicode;
 }
+void mouse_scale(safetyhook::Context& c) {
+    const auto editor=c.r12;
+    if(read<bool>(editor+0x262)||!unicode_source(text_of(reinterpret_cast<void*>(editor+0xc8)))) return;
+    struct Point {int x,y;};
+    static_assert(sizeof(Point)==8);
+    auto point=reinterpret_cast<Point*>(c.r14);
+    const auto graphics=read<void*>(0x3349508);
+    // The event is in screen pixels, while GetPositionAtScreen has returned
+    // the text sprite's unscaled coordinates in RAX. Convert the absolute
+    // event before the native subtraction, using the engine's integer rule.
+    *point=reinterpret_cast<Point(*)(void*,const Point*)>(0x207c508)(graphics,point);
+}
 void mouse_origin(safetyhook::Context& c) {
     const auto buffer=reinterpret_cast<void*>(c.rdi);
     if(!unicode_source(text_of(buffer))) return;
@@ -189,7 +201,7 @@ void hit(void* buffer,const String* source,const int* point) {
 }
 }
 void prepare_editor_input(Hooks& hooks) {
-    for(const auto address:{0x254b1ea,0x1feba14,0x20d602c,0x20d7528}) verify_site(address);
+    for(const auto address:{0x254b1ea,0x1feba14,0x20d602c,0x20d7528,0x207c508}) verify_site(address);
     event_ctor=&hooks.add_inline(0x1feb904,reinterpret_cast<void*>(construct_event));
     event_access=&hooks.add_inline(0x1feba1a,reinterpret_cast<void*>(access_event));
     event_string=&hooks.add_inline(0x1fec6f2,reinterpret_cast<void*>(input_string));
@@ -201,6 +213,7 @@ void prepare_editor_input(Hooks& hooks) {
     hooks.add_mid(0x1ff52d7,deliver);
     hooks.add_mid(0x20d784d,move_left);
     hooks.add_mid(0x20d7932,move_right);
+    hooks.add_mid(0x2066869,mouse_scale);
     hooks.add_mid(0x2066902,mouse_origin);
 }
 void report_input_counts() noexcept {
