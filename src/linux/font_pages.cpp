@@ -49,6 +49,7 @@ struct Atlas {
     std::map<std::tuple<bool,bool,float,float,std::string,std::vector<std::string>,std::vector<float>>,Paragraph> paragraphs;
     std::size_t paragraph_bytes=0;
     std::uint64_t paragraph_clock=0;
+    std::uint32_t next_paragraph_token=0xf0000;
 };
 struct Location {Atlas* atlas;std::uint32_t page;};
 std::recursive_mutex mutex;
@@ -236,7 +237,11 @@ std::shared_ptr<const FontParagraph> font_paragraph_geometry(void* font,std::str
     const auto bytes=sizeof(FontParagraph)+plan.text.size()+plan.glyphs.size()*(sizeof(NativeGlyph)+64);
     reserve_paragraph(atlas,bytes,&entry);
     auto result=std::make_shared<FontParagraph>();result->layout=entry.layout;
-    result->first_token=paragraph_token_start(plan,0xf0000);assign_paragraph_tokens(plan,result->first_token);
+    // RenderToScreen caches native vertices using the prepared string. Each
+    // geometry needs a distinct string even when its tile count is identical.
+    // Never recycle token ranges while this atlas and its native cache live.
+    result->first_token=paragraph_token_start(plan,atlas.next_paragraph_token);
+    assign_paragraph_tokens(plan,result->first_token);
     result->text=std::move(plan.text);result->glyphs.resize(plan.glyphs.size());
     struct Position {int x,y,row;};
     std::vector<Position> before;before.reserve(atlas.pages.size());
@@ -262,6 +267,7 @@ std::shared_ptr<const FontParagraph> font_paragraph_geometry(void* font,std::str
         }
         throw;
     }
+    atlas.next_paragraph_token=result->first_token+static_cast<std::uint32_t>(result->glyphs.size());
     atlas.paragraph_bytes+=bytes;entry.bytes+=bytes;entry.geometry=std::move(result);++paragraph_packed;
     return entry.geometry;
 }
