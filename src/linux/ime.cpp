@@ -3,12 +3,17 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <string>
 
 namespace eu4unicode::linux_native {
 namespace {
 struct Rect {int x,y,w,h;};
+// GetScreenPosition returns two floats in the low half of XMM0 (SysV SSE).
+struct Point {float x,y;};
+static_assert(sizeof(Point)==8);
 SafetyHookInline *poll_hook=nullptr,*focus_hook=nullptr,*blur_hook=nullptr,*cursor_hook=nullptr;
 SafetyHookInline *begin_hook=nullptr,*end_hook=nullptr,*destroy_hook=nullptr;
 void* focused=nullptr;
@@ -35,13 +40,21 @@ void set_rect(const Rect& rect) {
 }
 void update_rect() {
     if(!focused||!member<bool>(focused,0x260)) return;
-    int xy[2]{};
-    reinterpret_cast<void(*)(int*,void*)>(0x2066f62)(xy,focused);
+    const auto caret=member<void*>(focused,0x1f0);
+    if(!caret) return;
+    const auto caret_table=*static_cast<void***>(caret);
+    const auto point=reinterpret_cast<Point(*)(void*)>(caret_table[0x178/8])(caret);
+    const auto coordinate=[](float value) {
+        return std::isfinite(value)&&static_cast<double>(value)>=std::numeric_limits<int>::min()&&
+            static_cast<double>(value)<=std::numeric_limits<int>::max();
+    };
+    if(!coordinate(point.x)||!coordinate(point.y)) return;
+    // GetBaseCursorPosition is local to the edit box's parent. The native
+    // cursor sprite has already applied parent transforms and alignment;
+    // use its screen position just as GiveFocus uses the text sprite's.
+    int xy[2]={static_cast<int>(point.x),static_cast<int>(point.y)};
     auto buffer=static_cast<char*>(focused)+0xc8;
     auto buffer_table=*reinterpret_cast<void***>(buffer);
-    const auto position=reinterpret_cast<std::uint32_t(*)(void*)>(buffer_table[0x60/8])(buffer);
-    xy[0]+=static_cast<std::uint16_t>(position);
-    xy[1]+=static_cast<std::uint16_t>(position>>16);
     const auto graphics=*reinterpret_cast<void**>(0x3349508);
     reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&xy[0],&xy[1]);
     // Native cursor dimensions are GUI coordinates; use the same conversion
@@ -160,7 +173,7 @@ void preview(safetyhook::Context& context) {
 }
 }
 void prepare_ime(Hooks& hooks) {
-    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x2120340,0x207c56c,0x2067386,0x2066f62,0x2066944}) verify_site(address);
+    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x2120340,0x207c56c,0x2067386,0x2097208,0x2066944}) verify_site(address);
     poll_hook=&hooks.add_inline(0x21202b0,reinterpret_cast<void*>(poll));
     focus_hook=&hooks.add_inline(0x206731a,reinterpret_cast<void*>(focus));
     blur_hook=&hooks.add_inline(0x2067420,reinterpret_cast<void*>(blur));
