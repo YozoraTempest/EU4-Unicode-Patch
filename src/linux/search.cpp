@@ -34,7 +34,16 @@ int find(const String* name,const String* query,int start) {
     if(caller!=0x1a8bcf5&&caller!=0x1cad0d1&&caller!=0x1cad166)
         return find_hook->call<int>(name,query,start);
     if(start<0||static_cast<std::size_t>(start)>name->size) return -1;
-    const bool found=display_search_contains(name->view().substr(start),query->view());
+    const auto candidate=name->view().substr(start);
+    bool found;
+    if(caller==0x1a8bcf5) found=display_search_contains(candidate,query->view());
+    else {
+        // Goto's Find branch is the strict filter or its preferred substring
+        // tier. Tolerant pinyin belongs in the following native distance tier;
+        // treating it as a direct hit bypasses ranking and exact-only mode.
+        const auto quality=display_search_distance(candidate,query->view());
+        found=quality>=0&&quality<=1;
+    }
     if(found) matches.fetch_add(1,std::memory_order_relaxed);
     // Verified consumers use only found/not-found, never the returned offset.
     return found?0:-1;
