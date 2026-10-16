@@ -32,8 +32,13 @@ void after_presence(safetyhook::Context& context) noexcept {
             payload.key.c_str(),payload.bytes,payload.valid,static_cast<unsigned char>(context.rax)!=0,payload.sha256.c_str());
     payload={};
 }
+std::string_view culture_key(const void* culture) noexcept {
+    // CCulture's constructor stores the script identifier at +0x40 and its
+    // localized display name at +0x60. Policies are keyed by the identifier.
+    return culture?reinterpret_cast<const String*>(static_cast<const char*>(culture)+0x40)->view():std::string_view{};
+}
 bool policy_for(const void* culture,bool marked,NamePolicy& policy) {
-    const auto key=culture?reinterpret_cast<const String*(*)(const void*)>(0xf4d1c8)(culture)->view():std::string_view{};
+    const auto key=culture_key(culture);
     bool configured=culture_name_policy(key,policy);
     if(marked&&!configured) policy.separator=NameSeparator::none;
     if(!key.empty()) {
@@ -72,7 +77,7 @@ void generated(safetyhook::Context& context,std::uintptr_t next) noexcept {
         context.rax=context.rdi;
         context.rip=next; // Skip only the verified split-surname append call.
         if(names.fetch_add(1,std::memory_order_relaxed)<12&&sample) {
-            const auto key=culture?reinterpret_cast<const String*(*)(const void*)>(0xf4d1c8)(culture)->view():std::string_view{};
+            const auto key=culture_key(culture);
             log("Native generated name culture=%.*s surname-first=%d given-sha256=%s family-sha256=%s result-sha256=%s bytes=%zu",
                 static_cast<int>(key.size()),key.data(),policy.order==NameOrder::surname_first,
                 given_sha.c_str(),family_sha.c_str(),
@@ -95,7 +100,7 @@ String* convert(String* target,const String* source) {
 }
 }
 void prepare_name_presence(Hooks& hooks) {
-    for(const auto site:{0xf4d1c8,0x23677f0,0x25a3f30,0x254b1ea,0x16c1e11}) verify_site(site);
+    for(const auto site:{0xf4e168,0xf4e254,0x23677f0,0x25a3f30,0x254b1ea,0x16c1e11}) verify_site(site);
     hooks.add_mid(0xffc15d,explicit_surname);
     hooks.add_mid(0xffc1a5,table_surname);
     hooks.add_mid(0xffc200,dynasty_surname);
