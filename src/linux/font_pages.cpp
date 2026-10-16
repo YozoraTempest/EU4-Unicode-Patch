@@ -217,8 +217,8 @@ void destroy_texture(void* texture) {
     destroy_texture_hook->call<void>(texture);
 }
 }
-std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void* font,std::string_view text,float width,bool wrap,bool formatted) {
-    if(!font||!needs_native_paragraph_shaping(text,formatted)) return {};
+std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void* font,std::string_view text,float width,bool wrap,bool formatted,bool force) {
+    if(!font||(!force&&!needs_native_paragraph_shaping(text,formatted))) return {};
     std::lock_guard lock(mutex);
     const auto table=reinterpret_cast<void* const*>(static_cast<const char*>(font)+0x100);
     const auto found=bindings.find(identity(table));

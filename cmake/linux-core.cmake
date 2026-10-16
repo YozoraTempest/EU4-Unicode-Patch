@@ -29,7 +29,7 @@ target_compile_options(paragraph_transport PRIVATE -Wall -Wextra -Wpedantic)
 add_executable(paragraph_transport_tests tests/paragraph_transport_tests.cpp)
 target_link_libraries(paragraph_transport_tests PRIVATE paragraph_transport)
 add_test(NAME paragraph_transport COMMAND paragraph_transport_tests)
-add_executable(linux_paragraph_scope_tests tests/linux_paragraph_scope_tests.cpp src/linux/paragraph.cpp)
+add_executable(linux_paragraph_scope_tests tests/linux_paragraph_scope_tests.cpp src/linux/paragraph.cpp src/linux/paragraph_fit.cpp)
 target_include_directories(linux_paragraph_scope_tests PRIVATE include)
 target_link_libraries(linux_paragraph_scope_tests PRIVATE paragraph_transport safetyhook::safetyhook)
 target_compile_features(linux_paragraph_scope_tests PRIVATE cxx_std_23)
@@ -51,7 +51,7 @@ add_subdirectory(vendor/safetyhook EXCLUDE_FROM_ALL)
 add_library(EU4UnicodePatchLinux SHARED
     src/linux/bootstrap.cpp src/linux/profile.cpp
     src/linux/localization.cpp src/linux/script_bom.cpp src/linux/bitmap_fonts.cpp src/linux/text_layout.cpp src/linux/map_names.cpp
-    src/linux/font_pages.cpp src/linux/font_draw.cpp src/linux/paragraph.cpp
+    src/linux/font_pages.cpp src/linux/font_draw.cpp src/linux/paragraph.cpp src/linux/paragraph_fit.cpp
     src/linux/mod_registry.cpp src/linux/editor_input.cpp
     src/linux/multiplayer_name.cpp src/linux/search.cpp src/linux/ime.cpp src/linux/ime_presentation.cpp src/linux/name_presence.cpp src/legacy_text.cpp)
 target_include_directories(EU4UnicodePatchLinux PRIVATE include vendor/picosha2)

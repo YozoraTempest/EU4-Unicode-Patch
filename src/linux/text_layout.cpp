@@ -1,5 +1,6 @@
 #include "linux/native.hpp"
 #include "linux/paragraph.hpp"
+#include "linux/paragraph_fit.hpp"
 #include "formatted_text_cache.hpp"
 #include "unicode_text.hpp"
 #include <algorithm>
@@ -23,6 +24,7 @@ SafetyHookInline *width_hook=nullptr;
 thread_local FormattedTextCache cache;
 std::atomic<std::uint64_t> screen_breaks=0,texture_breaks=0,measured_breaks=0;
 std::atomic<std::uint64_t> row_breaks=0;
+std::atomic<unsigned> fitted_paragraphs=0;
 
 template<class T> T member(const void* object,std::size_t offset) {
     T result;std::memcpy(&result,static_cast<const char*>(object)+offset,sizeof(result));return result;
@@ -36,7 +38,7 @@ struct Text {
     std::string_view value;
     String native{};
     std::shared_ptr<const FormattedText> boundaries;
-    bool unicode=false,formatted;
+    bool unicode=false,formatted,planned=false;
     explicit Text(const String* source,bool formatted,bool own=false):value(source->view()),formatted(formatted) {
         if(formatted&&value.find('\xc2')!=std::string_view::npos) {
             normalized.reserve(value.size());
@@ -71,7 +73,7 @@ struct Text {
     void transported(const String* draw) {
         value=draw->view();native=borrowed_string(value);
         // The shaped transport already owns every explicit line boundary.
-        unicode=false;boundaries.reset();
+        unicode=false;planned=true;boundaries.reset();
     }
 };
 // Stack-owned scopes restore the enclosing call on nested native rendering.
@@ -126,6 +128,12 @@ int height(void* font,const String* source,int width,int limit,const Vector* pad
     ParagraphScope paragraph(font,source);
     Text text(source,formatted);
     const auto pixels=padding?static_cast<float>(static_cast<std::int64_t>(width?width:320)-2ll*padding->x):0.f;
+    if(!paragraph.active()&&pixels>0) try {
+        const auto scale=member<float>(font,0x940);
+        if(std::isfinite(scale)&&scale>0&&pixels/scale<=32767)
+            if(const auto layout=font_paragraph_layout(font,text.value,pixels/scale,true,formatted))
+                return static_cast<int>(member<int>(font,0x938)*scale)*static_cast<int>(layout->lines().size());
+    } catch(const std::exception& error) {report_paragraph_failure("height",error.what());}
     const auto draw=paragraph.prepare(&text.native,pixels,true,formatted,"height");
     if(paragraph.active()) text.transported(draw);
     Scope scope(text,height_scope);
@@ -134,17 +142,39 @@ int height(void* font,const String* source,int width,int limit,const Vector* pad
 void required(void* font,const String* source,String* output,int width,int height,
               Vector* padding,bool formatted) {
     ParagraphScope paragraph(font,nullptr);
+    try {
+        if(auto fitted=fit_paragraph(font,source->view(),width,height,
+                reinterpret_cast<const unsigned*>(padding),formatted,false,true)) {
+            reinterpret_cast<void(*)(void*,std::size_t,std::size_t,const char*,std::size_t)>(0x25a3f30)(
+                output,0,output->size,fitted->text.data(),fitted->text.size());
+            if(fitted_paragraphs.fetch_add(1)<4) log("Linux paragraph fit renderer=required width=%d limit=%d output-height=%d lines=%zu clipped=%d bytes=%zu",
+                width,height,fitted->height,fitted->lines,fitted->clipped,fitted->text.size());
+            return;
+        }
+    } catch(const std::exception& error) {report_paragraph_failure("required",error.what());}
     Text text(source,formatted,source==output);
     Scope scope(text,fit_scope);
     required_hook->call<void>(font,&text.native,output,width,height,padding,formatted);
 }
 void real(void* font,const String* source,String* output,int width,int height,
-          Vector* padding,bool formatted,bool flag,bool flag2,int* lines,bool* clipped) {
+          Vector* padding,bool truncate,bool break_lines,bool formatted,int* output_height,bool* clipped) {
     ParagraphScope paragraph(font,nullptr);
+    try {
+        if(auto fitted=fit_paragraph(font,source->view(),width,height,
+                reinterpret_cast<const unsigned*>(padding),formatted,break_lines,!truncate)) {
+            reinterpret_cast<void(*)(void*,std::size_t,std::size_t,const char*,std::size_t)>(0x25a3f30)(
+                output,0,output->size,fitted->text.data(),fitted->text.size());
+            if(output_height) *output_height=fitted->height;
+            if(clipped&&fitted->ellipsis) *clipped=true;
+            if(fitted_paragraphs.fetch_add(1)<4) log("Linux paragraph fit renderer=real width=%d limit=%d output-height=%d lines=%zu clipped=%d truncate=%d break-lines=%d formatted=%d bytes=%zu",
+                width,height,fitted->height,fitted->lines,fitted->clipped,truncate,break_lines,formatted,fitted->text.size());
+            return;
+        }
+    } catch(const std::exception& error) {report_paragraph_failure("real",error.what());}
     Text text(source,formatted,source==output);
     Scope scope(text,fit_scope);
     real_hook->call<void>(font,&text.native,output,width,height,padding,
-                         formatted,flag,flag2,lines,clipped);
+                         truncate,break_lines,formatted,output_height,clipped);
 }
 int width(void* font,const char* source,int length,bool formatted) {
     if(!source) return width_hook->call<int>(font,source,length,formatted);
@@ -212,6 +242,15 @@ int line_size(const void* buffer,const String* source) {
     return static_cast<int>(*selected);
 }
 void screen_wrap(safetyhook::Context& c) {
+    if(screen_scope&&screen_scope->text.planned) {
+        // Planned lines already contain hard breaks. The native emergency
+        // and word wrapping must not add a second break at an exact edge.
+        if(member<std::int16_t>(reinterpret_cast<void*>(c.rbp),6)==0) {
+            std::memcpy(reinterpret_cast<void*>(c.rsp+0x10),&c.xmm2,sizeof(float));
+            c.rip=0x20525e6;
+        } else c.rip=0x2052620;
+        return;
+    }
     if(!screen_scope||!screen_scope->text.unicode) return;
     const auto index=static_cast<std::uint32_t>(c.r13);
     if(screen_scope->text.after(index)) {
@@ -227,7 +266,21 @@ void texture_wrap(safetyhook::Context& c) {
         ++texture_breaks;c.rip=0x204f10a;
     }
 }
+void texture_planned_newline(safetyhook::Context& c) {
+    if(texture_scope&&texture_scope->text.planned) c.rip=0x204f06d;
+}
+void texture_planned_word(safetyhook::Context& c) {
+    if(texture_scope&&texture_scope->text.planned) c.rip=0x204f142;
+}
 void actual_wrap(safetyhook::Context& c) {
+    if(actual_scope&&actual_scope->text.planned) {
+        const bool submit=member<std::int16_t>(reinterpret_cast<void*>(c.rbp),6)==0;
+        std::memcpy(&c.rdx,reinterpret_cast<void*>(c.rsp+0x18),sizeof(c.rdx));
+        c.rbp=member<std::uint32_t>(reinterpret_cast<void*>(c.rsp),0x10);
+        // Preserve native word submission and maximum-width bookkeeping.
+        c.rip=submit?0x2056418:0x2056463;
+        return;
+    }
     if(actual_scope&&actual_scope->text.after(static_cast<std::uint32_t>(c.r13))) {
         ++measured_breaks;
         std::memcpy(&c.rdx,reinterpret_cast<void*>(c.rsp+0x18),sizeof(c.rdx));
@@ -242,20 +295,20 @@ void height_boundary(safetyhook::Context& c) {
 }
 void substring(safetyhook::Context& c) {
     // Only the native font fitting/truncation call sites below use this hook.
-    // Length is exclusive; align it to a complete formatted grapheme prefix.
+    // Both positions are absolute source byte offsets, with an exclusive end.
     if(!fit_scope||!fit_scope->text.boundaries) return;
     const auto source=reinterpret_cast<const String*>(c.rsi)->view();
     const auto start=static_cast<std::int32_t>(c.rdx);
-    const auto length=static_cast<std::int32_t>(c.rcx);
-    if(start<0||length<0||static_cast<std::size_t>(start)>source.size()) return;
+    const auto stop=static_cast<std::int32_t>(c.rcx);
+    if(start<0||stop<start||static_cast<std::size_t>(start)>source.size()) return;
     const auto& boundaries=fit_scope->text.boundaries;
-    const auto begin=boundaries->prefix(static_cast<std::size_t>(start));
-    const auto end=boundaries->prefix(std::min(source.size(),
-        static_cast<std::size_t>(start)+static_cast<std::size_t>(length)));
-    c.rdx=begin;c.rcx=end-begin;
+    std::size_t begin=start,end=std::min(source.size(),static_cast<std::size_t>(stop));
+    align_font_substring(*boundaries,begin,end);
+    c.rdx=begin;c.rcx=end;
 }
 }
 void prepare_text_layout(Hooks& hooks) {
+    verify_site(0x25a3f30);
     screen_hook=&hooks.add_inline(0x20519f8,reinterpret_cast<void*>(screen));
     texture_hook=&hooks.add_inline(0x204e886,reinterpret_cast<void*>(texture));
     actual_hook=&hooks.add_inline(0x2055f92,reinterpret_cast<void*>(actual));
@@ -264,10 +317,12 @@ void prepare_text_layout(Hooks& hooks) {
     real_hook=&hooks.add_inline(0x2056d66,reinterpret_cast<void*>(real));
     line_hook=&hooks.add_inline(0x20d6b06,reinterpret_cast<void*>(line_size));
     width_hook=&hooks.add_inline(0x2053f7c,reinterpret_cast<void*>(width));
-    for(const auto target:{0x20523ca,0x2052620,0x204f10a,0x20563a6,0x2053ead})
+    for(const auto target:{0x20523ca,0x20525e6,0x2052620,0x204f10a,0x204f06d,0x204f142,0x20563a6,0x2056418,0x2056463,0x2053ead})
         verify_site(target);
     hooks.add_mid(0x2052239,screen_wrap);
     hooks.add_mid(0x204f0f6,texture_wrap);
+    hooks.add_mid(0x204f062,texture_planned_newline);
+    hooks.add_mid(0x204f137,texture_planned_word);
     hooks.add_mid(0x2056386,actual_wrap);
     hooks.add_mid(0x2053e96,height_boundary);
     for(const auto site:{0x2056be0,0x2056c3b,0x205714b,0x205730f,0x2057363,
