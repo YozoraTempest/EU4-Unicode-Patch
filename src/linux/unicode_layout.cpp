@@ -212,11 +212,27 @@ LayoutDrawing TextLayout::drawing() const {
         const auto item=native->item;
         PangoRectangle logical{};pango_layout_iter_get_run_extents(iter.get(),nullptr,&logical);
         const auto baseline=impl_->run_baseline(iter.get());
-        const auto object=std::find_if(impl_->options.objects.begin(),impl_->options.objects.end(),
-            [&](const auto& value) { return value.text_start==static_cast<std::size_t>(item->offset); });
-        if(object!=impl_->options.objects.end()) {
-            result.objects.push_back({object->text_start,object->text_length,logical.x/unit,baseline-object->baseline,
-                object->width,object->height,object->id,impl_->style(object->text_start),(item->analysis.level&1)!=0});
+        std::vector<const TextInlineObject*> objects;
+        for(const auto& object:impl_->options.objects)
+            if(object.text_start>=static_cast<std::size_t>(item->offset)&&
+               object.text_start<static_cast<std::size_t>(item->offset+item->length)) objects.push_back(&object);
+        if(!objects.empty()) {
+            // Pango coalesces adjacent equal shape attributes into one item.
+            // An item can therefore represent many distinct native bitmap
+            // glyphs/icons, each with its own logical ID and visual position.
+            std::sort(objects.begin(),objects.end(),[](const auto* left,const auto* right){return left->text_start<right->text_start;});
+            std::size_t end=item->offset;
+            for(const auto* object:objects) {
+                if(object->text_start!=end) throw std::logic_error("Pango inline item has incomplete object coverage");
+                PangoRectangle position{};
+                pango_layout_index_to_pos(impl_->layout.get(),static_cast<int>(object->text_start),&position);
+                const auto x=(position.x+std::min(position.width,0))/unit;
+                result.objects.push_back({object->text_start,object->text_length,x,baseline-object->baseline,
+                    object->width,object->height,object->id,impl_->style(object->text_start),(item->analysis.level&1)!=0});
+                end=object->text_start+object->text_length;
+            }
+            if(end!=static_cast<std::size_t>(item->offset+item->length))
+                throw std::logic_error("Pango inline item has trailing non-object text");
             continue;
         }
         if(!item->analysis.font) continue;
