@@ -179,3 +179,25 @@ CI **38809455419** 对功能树 `2ac7be0f7bfeb84b3a574d61887565b7ac193d88` 的 W
 证据为本机 `PARAGRAPH-NATIVE-VALIDATION.md`、`native-paragraph-result.json`、`paragraph-native-*.png`、`paragraph-native-verified.txt` 和各同名原生运行目录。CI中测试字面量类型错误、缺少声明头文件、Pango相邻对象被合并丢失的失败均保留；后者由真实长对象回归检出并修正。屏幕及纹理日志中的行数、宽高是规划指标，不能充当原生绘制后行数的精确测量。完整裁切/尺寸一致性、末尾空白换行、更多缩放、复杂编辑几何和地图cluster绘制仍是开放验收项。
 
 最后成功测试已正常关闭，临时 Steam LaunchOptions 恢复为空，保留其他当前VDF字节，并只停止专用离线服务；见 `paragraph-native-final-cleanup.json`。没有残留自有游戏或观察器。Windows新DLL仅通过本轮27项CI测试，旧版原生游戏矩阵不归到新DLL；最终两平台游戏回归、搜索/姓名/Steam载荷、生命周期/重扫/安装压力、硬件GPU/Wayland等仍未完成。PR9保持草稿，本轮未合并或发布。
+
+## 原生编辑器的 UTF-8 写入、容量与视觉光标
+
+2026-10-17 的功能树 `b1b74658d801d9dd2dbe3793d1d7733f8b375f64`，CI **38952449164** 通过 **Windows27 / Arch18**。SO SHA256 为 `36b71879c4b68b630026f5c849dc11f80b1a8c8854c008dc09ececb81f36011e`；完整目标 ELF不变，全部219处 profile 字节及新增挂钩的真实指令边界重新核实。
+
+原生剪贴板直接返回 UTF-8，Write 的逐字节禁用表却会删除 Arabic Alef 中的A7以及其他组合/印地文字续字节。独立 mutation 模块改为完整标量过滤，保留实际禁用符号的限制；追加、行首和中间路径的五处 substring 对齐完整字素/格式边界，仍以原字节容量为上限。行首直接存入输入字节数的分支同时限制光标到实际文档末尾。原生暂存 CString 的构造、赋值、析构及通知不变。
+
+复杂编辑器用完整行 ShapedParagraph 处理命中、视觉移动及光标缓存。修复前相同17点扫描的光标像素为 `0,0,9,39,39,20,28,28,39,43,43,51,51,51,51,51,51`，原生命中记录已经是正确 byte2/trailing，随后却被焦点清理丢弃。只改共享记录仍复现，因此归因到焦点清理而不是线程切换。文档 affinity 改为按编辑器身份及自有文档/行列保存，失焦保留，销毁删除；IME 预编辑仍独立清理。最终相同扫描为 `0,0,9,13,13,20,28,28,39,43,43,51,51,51,51,51,51`，同时保留 RTL 段的逻辑反向。
+
+| 原生运行 / PID | 结果 |
+| --- | --- |
+| editor-physical-1c95943 / 1726 | 保留 Arabic/组合粘贴坏字节；希伯来文及中文移动通过。观察期限到达的历史结果保留，最终 exit0 另存。 |
+| editor-mutation-21eff77 / 5306 | 普通190px控件的 Arabic/组合/中文移动与禁用字符通过；鼠标扫描失败，记录保留。exit0，默认 userdir不变。 |
+| editor-capacity-before-1c95943 / 9411 | 隔离加宽控件三种容量路径均切断 UTF-8；行首光标253越过250字节文档。exit0，默认 userdir不变。 |
+| editor-final-153845c / 10195 | 四种容量用例通过，鼠标扫描仍失败。exit0，默认 userdir不变。 |
+| editor-verified-b1b7465 / 12149 | 同一最终产物通过7种 mutation、3种移动及17点鼠标扫描。 |
+
+最终 mutation 为 Arabic、组合字符、禁用字符、追加容量、行首容量、中间容量和组合边界容量。后四种实际文档/光标分别为249、249、247和248字节，均有效且满足250字节上限；旧版行首曾留下坏UTF-8和光标253。容量对照仅在独立模组中把真实原生 playername 宽度设为4096，以分离像素溢出与字节容量，修复前后夹具 GUI SHA256相同；原界面资源未修改。其他字体、事件、通知及资源加载均为真实原生路径。
+
+这些运行是专用 systemd unit 启动的原生游戏，连接已运行的 Steam 客户端，保留成功 SteamAPI日志和 cgroup，不称为客户端派生运行。详细证据在本机 `NATIVE-EDITOR-VALIDATION.md`、`native-editor-verified.json`、`editor-native-verified.txt`、`editor-paste-native-verified.txt` 和各同名原生目录。默认 userdir 内容及 mtime、原生正常退出、Steam临时选项恢复及专用服务停止由独立审计脚本核实。
+
+验收范围为该 Instant 控件与GUI scale1.0；新 Windows DLL仅通过CI。复杂双向选区的多区域绘制、复杂预编辑视口与组合期间鼠标、地图cluster、更多控件/缩放/密码框、完整搜索矩阵、真实生成姓名/Steam载荷、生命周期/安装压力与最终两平台游戏矩阵仍待完成。PR9保持草稿，Linux发布目标继续进行。
