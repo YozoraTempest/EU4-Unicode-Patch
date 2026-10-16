@@ -17,11 +17,12 @@ thread_local ProvinceScope* province_scope=nullptr;
 template<class T> T member(const void* object,std::size_t offset) {
     T result;std::memcpy(&result,static_cast<const char*>(object)+offset,sizeof(result));return result;
 }
-void area(void* work,const int* provinces,int a,int b,int c,int d,const void* data) {
+bool area(void* work,const int* provinces,int a,int b,int c,int d,const void* data) {
     ParagraphScope paragraph(member<void*>(work,0x30),nullptr);
     const auto previous=country_scope;country_scope=&paragraph;
     struct Reset {ParagraphScope* previous;~Reset(){country_scope=previous;}} reset{previous};
-    area_hook->call<void>(work,provinces,a,b,c,d,data);
+    // Update counts only successful areas from AL, then trims its label vector.
+    return area_hook->call<bool>(work,provinces,a,b,c,d,data);
 }
 void nudged(void* collection,void* map,const void* provinces,int count,void* font) {
     ProvinceScope scope;
