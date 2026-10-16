@@ -20,6 +20,9 @@ std::size_t grapheme_prefix(std::string_view text,std::size_t byte_limit);
 using PrefixMeasure=std::function<int(std::size_t)>;
 std::size_t fitting_grapheme_prefix(std::string_view text,int pixels,const PrefixMeasure& measure);
 std::size_t nearest_grapheme_boundary(std::string_view text,int pixels,const PrefixMeasure& measure);
+// Native formatted editors supply boundaries that include whole directives.
+std::size_t nearest_text_boundary(const std::vector<std::size_t>& boundaries,
+    int pixels,const PrefixMeasure& measure);
 struct TextViewport { std::size_t begin,end; };
 using RangeMeasure=std::function<int(std::size_t,std::size_t)>;
 // Keep the active edge visible using complete supplied text-unit boundaries.

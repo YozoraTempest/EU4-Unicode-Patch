@@ -31,14 +31,19 @@ std::size_t fitting_grapheme_prefix(std::string_view text,int pixels,const Prefi
 }
 std::size_t nearest_grapheme_boundary(std::string_view text,int pixels,const PrefixMeasure& measure) {
     const auto boundaries=grapheme_boundaries(text);
-    if(pixels<=0||text.empty()) return 0;
+    return nearest_text_boundary(boundaries,pixels,measure);
+}
+std::size_t nearest_text_boundary(const std::vector<std::size_t>& boundaries,int pixels,const PrefixMeasure& measure) {
+    if(boundaries.empty()||boundaries.front()!=0||!std::is_sorted(boundaries.begin(),boundaries.end()))
+        throw std::invalid_argument("Invalid text hit boundaries");
+    if(pixels<=0||boundaries.back()==0) return 0;
     std::size_t first=1,last=boundaries.size();
     while(first<last) {
         const auto middle=first+(last-first)/2;
         if(measure(boundaries[middle])<pixels) first=middle+1;
         else last=middle;
     }
-    if(first==boundaries.size()) return text.size();
+    if(first==boundaries.size()) return boundaries.back();
     const auto before=boundaries[first-1],after=boundaries[first];
     const auto left=before?measure(before):0;
     const auto right=measure(after);

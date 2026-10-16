@@ -1,17 +1,22 @@
 #include "linux/native.hpp"
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
+#include "unicode_editor.hpp"
+#include "formatted_text.hpp"
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <stdexcept>
 
 namespace eu4unicode::linux_native {
 namespace {
 SafetyHookInline *event_ctor=nullptr,*event_access=nullptr,*event_string=nullptr,*event_any=nullptr;
 SafetyHookInline *edit_input=nullptr,*backspace_hook=nullptr,*delete_hook=nullptr;
+SafetyHookInline *hit_hook=nullptr;
 thread_local const void* text_event=nullptr;
 thread_local std::uint32_t text_scalar=0;
 std::atomic<std::uint64_t> packets{0},scalars{0},edited{0};
+std::atomic<std::uint64_t> mouse_hits{0};
 constexpr std::uint32_t marker=0xa0000000,marker_mask=0xe00000ff;
 
 template<class T> T read(std::uintptr_t address) {
@@ -136,6 +141,36 @@ bool select_cluster(void* buffer,bool backwards) {
 }
 void backspace(void* buffer) {select_cluster(buffer,true);backspace_hook->call<void>(buffer);}
 void erase(void* buffer) {select_cluster(buffer,false);delete_hook->call<void>(buffer);}
+void hit(void* buffer,const String* source,const int* point) {
+    const auto text=source->view();
+    bool unicode=false;
+    for(std::size_t offset=0;offset<text.size();) {
+        const auto unit=decode(text.substr(offset));
+        if(!unit.valid) return hit_hook->call<void>(buffer,source,point);
+        unicode|=unit.bytes>1;offset+=unit.bytes;
+    }
+    if(!unicode) return hit_hook->call<void>(buffer,source,point);
+    // The native overload only sets a column in its supplied row. It rejects
+    // negative points and performs no selection mutation or notification.
+    if(point[0]<0||point[1]<0) return;
+    try {
+        const auto base=reinterpret_cast<std::uintptr_t>(buffer);
+        const auto font=read<void*>(base+0x98);
+        const bool formatted=read<bool>(base+0xe4);
+        const auto table=*static_cast<void***>(font);
+        const auto measure=reinterpret_cast<int(*)(void*,const char*,int,bool)>(table[0x68/8]);
+        const FormattedText units(text,formatted);
+        const auto column=nearest_text_boundary(units.prefixes(),point[0],[&](std::size_t end) {
+            return measure(font,text.data(),static_cast<int>(end),formatted);
+        });
+        if(column>UINT16_MAX) throw std::out_of_range("Native editor hit exceeds its column range");
+        const std::array<std::uint16_t,2> position{static_cast<std::uint16_t>(column),0};
+        std::memcpy(static_cast<char*>(buffer)+0x54,position.data(),sizeof(position));
+        ++mouse_hits;
+    } catch(const std::exception& error) {
+        static bool logged=false;if(!logged) {log("Unicode editor mouse hit rejected: %s",error.what());logged=true;}
+    }
+}
 }
 void prepare_editor_input(Hooks& hooks) {
     for(const auto address:{0x254b1ea,0x1feba14,0x20d602c,0x20d7528}) verify_site(address);
@@ -146,13 +181,14 @@ void prepare_editor_input(Hooks& hooks) {
     edit_input=&hooks.add_inline(0x20674a4,reinterpret_cast<void*>(edit));
     backspace_hook=&hooks.add_inline(0x20d8210,reinterpret_cast<void*>(backspace));
     delete_hook=&hooks.add_inline(0x20d8480,reinterpret_cast<void*>(erase));
+    hit_hook=&hooks.add_inline(0x20d5142,reinterpret_cast<void*>(hit));
     hooks.add_mid(0x1ff52d7,deliver);
     hooks.add_mid(0x20d784d,move_left);
     hooks.add_mid(0x20d7932,move_right);
 }
 void report_input_counts() noexcept {
-    log("SDL text packets=%llu scalars=%llu editor-events=%llu",
+    log("SDL text packets=%llu scalars=%llu editor-events=%llu mouse-hits=%llu",
         static_cast<unsigned long long>(packets.load()),static_cast<unsigned long long>(scalars.load()),
-        static_cast<unsigned long long>(edited.load()));
+        static_cast<unsigned long long>(edited.load()),static_cast<unsigned long long>(mouse_hits.load()));
 }
 }

@@ -88,6 +88,16 @@ int main() {
         check(nearest_grapheme_boundary(measured,pixel,measure)==edges[nearest],"pixel hits match the closest complete edge, including ties");
     }
     check(fitting_grapheme_prefix("",10,measure)==0&&nearest_grapheme_boundary("",10,measure)==0,"empty measured editor has one edge");
+    {
+        const std::vector<std::size_t> formatted_edges{0,3,6,9}; // section-color, Han glyph, reset
+        const auto formatted_width=[](std::size_t end) {return end<6?0:12;};
+        check(nearest_text_boundary(formatted_edges,5,formatted_width)==3,
+            "a formatted hit before a Han glyph retains the complete color introducer");
+        check(nearest_text_boundary(formatted_edges,7,formatted_width)==6,
+            "a formatted hit after a Han glyph never splits its UTF-8 or the following reset");
+        check(nearest_text_boundary(formatted_edges,6,formatted_width)==3,"formatted midpoint ties choose the left complete edge");
+        check(nearest_text_boundary({0},50,formatted_width)==0,"empty formatted hits have a single edge");
+    }
     const std::string document=u8"中文 العربية\r\nहिन्दी English\n𠮷e\u0301";
     const std::vector<std::string> native_rows={u8"中文 \n",u8"العربية\r\n",u8"हिन्दी \n","English\n",u8"𠮷e\u0301"};
     std::vector<EditRowInput> input;
