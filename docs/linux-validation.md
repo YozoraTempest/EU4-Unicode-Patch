@@ -157,3 +157,25 @@ CI **38809455419** 对功能树 `2ac7be0f7bfeb84b3a574d61887565b7ac193d88` 的 W
 证据为 `artifacts/linux-four-features-2026-10-15/IME-PRESENTATION-AND-MOUSE-VALIDATION.md`、`ime-latest-native-results.json`、`ime-and-hit-builds.json`、`editor-scale-profile-verification.json`、对应截图，以及 `artifacts/linux-native-arch-2026-10-14/native-implementation/tests/` 下各同名运行。临时 Steam LaunchOptions 已恢复为空，保留其他当前VDF字节，专用离线服务已停止；VM显示分辨率已从测试用1920×1200恢复原1280×800。没有残留的隔离游戏进程。
 
 1.25倍验收限定该 Texture 查找框，1.0倍覆盖两种绘制分支。普通文档的真实选区替换、其他缩放/密码框、预编辑期间鼠标行为仍需验证。复杂段落 shaping/bidi、完整搜索矩阵、真实生成姓名及Steam载荷、生命周期/安装压力和最终Windows/Linux回归仍未完成。上述IME回归使用llvmpipe，不代表修复了其原版也会出现的政治地图杂色；早期softpipe的颜色对照保持独立。草稿PR9未合并，Linux发布目标保持进行中。
+
+## 原生文档选区及复杂 UI 段落
+
+2026-10-16 继续验收原生 Instant 多人过滤框，font14、GUI scale1.0。`selection-native-6ef3c02`、PID21017、SO仍为 e56192c…，原生 Shift+Home 选中 `abcde` 后，预编辑投影为 `ce shif`，真实文档/选择仍是 `abcdef` / `abcde`；取消保留两者，提交得到 `测试f`。原生 Shift+End 全选 `测试f` 后，`bei jing` 预览和取消均不改变原文/选择，提交准确得到 `北京`，光标字节列6、选区空。32次装饰 GL 状态检查零不一致。完整函数调查确认该原生控件没有 Shift+Left 选区分支；失败初试和拖动不建立选择的记录均保留，不据此增加额外游戏快捷键。
+
+该观察器曾在期限结束时保留“游戏仍运行”的中间结果，最终正常退出0、默认 userdir 未变的记录另存，不覆盖历史结果。证据为 `NATIVE-SELECTION-VALIDATION.md`、`native-selection-result.json`、各原生快照及 `post-harness-exit.json`。这项结果只覆盖该真实控件，其他编辑器、密码框及组合期间鼠标仍需验收。
+
+复杂段落功能树 **aa917ddc34be74c9404e89db749ce44383f92987** 的 CI **38910831302** 通过 Windows27/Arch16。共享 `paragraph_transport` 的两平台测试使用真实 shaping/rasterization 核对像素重建、内联命令、强制换行、缩放整数进位、PUA隔离和长单词暂存分段；Linux 新增实际 ParagraphScope 的嵌套、字库别名、传输副本和所有权测试。原生实测 SO SHA256 为 `ee9edf3780e5a6667fa174c752c217257473379e246daa9a79b41f2f7cd43277`，187处 profile 签名全部重新核实。
+
+| 原生运行 / PID | 结果与实际边界 |
+| --- | --- |
+| paragraph-before-ba4e3d4 / 26490 | 旧 e56192c…包的相同样例显示独立阿拉伯字形、逻辑序希伯来文和未连写印地文；正常退出0 |
+| paragraph-native-ba4e3d4 / 26750 | 首版新包正确拒绝超过原单词暂存容量的传输串，packed0；保留失败日志、截图和正常退出0记录，不算 shaping 通过 |
+| paragraph-native-aa917dd / 27100 | 原生 screen 路径成功打包/上传1份段落，6行规划、55 tokens、619bytes；阿拉伯文连写、Hebrew/Hindi/组合字符与原中文、颜色、图标混排在说明框内。普通东方说明与返回也正常；退出0，484.21秒 |
+| paragraph-texture-aa917dd / 27335 | 错误夹具把游戏固定要求的 scenario_description InstantTextBox 改成另一类型，原生界面查找失败并崩溃；退出11，报告取消，记录保留 |
+| paragraph-static-texture-aa917dd / 27568 | 改用正常 GUI 工厂创建的独立 TextBox 子控件，原生 texture 与 screen 都成功绘制同一段文字；唯一键第二段复杂说明与第一段切换/返回正确。几何及上传数1/1→2/2→3/3，返回保持3/3，无独立标量缺字回退请求；正常退出0，429.79秒 |
+
+五轮均保留原生启动参数、描述符、启用列表、日志、完整可执行文件/SO哈希与默认 userdir 文件内容/mtime 未变的结果。主样例文件SHA256保持 `29261513b40a73c1575f4340301151a7d9e8af1c016dd5af6ad3881d6e871e4e`。前一个第二段本地化覆盖没有胜出，保留为无效夹具；成功版本使用自有 bookmark 资产指向唯一键。没有修改原模组或游戏界面资源。
+
+证据为本机 `PARAGRAPH-NATIVE-VALIDATION.md`、`native-paragraph-result.json`、`paragraph-native-*.png`、`paragraph-native-verified.txt` 和各同名原生运行目录。CI中测试字面量类型错误、缺少声明头文件、Pango相邻对象被合并丢失的失败均保留；后者由真实长对象回归检出并修正。屏幕及纹理日志中的行数、宽高是规划指标，不能充当原生绘制后行数的精确测量。完整裁切/尺寸一致性、末尾空白换行、更多缩放、复杂编辑几何和地图cluster绘制仍是开放验收项。
+
+最后成功测试已正常关闭，临时 Steam LaunchOptions 恢复为空，保留其他当前VDF字节，并只停止专用离线服务；见 `paragraph-native-final-cleanup.json`。没有残留自有游戏或观察器。Windows新DLL仅通过本轮27项CI测试，旧版原生游戏矩阵不归到新DLL；最终两平台游戏回归、搜索/姓名/Steam载荷、生命周期/重扫/安装压力、硬件GPU/Wayland等仍未完成。PR9保持草稿，本轮未合并或发布。
