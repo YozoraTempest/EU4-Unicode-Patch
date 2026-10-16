@@ -1,5 +1,6 @@
 #include "linux/native.hpp"
 #include "linux/editor_layout.hpp"
+#include "linux/editor_mutation.hpp"
 #include "linux/font_pages.hpp"
 #include "linux/ime_presentation.hpp"
 #include <dlfcn.h>
@@ -37,6 +38,7 @@ int patched_main(int argc,char** argv,char** envp) {
         prepare_mod_registry(*hooks);
         prepare_editor_layout(*hooks);
         prepare_editor_input(*hooks);
+        prepare_editor_mutation(*hooks);
         prepare_multiplayer_name(*hooks);
         prepare_search(*hooks);
         prepare_ime(*hooks);
@@ -59,6 +61,7 @@ int patched_main(int argc,char** argv,char** envp) {
     report_script_counts();
     report_input_counts();
     report_editor_layout_counts();
+    report_editor_mutation_counts();
     report_ime_counts();
     report_ime_presentation_counts();
     report_name_presence_counts();

@@ -39,6 +39,11 @@ target_include_directories(linux_editor_layout_tests PRIVATE include)
 target_link_libraries(linux_editor_layout_tests PRIVATE paragraph_transport safetyhook::safetyhook)
 target_compile_features(linux_editor_layout_tests PRIVATE cxx_std_23)
 add_test(NAME linux_editor_layout COMMAND linux_editor_layout_tests)
+add_executable(linux_editor_mutation_tests tests/linux_editor_mutation_tests.cpp src/linux/editor_mutation.cpp)
+target_include_directories(linux_editor_mutation_tests PRIVATE include)
+target_link_libraries(linux_editor_mutation_tests PRIVATE formatted_text safetyhook::safetyhook)
+target_compile_features(linux_editor_mutation_tests PRIVATE cxx_std_23)
+add_test(NAME linux_editor_mutation COMMAND linux_editor_mutation_tests)
 foreach(module unicode_layout shaped_paragraph formatted_paragraph)
     add_executable(${module}_tests tests/${module}_tests.cpp)
     if(module STREQUAL "formatted_paragraph")
@@ -57,7 +62,7 @@ add_library(EU4UnicodePatchLinux SHARED
     src/linux/bootstrap.cpp src/linux/profile.cpp
     src/linux/localization.cpp src/linux/script_bom.cpp src/linux/bitmap_fonts.cpp src/linux/text_layout.cpp src/linux/map_names.cpp
     src/linux/font_pages.cpp src/linux/font_draw.cpp src/linux/paragraph.cpp src/linux/paragraph_fit.cpp
-    src/linux/mod_registry.cpp src/linux/editor_input.cpp src/linux/editor_layout.cpp
+    src/linux/mod_registry.cpp src/linux/editor_input.cpp src/linux/editor_layout.cpp src/linux/editor_mutation.cpp
     src/linux/multiplayer_name.cpp src/linux/search.cpp src/linux/ime.cpp src/linux/ime_presentation.cpp src/linux/name_presence.cpp src/legacy_text.cpp)
 target_include_directories(EU4UnicodePatchLinux PRIVATE include vendor/picosha2)
 target_compile_features(EU4UnicodePatchLinux PRIVATE cxx_std_23)

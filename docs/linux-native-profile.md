@@ -80,6 +80,20 @@ IME 的主线程投影持有自有文字、完整格式字素视口和范围。�
 
 `CTextBuffer::SetCursorPositionFromPixels(String,Point)`（`0x20d5142`）原生只写入 row0/column，不负责选择与通知。Unicode 输入通过当前字体测量完整格式字素前缀，选择最近边界，平局取左；单字节路径保留原生实现。CEditBox 的非密码调用点 `0x2066902` 已先减掉文字精灵外框，插件在该处进一步扣除实际 border/font padding，其他 CTextBuffer 调用方不受影响。初始化不持有跨编辑器生命周期的原生字符串或缓冲区指针。
 
+复杂文字由独立 `editor_layout.cpp` 将上述命中入口、左右移动和光标像素位置接入同一完整行的 `ShapedParagraph`。作用域由 `CEditBox::HandleInput`（`0x2066750`）、`SetCursorPixelPosition`（`0x206684c`）以及 IME 的两条原生光标刷新路径建立；密码编辑框会屏蔽嵌套的普通文字几何。作用域只借用本次调用的 buffer，退出即还原，不保存字体或原生行指针。
+
+`GetCursorPositionInPixels()`（`0x20d4f5a`）、接受 CString 的重载（`0x20d53cc`）和 `GetStartSelectionPositionInPixels()`（`0x20d4b58`）均以 RAX 返回两个 uint16，低16位为 x、高16位为 y。插件保留原生 y、padding 和缓存更新约定，只用完整行的视觉插入位置替换 x；选区起点保留原生额外3像素。当前行由 `GetRowNo(int)`（`0x20d4d76`）按 sret ABI 构造，长行和短行均调用原生 CString 析构入口 `0xd95742`，不假设插件分配器与游戏相同。
+
+左右键在原生函数完成 prologue、尚未按逻辑行首/行尾判断前接入（`0x20d7844`、`0x20d78de`），处理完整行中的视觉停止点后返回各自原生收尾（`0x20d7876`、`0x20d793d`），由游戏清理旧选择并发出通知。跨行使用原生 `GetNoOfRowsInWrappedString`（`0x20d4a38`）和 `GetRowNo`；前者返回换行符个数，即末行索引。双向边界的 trailing affinity 仅以自有文档快照、行列和对象身份记录，文本改变后不能复用，失焦和销毁会清理。
+
+CI 中的 `linux_editor_layout` 测试运行实际作用域和命中适配代码，以 Pango 几何验证双向字节偏移、1.5倍字体缩放、完整字素、密码嵌套与普通 bitmap 路径。原生行所有权、光标缓存、移动通知及画面仍须由真实游戏验证。多区域双向选区绘制、复杂预编辑视口和组合期间鼠标操作尚未由此实现。
+
+`CClipboard::GetClipboard`（`0x1fdd640`）直接从 SDL UTF-8 剪贴板构造 CString，没有 Latin-1 转码。`Paste`（`0x20d8766`）随后通过 buffer 虚表 `+0xa8` 调用 `CTextBuffer::Write`（`0x20d5caa`）。该函数在 `0x20d5ce3` 对暂存串调用逐字节 `RemoveIf<SCharIsInString>`，禁用字符表位于 buffer `+0xb8`。真实原生玩家名称控件的表为 `22 a7 a4 a3 40 7b 7d 2f 5c`；例如 Alef U+0627 的 `d8 a7` 会丢失续字节 `a7`，组合音标及印地文字也会受影响。这与容量超限是两个独立问题。
+
+独立 `editor_mutation.cpp` 仅替换 Write 的上述过滤调用，将 AddForbiddenChars 的单字节字符值与完整 Unicode 标量匹配。禁用的引号、斜杠、格式符等仍被删除，其他字符中的相同 UTF-8 字节得以保留。暂存串已由游戏构造，长度变化通过原生 `_M_replace`（`0x25a3f30`）完成，之后继续原生插入、选区、通知与析构。无效 UTF-8 保留原生路径；通用 CString 过滤函数不变。
+
+`TryToAppendStringToText`、`AppendTextToString`、`InsertStringInToText` 中五处文档前缀裁切调用分别位于 `0x20d61e4`、`0x20d622d`、`0x20d6722`、`0x20d676b`、`0x20d68f5`。它们传入的 CString 均为 buffer `+0x30`，substring 参数为 `[begin,end)`。插件按现有 FormattedText 的完整字素与格式指令边界向下对齐 end，不改变 max-chars 的原生字节容量，也不接管构造、赋值、析构或后续光标计算。
+
 1.25 倍原生测试又确认事件位置为屏幕像素，而 `GetPositionAtScreen` 返回未缩放的文字精灵坐标。`0x2066869` 位于返回坐标后、原生减法之前；Unicode 非密码输入在这里调用 `CGraphics::ConvertScreenCoordinateTo2d(CPoint<int> const&)`（`0x207c508`），沿用引擎对 `graphics+0x4b0/+0x4b4` 的乘法和整数截断。该函数返回 RAX 内的两个 int，与浮点屏幕位置方法的 SSE ABI 区分。随后执行原生减法和已有内容边距修正，不自行推算 GUI 缩放，也不改变其他鼠标事件。
 
 ## 多人游戏名称
