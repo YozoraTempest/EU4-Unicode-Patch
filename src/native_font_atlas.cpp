@@ -165,14 +165,20 @@ void release_paragraph_tokens(Atlas& atlas,std::uint32_t first,std::uint32_t cou
     }
     atlas.free_paragraph_tokens.emplace(first,count);
 }
-std::uint32_t allocate_paragraph_tokens(Atlas& atlas,std::uint32_t count) {
+std::uint32_t allocate_paragraph_tokens(Atlas& atlas,const ParagraphTransport& plan) {
+    const auto count=static_cast<std::uint32_t>(plan.glyphs.size());
     for(auto range=atlas.free_paragraph_tokens.begin();range!=atlas.free_paragraph_tokens.end();++range) if(range->second>=count) {
-        const auto first=range->first,remaining=range->second-count;atlas.free_paragraph_tokens.erase(range);
-        if(remaining) atlas.free_paragraph_tokens.emplace(first+count,remaining);
+        const auto first=paragraph_token_start(plan,range->first),end=range->first+range->second;
+        if(first>end||count>end-first) continue;
+        const auto begin=range->first;atlas.free_paragraph_tokens.erase(range);
+        if(begin<first) atlas.free_paragraph_tokens.emplace(begin,first-begin);
+        if(first+count<end) atlas.free_paragraph_tokens.emplace(first+count,end-first-count);
         return first;
     }
-    if(count>0xffffe-atlas.next_paragraph_token) throw std::length_error("Native paragraph transport token budget exhausted");
-    const auto first=atlas.next_paragraph_token;atlas.next_paragraph_token+=count;return first;
+    const auto first=paragraph_token_start(plan,atlas.next_paragraph_token);
+    if(first>atlas.next_paragraph_token)
+        atlas.free_paragraph_tokens.emplace(atlas.next_paragraph_token,first-atlas.next_paragraph_token);
+    atlas.next_paragraph_token=first+count;return first;
 }
 void reserve_paragraph(Atlas& atlas,std::size_t bytes,const Atlas::Paragraph* keep=nullptr) {
     constexpr std::size_t budget=8ull*1024*1024;
@@ -510,19 +516,20 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
     auto& entry=paragraph_layout(atlas,font,text,width,wrap,formatted);
     if(entry.geometry) return entry.geometry;
     // Validate the complete transport before consuming any stable atlas slots.
-    std::vector<ScalarGlyph> glyphs;
-    std::string transport;
+    ParagraphTransport plan;
+    auto& glyphs=plan.glyphs;
+    auto& transport=plan.text;
     const auto scale=*reinterpret_cast<const float*>(static_cast<const std::byte*>(font)+0x968);
     auto append_glyph=[&](ScalarGlyph glyph) {
         // Final invocation-local token values are assigned after cache eviction.
+        plan.tokens.push_back(transport.size());
         transport+=encode(0xf0000+static_cast<std::uint32_t>(glyphs.size()));
         glyphs.push_back(std::move(glyph));
     };
     if(atlas.map) {
         for(auto& glyph:map_cluster_glyphs(*entry.layout,atlas.supplemental_size.width,atlas.supplemental_size.height)) append_glyph(std::move(glyph));
     } else {
-        auto plan=plan_paragraph_transport(*entry.layout,atlas.supplemental_size,scale);
-        transport=std::move(plan.text);glyphs=std::move(plan.glyphs);
+        plan=plan_paragraph_transport(*entry.layout,atlas.supplemental_size,scale);
     }
     if(transport.size()>32000||glyphs.size()>0xfffe)
         throw std::length_error("Native paragraph transport exceeds capacity");
@@ -536,16 +543,9 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
     std::vector<PagePosition> positions;positions.reserve(atlas.pages.size());
     for(const auto& page:atlas.pages) positions.push_back({page->x,page->y,page->row,page->pending.size()});
     const auto reserved_before=atlas.supplemental_reserved_bytes;
-    geometry->first_token=allocate_paragraph_tokens(atlas,static_cast<std::uint32_t>(glyphs.size()));
+    geometry->first_token=allocate_paragraph_tokens(atlas,plan);
     try {
-        for(std::size_t offset=0;offset<transport.size();) {
-            const auto unit=native_text_unit(transport,offset,formatted);
-            if(unit.kind==TextUnitKind::glyph&&unit.scalar>=0xf0000&&unit.scalar<0xf0000+glyphs.size()) {
-                const auto assigned=encode(geometry->first_token+unit.scalar-0xf0000);
-                std::copy(assigned.begin(),assigned.end(),transport.begin()+offset);
-            }
-            offset=unit.end;
-        }
+        assign_paragraph_tokens(plan,geometry->first_token);
         geometry->draw_text=std::move(transport);
         for(std::size_t index=0;index<glyphs.size();++index) {
             const auto packed=queue_glyph(atlas,std::move(glyphs[index]));

@@ -1,8 +1,11 @@
 #include "linux/font_pages.hpp"
 #include "scalar_glyph.hpp"
+#include "formatted_paragraph.hpp"
+#include "linux/paragraph.hpp"
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <dlfcn.h>
 #include <filesystem>
@@ -37,6 +40,15 @@ struct Atlas {
     std::unordered_map<std::uint32_t,Record> glyphs;
     std::unordered_set<std::uint32_t> rejected;
     std::uint64_t reserved_bytes=0;
+    struct Paragraph {
+        std::shared_ptr<const ShapedParagraph> layout;
+        std::shared_ptr<const FontParagraph> geometry;
+        std::size_t bytes;
+        std::uint64_t used;
+    };
+    std::map<std::tuple<bool,bool,float,float,std::string,std::vector<std::string>,std::vector<float>>,Paragraph> paragraphs;
+    std::size_t paragraph_bytes=0;
+    std::uint64_t paragraph_clock=0;
 };
 struct Location {Atlas* atlas;std::uint32_t page;};
 std::recursive_mutex mutex;
@@ -48,6 +60,7 @@ std::thread::id graphics_thread;
 std::shared_ptr<const TextFonts> optional_fonts;
 std::once_flag fonts_once;
 std::atomic<std::uint64_t> queued=0,uploaded=0;
+std::atomic<std::uint64_t> paragraph_layouts=0,paragraph_packed=0,paragraph_evicted=0;
 std::uint64_t reserved_total=0;
 const void* identity(void* const* table) {return table[0x41]?table[0x41]:table;}
 void check_graphics_thread() {
@@ -106,6 +119,59 @@ Record pack(Atlas& atlas,ScalarGlyph glyph) {
     glyph.metrics.x=static_cast<std::int16_t>(x);glyph.metrics.y=static_cast<std::int16_t>(y);
     return {glyph.metrics,static_cast<std::uint32_t>(index+1)};
 }
+void reserve_paragraph(Atlas& atlas,std::size_t bytes,const Atlas::Paragraph* keep=nullptr) {
+    constexpr std::size_t budget=8ull*1024*1024;
+    if(bytes>budget) throw std::length_error("Linux paragraph exceeds CPU cache budget");
+    while(bytes>budget-atlas.paragraph_bytes) {
+        auto oldest=atlas.paragraphs.end();
+        for(auto entry=atlas.paragraphs.begin();entry!=atlas.paragraphs.end();++entry) {
+            const auto& item=entry->second;
+            if(&item==keep||(item.geometry&&item.geometry.use_count()!=1)||
+               item.layout.use_count()>(item.geometry?2:1)) continue;
+            if(oldest==atlas.paragraphs.end()||item.used<oldest->second.used) oldest=entry;
+        }
+        if(oldest==atlas.paragraphs.end()) throw std::length_error("Active Linux paragraphs exceed CPU cache budget");
+        if(oldest->second.geometry) for(const auto& glyph:oldest->second.geometry->glyphs) locations.erase(&glyph);
+        // Cached native vertices own only UV/page values. Never reuse their
+        // atlas pixels when evicting the CPU layout and glyph records.
+        atlas.paragraph_bytes-=oldest->second.bytes;atlas.paragraphs.erase(oldest);++paragraph_evicted;
+    }
+}
+Atlas::Paragraph& layout(Atlas& atlas,void* font,std::string_view text,float width,bool wrap,bool formatted) {
+    const auto scale=read<float>(font,0x940);
+    if(!std::isfinite(scale)||scale<=0) throw std::invalid_argument("Invalid Linux paragraph font scale");
+    const auto vtable=read<void**>(font,0);
+    auto content=std::make_shared<ParagraphText>(text,formatted,[font,scale,vtable](std::string_view name) {
+        const std::string terminated(name);
+        return reinterpret_cast<int(*)(void*,const char*)>(vtable[0x100/8])(font,terminated.c_str())/scale;
+    },[font](unsigned char code) {
+        std::uint32_t color=0;
+        return reinterpret_cast<bool(*)(void*,char,std::uint32_t&)>(0x20519a2)(font,static_cast<char>(code),color);
+    },[font,scale,vtable](std::string_view) {
+        return reinterpret_cast<int(*)(void*)>(vtable[0x110/8])(font)/scale;
+    },[font](std::uint32_t scalar) {
+        const auto table=reinterpret_cast<void* const*>(static_cast<const char*>(font)+0x100);
+        const auto glyph=scalar<=255?static_cast<const NativeGlyph*>(table[scalar]):
+            static_cast<const NativeGlyph*>(find_unicode_glyph(table,scalar));
+        return glyph?static_cast<float>(glyph->advance):-1.f;
+    },[scale](std::string_view command) {
+        // Verified native GetWidthOfString constants: numbered symbols eight
+        // client pixels; currency sixteen. Native rendering keeps their commands.
+        return (command.front()=='{'?8.f:16.f)/scale;
+    });
+    std::vector<float> icons;for(const auto& icon:content->icons()) icons.push_back(icon.advance);
+    auto key=std::make_tuple(wrap,formatted,width,scale,std::string(text),content->colors(),std::move(icons));
+    const auto found=atlas.paragraphs.find(key);
+    if(found!=atlas.paragraphs.end()) {found->second.used=++atlas.paragraph_clock;return found->second;}
+    std::size_t colors=0;for(const auto& color:content->colors()) colors+=sizeof(std::string)+color.size();
+    const auto bytes=sizeof(Atlas::Paragraph)+text.size()*96+colors*2+4096;
+    reserve_paragraph(atlas,bytes);
+    std::call_once(fonts_once,load_optional_fonts);
+    auto shaped=std::make_shared<ShapedParagraph>(text,atlas.size,width,wrap,optional_fonts,content);
+    if(shaped->missing_glyphs()) throw std::domain_error("Linux font collection has no glyph for paragraph");
+    auto& result=atlas.paragraphs.emplace(std::move(key),Atlas::Paragraph{std::move(shaped),{},bytes,++atlas.paragraph_clock}).first->second;
+    atlas.paragraph_bytes+=bytes;++paragraph_layouts;return result;
+}
 void sync(Atlas& atlas) {
     // Establish the owner from a real font draw, never a resource lookup or
     // CPU-only measurement that may run while the engine prepares assets.
@@ -150,6 +216,51 @@ void destroy_texture(void* texture) {
     destroy_texture_hook->call<void>(texture);
 }
 }
+std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void* font,std::string_view text,float width,bool wrap,bool formatted) {
+    if(!font||!needs_native_paragraph_shaping(text,formatted)) return {};
+    std::lock_guard lock(mutex);
+    const auto table=reinterpret_cast<void* const*>(static_cast<const char*>(font)+0x100);
+    const auto found=bindings.find(identity(table));
+    if(found==bindings.end()||found->second->black) return {};
+    return layout(*found->second,font,text,width,wrap,formatted).layout;
+}
+std::shared_ptr<const FontParagraph> font_paragraph_geometry(void* font,std::string_view text,float width,bool wrap,bool formatted) {
+    if(!font||!needs_native_paragraph_shaping(text,formatted)) return {};
+    std::lock_guard lock(mutex);
+    const auto table=reinterpret_cast<void* const*>(static_cast<const char*>(font)+0x100);
+    const auto found=bindings.find(identity(table));
+    if(found==bindings.end()||found->second->black) return {};
+    auto& atlas=*found->second;auto& entry=layout(atlas,font,text,width,wrap,formatted);
+    if(entry.geometry) return entry.geometry;
+    auto plan=plan_paragraph_transport(*entry.layout,atlas.supplemental_size,read<float>(font,0x940));
+    const auto bytes=sizeof(FontParagraph)+plan.text.size()+plan.glyphs.size()*(sizeof(NativeGlyph)+64);
+    reserve_paragraph(atlas,bytes,&entry);
+    auto result=std::make_shared<FontParagraph>();result->layout=entry.layout;
+    result->first_token=paragraph_token_start(plan,0xf0000);assign_paragraph_tokens(plan,result->first_token);
+    result->text=std::move(plan.text);result->glyphs.resize(plan.glyphs.size());
+    struct Position {int x,y,row;};
+    std::vector<Position> before;before.reserve(atlas.pages.size());
+    for(const auto& page:atlas.pages) before.push_back({page->x,page->y,page->row});
+    const auto reserved=atlas.reserved_bytes;
+    try {
+        for(std::size_t index=0;index<plan.glyphs.size();++index) {
+            const auto record=pack(atlas,std::move(plan.glyphs[index]));
+            result->glyphs[index]=record.glyph;locations[&result->glyphs[index]]={&atlas,record.page};
+        }
+    } catch(...) {
+        for(const auto& glyph:result->glyphs) locations.erase(&glyph);
+        // No GPU upload or published vertex can observe these new slots while
+        // the atlas lock is held. Pixels outside restored packing cursors are
+        // unreachable and overwritten on the next successful allocation.
+        atlas.pages.resize(before.size());reserved_total-=atlas.reserved_bytes-reserved;atlas.reserved_bytes=reserved;
+        for(std::size_t index=0;index<before.size();++index) {
+            auto& page=*atlas.pages[index];const auto& pos=before[index];page.x=pos.x;page.y=pos.y;page.row=pos.row;
+        }
+        throw;
+    }
+    atlas.paragraph_bytes+=bytes;entry.bytes+=bytes;entry.geometry=std::move(result);++paragraph_packed;
+    return entry.geometry;
+}
 void register_font_pages(void* font) {
     std::lock_guard lock(mutex);
     const auto table=reinterpret_cast<void* const*>(static_cast<const char*>(font)+0x100);
@@ -185,6 +296,7 @@ void release_font_pages(void* const* table) noexcept {
 }
 NativeGlyph* find_font_glyph(void* const* table,std::uint32_t scalar,const char* origin) noexcept {
     if(!table) return nullptr;
+    if(auto glyph=find_paragraph_glyph(table,scalar)) return glyph;
     if(scalar<=255&&table[scalar]) return static_cast<NativeGlyph*>(table[scalar]);
     if(auto existing=static_cast<NativeGlyph*>(find_unicode_glyph(table,scalar))) return existing;
     if(scalar<0x20||scalar>0x10ffff||(scalar>=0xd800&&scalar<=0xdfff)) return nullptr;
@@ -217,12 +329,14 @@ std::vector<FontPage> font_pages(void* original) {
     return result;
 }
 void prepare_font_pages(Hooks& hooks) {
-    verify_site(0x229f203);verify_site(0x22adbb4);
+    verify_site(0x229f203);verify_site(0x22adbb4);verify_site(0x20519a2);
     lookup_hook=&hooks.add_inline(0x22a8a2e,reinterpret_cast<void*>(lookup));
     destroy_texture_hook=&hooks.add_inline(0x22adc83,reinterpret_cast<void*>(destroy_texture));
 }
 void report_font_page_counts() noexcept {
     log("Linux font pages queued-glyphs=%llu uploads=%llu",static_cast<unsigned long long>(queued.load()),static_cast<unsigned long long>(uploaded.load()));
+    log("Linux paragraphs layouts=%llu packed=%llu evicted=%llu",static_cast<unsigned long long>(paragraph_layouts.load()),
+        static_cast<unsigned long long>(paragraph_packed.load()),static_cast<unsigned long long>(paragraph_evicted.load()));
 }
 void release_font_page_resources() {
     std::lock_guard lock(mutex);

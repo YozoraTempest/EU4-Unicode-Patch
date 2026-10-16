@@ -1,9 +1,11 @@
 #include "linux/native.hpp"
+#include "linux/paragraph.hpp"
 #include "formatted_text_cache.hpp"
 #include "unicode_text.hpp"
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <cmath>
 #include <iterator>
 #include <string>
 
@@ -17,6 +19,7 @@ static_assert(sizeof(Rect)==16&&sizeof(Vector)==8);
 SafetyHookInline *screen_hook=nullptr,*texture_hook=nullptr,*actual_hook=nullptr;
 SafetyHookInline *height_hook=nullptr,*required_hook=nullptr,*real_hook=nullptr;
 SafetyHookInline *line_hook=nullptr;
+SafetyHookInline *width_hook=nullptr;
 thread_local FormattedTextCache cache;
 std::atomic<std::uint64_t> screen_breaks=0,texture_breaks=0,measured_breaks=0;
 std::atomic<std::uint64_t> row_breaks=0;
@@ -65,6 +68,11 @@ struct Text {
         const auto unit=decode(value.substr(native_scalar_start(value,last_byte)));
         return unit.valid&&unit.value>255;
     }
+    void transported(const String* draw) {
+        value=draw->view();native=borrowed_string(value);
+        // The shaped transport already owns every explicit line boundary.
+        unicode=false;boundaries.reset();
+    }
 };
 // Stack-owned scopes restore the enclosing call on nested native rendering.
 // Cached values own their boundary data; no native String/frame is retained.
@@ -81,7 +89,12 @@ thread_local Scope *actual_scope=nullptr,*height_scope=nullptr,*fit_scope=nullpt
 void screen(void* font,const String* source,std::uint64_t formatting,int alignment,
             int orientation,const void* matrix,Rect rect,Vector position,
             Vector* output,int limit,bool formatted) {
-    Text text(source,formatted);Scope scope(text,screen_scope);
+    ParagraphScope paragraph(font,source);
+    Text text(source,formatted);
+    const auto pixels=static_cast<float>(static_cast<std::int64_t>(rect.right?rect.right:320)-2ll*position.x);
+    const auto draw=paragraph.prepare(&text.native,pixels,true,formatted,"screen");
+    if(paragraph.active()) text.transported(draw);
+    Scope scope(text,screen_scope);
     screen_hook->call<void>(font,&text.native,formatting,alignment,orientation,
                            matrix,rect,position,output,limit,formatted);
 }
@@ -89,34 +102,70 @@ void* texture(void* font,void* context,void* target,Vector* size,Vector* positio
               const String* source,void* background,unsigned width,unsigned height,
               const Vector* padding,std::uint64_t formatting,bool flag,unsigned count,
               bool flag2,bool formatted) {
-    Text text(source,formatted);Scope scope(text,texture_scope);
+    ParagraphScope paragraph(font,source);
+    Text text(source,formatted);
+    const auto pixels=padding?static_cast<float>(static_cast<std::int64_t>(width?width:320)-2ll*padding->x):0.f;
+    const auto draw=paragraph.prepare(&text.native,pixels,true,formatted,"texture");
+    if(paragraph.active()) text.transported(draw);
+    Scope scope(text,texture_scope);
     return texture_hook->call<void*>(font,context,target,size,position,&text.native,
         background,width,height,padding,formatting,flag,count,flag2,formatted);
 }
 void actual(void* font,const String* source,int width,int height,Vector* padding,
             Vector* output,bool formatted) {
-    Text text(source,formatted);Scope scope(text,actual_scope);
+    ParagraphScope paragraph(font,source);
+    Text text(source,formatted);
+    const auto pixels=padding?static_cast<float>(static_cast<std::int64_t>(width?width:320)-2ll*padding->x):0.f;
+    const auto draw=paragraph.prepare(&text.native,pixels,true,formatted,"actual");
+    if(paragraph.active()) text.transported(draw);
+    Scope scope(text,actual_scope);
     actual_hook->call<void>(font,&text.native,width,height,padding,output,formatted);
 }
 int height(void* font,const String* source,int width,int limit,const Vector* padding,
            bool formatted) {
-    Text text(source,formatted);Scope scope(text,height_scope);
+    ParagraphScope paragraph(font,source);
+    Text text(source,formatted);
+    const auto pixels=padding?static_cast<float>(static_cast<std::int64_t>(width?width:320)-2ll*padding->x):0.f;
+    const auto draw=paragraph.prepare(&text.native,pixels,true,formatted,"height");
+    if(paragraph.active()) text.transported(draw);
+    Scope scope(text,height_scope);
     return height_hook->call<int>(font,&text.native,width,limit,padding,formatted);
 }
 void required(void* font,const String* source,String* output,int width,int height,
               Vector* padding,bool formatted) {
+    ParagraphScope paragraph(font,nullptr);
     Text text(source,formatted,source==output);
     Scope scope(text,fit_scope);
     required_hook->call<void>(font,&text.native,output,width,height,padding,formatted);
 }
 void real(void* font,const String* source,String* output,int width,int height,
           Vector* padding,bool formatted,bool flag,bool flag2,int* lines,bool* clipped) {
+    ParagraphScope paragraph(font,nullptr);
     Text text(source,formatted,source==output);
     Scope scope(text,fit_scope);
     real_hook->call<void>(font,&text.native,output,width,height,padding,
                          formatted,flag,flag2,lines,clipped);
 }
+int width(void* font,const char* source,int length,bool formatted) {
+    if(!source) return width_hook->call<int>(font,source,length,formatted);
+    const auto size=length<0?strnlen(source,32001):static_cast<std::size_t>(length);
+    const std::string_view input(source,size);
+    if(paragraph_transport_source(font,input)) return width_hook->call<int>(font,source,length,formatted);
+    const auto borrowed=borrowed_string(input);
+    ParagraphScope paragraph(font,nullptr);
+    if(size<=32000) try {
+        Text text(&borrowed,formatted);
+        if(const auto layout=font_paragraph_layout(font,text.value,32767,false,formatted)) {
+            const auto scale=member<float>(font,0x940);float pixels=0;
+            for(std::size_t line=0;line<layout->lines().size();++line)
+                pixels=std::max(pixels,plan_paragraph_line(*layout,line,scale).pixels);
+            return static_cast<int>(pixels);
+        }
+    } catch(const std::exception& error) {report_paragraph_failure("width",error.what());}
+    return width_hook->call<int>(font,source,length,formatted);
+}
 int line_size(const void* buffer,const String* source) {
+    ParagraphScope paragraph(nullptr,nullptr);
     auto text=source->view();
     // GetTextAsRows calls this only when its first explicit line is too wide.
     // Its original byte bisection can return a UTF-8 continuation byte; that
@@ -214,6 +263,7 @@ void prepare_text_layout(Hooks& hooks) {
     required_hook=&hooks.add_inline(0x20565aa,reinterpret_cast<void*>(required));
     real_hook=&hooks.add_inline(0x2056d66,reinterpret_cast<void*>(real));
     line_hook=&hooks.add_inline(0x20d6b06,reinterpret_cast<void*>(line_size));
+    width_hook=&hooks.add_inline(0x2053f7c,reinterpret_cast<void*>(width));
     for(const auto target:{0x20523ca,0x2052620,0x204f10a,0x20563a6,0x2053ead})
         verify_site(target);
     hooks.add_mid(0x2052239,screen_wrap);

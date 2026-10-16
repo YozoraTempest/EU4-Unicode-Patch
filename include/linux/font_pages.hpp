@@ -2,9 +2,18 @@
 #include "linux/native.hpp"
 #include "glyph_registry.hpp"
 #include "font_draw_batches.hpp"
+#include "paragraph_transport.hpp"
 
 namespace eu4unicode::linux_native {
 struct FontPage { void* texture;FontPageSize size; };
+struct FontParagraph {
+    std::shared_ptr<const ShapedParagraph> layout;
+    std::string text;
+    std::uint32_t first_token=0;
+    std::vector<NativeGlyph> glyphs;
+};
+std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void* font,std::string_view text,float width,bool wrap,bool formatted);
+std::shared_ptr<const FontParagraph> font_paragraph_geometry(void* font,std::string_view text,float width,bool wrap,bool formatted);
 void prepare_font_pages(Hooks&);
 void prepare_font_draw(Hooks&);
 void register_font_pages(void* font);

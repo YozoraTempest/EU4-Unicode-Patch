@@ -50,6 +50,36 @@ int main() {
     }
     check(seen==plan.glyphs.size()&&line+1==paragraph.lines().size(),"transport preserves glyph and hard-line counts");
     check(actual.alpha==expected.alpha,"native transport reconstructs the shaped paragraph ink exactly");
+    const auto original_plan=plan.text;
+    const auto assigned=paragraph_token_start(plan,0xf0100);
+    assign_paragraph_tokens(plan,assigned);
+    check(assigned==0xf0100&&plan.text.size()==original_plan.size(),"token reassignment retains byte geometry");
+    for(std::size_t index=0;index<plan.tokens.size();++index)
+        check(decode(std::string_view(plan.text).substr(plan.tokens[index])).value==assigned+index,
+            "explicit offsets reassign every generated glyph");
+    // The inline bitmap command is a real PUA character. It must not become
+    // an alias for a raster token or be rewritten while assigning the plan.
+    const auto literal=encode(0xf0000);
+    const auto pua_source=u8"العربية "+literal;
+    auto pua_content=std::make_shared<ParagraphText>(pua_source,false,
+        ParagraphText::IconMeasure{},ParagraphText::ColorLookup{},ParagraphText::IconMeasure{},
+        [](std::uint32_t value){return value==0xf0000?13.f:-1.f;});
+    ShapedParagraph pua_paragraph(pua_source,24,220,true,{},pua_content);
+    auto pua=plan_paragraph_transport(pua_paragraph,{256,256},1);
+    const auto pua_first=paragraph_token_start(pua,0xf0000);
+    check(pua_first>0xf0000,"transport tokens avoid literal plane-15 bitmap glyphs");
+    assign_paragraph_tokens(pua,pua_first);
+    std::size_t literals=0;
+    for(std::size_t offset=0;offset<pua.text.size();) {
+        const auto unit=decode(std::string_view(pua.text).substr(offset));
+        if(unit.value==0xf0000) ++literals;
+        offset+=unit.bytes;
+    }
+    check(literals==1,"literal PUA command survives reassignment exactly once");
+    bool exhausted=false;
+    auto exhausted_plan=plan_paragraph_transport(paragraph,{256,256},1);
+    try {paragraph_token_start(exhausted_plan,0xffffd,0xffffe);} catch(const std::length_error&) {exhausted=true;}
+    check(exhausted,"insufficient token range fails before packing");
     const std::string mixed=u8"العربية 中 £adm£ हिन्दी @FRA";
     auto objects=std::make_shared<ParagraphText>(mixed,true,[](std::string_view){return 17.f;},
         ParagraphText::ColorLookup{},[](std::string_view){return 23.f;},

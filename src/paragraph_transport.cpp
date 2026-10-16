@@ -42,6 +42,7 @@ ParagraphTransport plan_paragraph_transport(const ShapedParagraph& paragraph,Fon
     };
     auto append_glyph=[&](ScalarGlyph glyph) {
         if(result.glyphs.size()>=0xfffe) throw std::length_error("Native paragraph transport exceeds capacity");
+        result.tokens.push_back(result.text.size());
         result.text+=encode(0xf0000+static_cast<std::uint32_t>(result.glyphs.size()));
         result.glyphs.push_back(std::move(glyph));
     };
@@ -82,5 +83,40 @@ ParagraphTransport plan_paragraph_transport(const ShapedParagraph& paragraph,Fon
     }
     if(result.text.size()>32000) throw std::length_error("Native paragraph transport exceeds capacity");
     return result;
+}
+std::uint32_t paragraph_token_start(const ParagraphTransport& plan,std::uint32_t first,std::uint32_t end) {
+    if(first<0xf0000||end>0xffffe||first>end||plan.tokens.size()!=plan.glyphs.size())
+        throw std::invalid_argument("Invalid paragraph token range");
+    std::vector<std::uint32_t> literals;
+    std::size_t token=0;
+    for(std::size_t offset=0;offset<plan.text.size();) {
+        const auto unit=decode(std::string_view(plan.text).substr(offset));
+        if(token<plan.tokens.size()&&offset==plan.tokens[token]) {
+            if(!unit.valid||unit.value!=0xf0000+token)
+                throw std::invalid_argument("Invalid generated paragraph token");
+            ++token;
+        } else if(unit.valid&&unit.value>=0xf0000&&unit.value<end) {
+            literals.push_back(unit.value);
+        }
+        offset+=unit.bytes;
+    }
+    if(token!=plan.tokens.size()) throw std::invalid_argument("Invalid paragraph token offsets");
+    std::sort(literals.begin(),literals.end());
+    for(const auto scalar:literals) {
+        if(scalar<first) continue;
+        if(scalar-first>=plan.glyphs.size()) break;
+        first=scalar+1;
+    }
+    if(plan.glyphs.size()>end-first) throw std::length_error("Native paragraph transport token budget exhausted");
+    return first;
+}
+void assign_paragraph_tokens(ParagraphTransport& plan,std::uint32_t first) {
+    if(paragraph_token_start(plan,first)!=first)
+        throw std::invalid_argument("Paragraph token range overlaps literal text");
+    // Both ends are in plane 15, so replacement preserves byte positions.
+    for(std::size_t index=0;index<plan.tokens.size();++index) {
+        const auto assigned=encode(first+static_cast<std::uint32_t>(index));
+        plan.text.replace(plan.tokens[index],assigned.size(),assigned);
+    }
 }
 }
