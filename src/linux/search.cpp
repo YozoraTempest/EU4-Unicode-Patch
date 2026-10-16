@@ -12,7 +12,7 @@ std::atomic<unsigned long long> matches{0};
 bool search_normalization(std::uintptr_t caller) noexcept {
     constexpr std::uintptr_t sites[]={0x1cacbc4,0x1cacbcc,0x1cacbf6,0x1cacbfe,
         0x1cacd94,0x1cacd9c,0x1cacef6,0x1cacefe,0x1cad042,0x1cad04c,
-        0x1a8bcdb,0x1a8bce3};
+        0x1a8bcdb,0x1a8bce3,0x1a87fc9,0x1a87fd1};
     return std::find(std::begin(sites),std::end(sites),caller)!=std::end(sites);
 }
 void normalize(String* value,SafetyHookInline* original,std::uintptr_t caller) {
@@ -61,6 +61,9 @@ int distance(const String* name,const String* query) {
 }
 void prepare_search(Hooks& hooks) {
     verify_site(0x25a3f30);
+    // OnFilterOpinions normalizes the query before the result loop sees it.
+    // Its bytewise Latin-1 cleanup must share the candidate's UTF-8 policy.
+    verify_site(0x1a87fc4);verify_site(0x1a87fcc);
     find_hook=&hooks.add_inline(0x254c402,reinterpret_cast<void*>(find));
     distance_hook=&hooks.add_inline(0x2557227,reinterpret_cast<void*>(distance));
     lower_hook=&hooks.add_inline(0x254ceb2,reinterpret_cast<void*>(lower));
