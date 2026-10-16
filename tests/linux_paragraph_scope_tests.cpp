@@ -28,7 +28,7 @@ namespace eu4unicode::linux_native {
 // Replace only the platform atlas boundary. The test exercises the actual
 // production scope, borrowed String ABI, Pango layout and transport records.
 std::shared_ptr<const FontParagraph> font_paragraph_geometry(void*,std::string_view source,float,bool,bool) {
-    ++preparations;return source==u8"سلام"?fixture:nullptr;
+    ++preparations;return source=="سلام"?fixture:nullptr;
 }
 void log(const char*,...) noexcept {}
 }
@@ -36,18 +36,18 @@ int main() {
     using namespace eu4unicode;
     using namespace eu4unicode::linux_native;
     fixture=std::make_shared<FontParagraph>();
-    fixture->layout=std::make_shared<ShapedParagraph>(u8"سلام",16,200,false);
+    fixture->layout=std::make_shared<ShapedParagraph>("سلام",16,200,false);
     fixture->first_token=0xf0001;fixture->glyphs.resize(2);
     fixture->text=encode(0xf0001)+encode(0xf0002)+encode(0xf0000);
     int anchor=0,other=0;Font font(&anchor),alias(&anchor),different(&other);
-    const auto original=borrowed_string(u8"سلام");
+    const auto original=borrowed_string("سلام");
     const auto plain=borrowed_string("ordinary");
     const auto* first=&fixture->glyphs[0];
     check(!find_paragraph_glyph(font.table(),0xf0001),"tokens are absent outside a draw invocation");
     {
         ParagraphScope outer(font.data(),&original);
         const auto draw=outer.prepare(&original,200,false,false,"screen");
-        check(draw!=&original&&original.view()==u8"سلام","prepared text never replaces the original owner");
+        check(draw!=&original&&original.view()=="سلام","prepared text never replaces the original owner");
         check(find_paragraph_glyph(font.table(),0xf0001)==first,"active scope resolves generated glyphs");
         check(find_paragraph_glyph(alias.table(),0xf0001)==first,"native font aliases share the active atlas");
         check(!find_paragraph_glyph(different.table(),0xf0001),"another atlas cannot resolve tokens");
