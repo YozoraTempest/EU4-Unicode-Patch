@@ -79,16 +79,26 @@ void update_rect() {
             return size[0];
         };
         // The verified cursor-position call site has already applied the
-        // display viewport's advance. Publish values, not an editor pointer,
-        // for whichever thread later draws the native text sprite.
+        // display viewport's advance. The cursor image includes transparent
+        // offsets, so decorations must use the text sprite's content origin.
+        const auto sprite=member<void*>(focused,0x1e8);
+        const auto sprite_table=*static_cast<void***>(sprite);
+        const auto origin=reinterpret_cast<Point(*)(void*)>(sprite_table[0x178/8])(sprite);
+        if(!coordinate(origin.x)||!coordinate(origin.y)) return;
+        const auto vertical=sprite_table[0x178/8]==reinterpret_cast<void*>(0x208c29e)?member<float>(sprite,0x254):0;
+        int content[2]={static_cast<int>(origin.x)+member<int>(focused,0x240)+member<int>(font,0x30),
+            static_cast<int>(origin.y+vertical)+member<int>(focused,0x244)+member<int>(font,0x34)};
+        reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&content[0],&content[1]);
+        // Publish values, not an editor pointer, for the native draw thread.
         ImePresentation display;
-        display.sprite=member<void*>(focused,0x1e8);display.text=projection.text;
-        display.x=xy[0]-pixels(projection.caret);display.y=xy[1];
+        display.sprite=sprite;display.text=projection.text;
+        display.x=content[0];display.y=content[1];
         display.width=pixels(projection.width);display.height=std::max(1,wh[1]);
         display.underline_begin=pixels(projection.begin);display.underline_end=pixels(projection.end);
         display.selection_begin=pixels(projection.selection_begin);display.selection_end=pixels(projection.selection_end);
         display.thickness=std::max(1,display.height/16);
         publish_ime_presentation(std::move(display));
+        xy[0]=content[0]+pixels(projection.caret);xy[1]=content[1];
     }
     set_rect({xy[0],xy[1],std::max(1,wh[0]),std::max(1,wh[1])});
 }
@@ -162,6 +172,7 @@ int poll(void* event) {
                     const auto length=read<int>(static_cast<const char*>(event)+(extended?28:48));
                     preedit_cursor=scalar_offset(preedit,std::max(0,start));
                     preedit_selection=scalar_offset(preedit.substr(preedit_cursor),std::max(0,length));
+                    if(preedit.empty()) clear();
                     compositions.fetch_add(1,std::memory_order_relaxed);refresh();
                 }
             } catch(...) { log("SDL composition update failed");clear(); }
@@ -266,7 +277,7 @@ void selection_position(safetyhook::Context& context) {
 }
 }
 void prepare_ime(Hooks& hooks) {
-    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x2120340,0x207c56c,0x2067386,0x2097208,0x20541d4,0x2066944,0x20d602c,0x20d55d2,0x2066f16}) verify_site(address);
+    for(const auto address:{0x2120930,0x2120950,0x2120960,0x21212a0,0x21206f0,0x2120340,0x207c56c,0x2067386,0x2097208,0x208c29e,0x20541d4,0x2066944,0x20d602c,0x20d55d2,0x2066f16}) verify_site(address);
     poll_hook=&hooks.add_inline(0x21202b0,reinterpret_cast<void*>(poll));
     focus_hook=&hooks.add_inline(0x206731a,reinterpret_cast<void*>(focus));
     blur_hook=&hooks.add_inline(0x2067420,reinterpret_cast<void*>(blur));
