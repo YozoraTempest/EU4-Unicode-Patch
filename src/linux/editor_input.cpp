@@ -3,6 +3,7 @@
 #include "unicode_services.hpp"
 #include "unicode_editor.hpp"
 #include "formatted_text.hpp"
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstring>
@@ -141,15 +142,30 @@ bool select_cluster(void* buffer,bool backwards) {
 }
 void backspace(void* buffer) {select_cluster(buffer,true);backspace_hook->call<void>(buffer);}
 void erase(void* buffer) {select_cluster(buffer,false);delete_hook->call<void>(buffer);}
-void hit(void* buffer,const String* source,const int* point) {
-    const auto text=source->view();
+bool unicode_source(std::string_view text) {
     bool unicode=false;
     for(std::size_t offset=0;offset<text.size();) {
         const auto unit=decode(text.substr(offset));
-        if(!unit.valid) return hit_hook->call<void>(buffer,source,point);
+        if(!unit.valid) return false;
         unicode|=unit.bytes>1;offset+=unit.bytes;
     }
-    if(!unicode) return hit_hook->call<void>(buffer,source,point);
+    return unicode;
+}
+void mouse_origin(safetyhook::Context& c) {
+    const auto buffer=reinterpret_cast<void*>(c.rdi);
+    if(!unicode_source(text_of(buffer))) return;
+    const auto editor=c.r12;
+    const auto font=read<std::uintptr_t>(c.rdi+0x98);
+    auto point=reinterpret_cast<int*>(c.rsi);
+    // CEditBox subtracts its text sprite's outer position before this call.
+    // The actual glyph origin also includes the border and font padding.
+    // Restrict this adjustment to that verified non-password editor call.
+    point[0]=std::max(0,point[0]-read<int>(editor+0x240)-read<int>(font+0x30));
+    point[1]=std::max(0,point[1]-read<int>(editor+0x244)-read<int>(font+0x34));
+}
+void hit(void* buffer,const String* source,const int* point) {
+    const auto text=source->view();
+    if(!unicode_source(text)) return hit_hook->call<void>(buffer,source,point);
     // The native overload only sets a column in its supplied row. It rejects
     // negative points and performs no selection mutation or notification.
     if(point[0]<0||point[1]<0) return;
@@ -185,6 +201,7 @@ void prepare_editor_input(Hooks& hooks) {
     hooks.add_mid(0x1ff52d7,deliver);
     hooks.add_mid(0x20d784d,move_left);
     hooks.add_mid(0x20d7932,move_right);
+    hooks.add_mid(0x2066902,mouse_origin);
 }
 void report_input_counts() noexcept {
     log("SDL text packets=%llu scalars=%llu editor-events=%llu mouse-hits=%llu",
