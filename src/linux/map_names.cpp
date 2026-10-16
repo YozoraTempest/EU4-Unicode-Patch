@@ -1,10 +1,64 @@
 #include "linux/native.hpp"
+#include "linux/paragraph.hpp"
 #include "unicode_text.hpp"
 #include <atomic>
+#include <cstring>
 
 namespace eu4unicode::linux_native {
 namespace {
 std::atomic<unsigned long long> spacing_scalars{0};
+std::atomic<unsigned long long> shaped_countries{0},shaped_provinces{0};
+SafetyHookInline *area_hook=nullptr,*nudged_hook=nullptr;
+thread_local ParagraphScope* country_scope=nullptr;
+struct ProvinceScope {
+    std::unique_ptr<ParagraphScope> paragraph;
+};
+thread_local ProvinceScope* province_scope=nullptr;
+template<class T> T member(const void* object,std::size_t offset) {
+    T result;std::memcpy(&result,static_cast<const char*>(object)+offset,sizeof(result));return result;
+}
+void area(void* work,const int* provinces,int a,int b,int c,int d,const void* data) {
+    ParagraphScope paragraph(member<void*>(work,0x30),nullptr);
+    const auto previous=country_scope;country_scope=&paragraph;
+    struct Reset {ParagraphScope* previous;~Reset(){country_scope=previous;}} reset{previous};
+    area_hook->call<void>(work,provinces,a,b,c,d,data);
+}
+void nudged(void* collection,void* map,const void* provinces,int count,void* font) {
+    ProvinceScope scope;
+    const auto previous=province_scope;province_scope=&scope;
+    struct Reset {ProvinceScope* previous;~Reset(){province_scope=previous;}} reset{previous};
+    nudged_hook->call<void>(collection,map,provinces,count,font);
+}
+void country_shape(safetyhook::Context& context) noexcept {
+    if(!country_scope) return;
+    try {
+        auto source=reinterpret_cast<String*>(context.rbp-0x110);
+        const auto font=member<void*>(reinterpret_cast<void*>(context.r13),0x30);
+        const auto prepared=country_scope->prepare(source,32000.f*member<float>(font,0x940),false,false,"map-country");
+        if(prepared==source) return;
+        // This is AddNameArea's owned scratch CString, not the country name.
+        reinterpret_cast<void*(*)(void*,std::size_t,std::size_t,const char*,std::size_t)>(0x25a3f30)(
+            source,0,source->size,prepared->bytes,prepared->size);
+        ++shaped_countries;
+    } catch(...) {report_paragraph_failure("map-country","Native scratch assignment failed");}
+}
+void country_spacing(safetyhook::Context& context) {
+    // Inserting spaces between already shaped clusters breaks joined scripts.
+    if(country_scope&&country_scope->active()) context.rip=0x1b5df5f;
+}
+void province_shape(safetyhook::Context& context) noexcept {
+    if(!province_scope) return;
+    try {
+        // End the previous borrowed invocation before installing this one.
+        province_scope->paragraph.reset();
+        auto source=reinterpret_cast<const String*>(context.rax);
+        auto paragraph=std::make_unique<ParagraphScope>(reinterpret_cast<void*>(context.r12),source);
+        const auto prepared=paragraph->prepare(source,32000.f*member<float>(reinterpret_cast<void*>(context.r12),0x940),false,false,"map-province");
+        context.rax=reinterpret_cast<std::uintptr_t>(prepared);
+        if(paragraph->active()) ++shaped_provinces;
+        province_scope->paragraph=std::move(paragraph);
+    } catch(...) {report_paragraph_failure("map-province","Native label preparation failed");}
+}
 void count(safetyhook::Context& context,std::uintptr_t next) {
     const auto text=reinterpret_cast<const String*>(context.rdi)->view();
     if(!valid_utf8(text)) return;
@@ -53,6 +107,12 @@ void character(safetyhook::Context& context) {
 }
 void prepare_map_names(Hooks& hooks) {
     verify_site(0x25a3f30);
+    verify_site(0x1b5df5f);
+    area_hook=&hooks.add_inline(0x1b5d334,reinterpret_cast<void*>(area));
+    nudged_hook=&hooks.add_inline(0x1b5fd3a,reinterpret_cast<void*>(nudged));
+    hooks.add_mid(0x1b5dcd9,country_shape);
+    hooks.add_mid(0x1b5dd9c,country_spacing);
+    hooks.add_mid(0x1b5fde2,province_shape);
     hooks.add_mid(0x1b5f327,label_count);
     hooks.add_mid(0x1b5f332,curve_count);
     hooks.add_mid(0x1b5f54d,interpolation_count);
@@ -63,5 +123,8 @@ void prepare_map_names(Hooks& hooks) {
     hooks.add_mid(0x1b5de2a,spacing_character);
     hooks.add_mid(0x1b5de6a,spacing_last);
 }
-void report_map_counts() noexcept { log("Map label spacing scalars preserved=%llu",spacing_scalars.load()); }
+void report_map_counts() noexcept {
+    log("Map label spacing scalars preserved=%llu",spacing_scalars.load());
+    log("Map shaped labels countries=%llu provinces=%llu",shaped_countries.load(),shaped_provinces.load());
+}
 }

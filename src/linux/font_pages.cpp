@@ -2,6 +2,7 @@
 #include "scalar_glyph.hpp"
 #include "formatted_paragraph.hpp"
 #include "linux/paragraph.hpp"
+#include "unicode_text.hpp"
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -46,7 +47,7 @@ struct Atlas {
         std::size_t bytes;
         std::uint64_t used;
     };
-    std::map<std::tuple<bool,bool,float,float,std::string,std::vector<std::string>,std::vector<float>>,Paragraph> paragraphs;
+    std::map<std::tuple<bool,bool,float,float,float,float,std::string,std::vector<std::string>,std::vector<float>>,Paragraph> paragraphs;
     std::size_t paragraph_bytes=0;
     std::uint64_t paragraph_clock=0;
     std::uint32_t next_paragraph_token=0xf0000;
@@ -138,7 +139,7 @@ void reserve_paragraph(Atlas& atlas,std::size_t bytes,const Atlas::Paragraph* ke
         atlas.paragraph_bytes-=oldest->second.bytes;atlas.paragraphs.erase(oldest);++paragraph_evicted;
     }
 }
-Atlas::Paragraph& layout(Atlas& atlas,void* font,std::string_view text,float width,bool wrap,bool formatted) {
+Atlas::Paragraph& layout(Atlas& atlas,void* font,std::string_view text,float width,bool wrap,bool formatted,const ParagraphViewport* viewport=nullptr) {
     const auto scale=read<float>(font,0x940);
     if(!std::isfinite(scale)||scale<=0) throw std::invalid_argument("Invalid Linux paragraph font scale");
     const auto vtable=read<void**>(font,0);
@@ -150,7 +151,8 @@ Atlas::Paragraph& layout(Atlas& atlas,void* font,std::string_view text,float wid
         return reinterpret_cast<bool(*)(void*,char,std::uint32_t&)>(0x20519a2)(font,static_cast<char>(code),color);
     },[font,scale,vtable](std::string_view) {
         return reinterpret_cast<int(*)(void*)>(vtable[0x110/8])(font)/scale;
-    },[font](std::uint32_t scalar) {
+    },[font,&atlas](std::uint32_t scalar) {
+        if(atlas.black) return -1.f;
         const auto table=reinterpret_cast<void* const*>(static_cast<const char*>(font)+0x100);
         const auto glyph=scalar<=255?static_cast<const NativeGlyph*>(table[scalar]):
             static_cast<const NativeGlyph*>(find_unicode_glyph(table,scalar));
@@ -161,7 +163,8 @@ Atlas::Paragraph& layout(Atlas& atlas,void* font,std::string_view text,float wid
         return (command.front()=='{'?8.f:16.f)/scale;
     });
     std::vector<float> icons;for(const auto& icon:content->icons()) icons.push_back(icon.advance);
-    auto key=std::make_tuple(wrap,formatted,width,scale,std::string(text),content->colors(),std::move(icons));
+    auto key=std::make_tuple(wrap,formatted,width,scale,viewport?viewport->left:-1.f,viewport?viewport->width:0.f,
+        std::string(text),content->colors(),std::move(icons));
     const auto found=atlas.paragraphs.find(key);
     if(found!=atlas.paragraphs.end()) {found->second.used=++atlas.paragraph_clock;return found->second;}
     std::size_t colors=0;for(const auto& color:content->colors()) colors+=sizeof(std::string)+color.size();
@@ -222,18 +225,25 @@ std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void* font,std::str
     std::lock_guard lock(mutex);
     const auto table=reinterpret_cast<void* const*>(static_cast<const char*>(font)+0x100);
     const auto found=bindings.find(identity(table));
-    if(found==bindings.end()||found->second->black) return {};
+    if(found==bindings.end()) return {};
     return layout(*found->second,font,text,width,wrap,formatted).layout;
 }
-std::shared_ptr<const FontParagraph> font_paragraph_geometry(void* font,std::string_view text,float width,bool wrap,bool formatted) {
+std::shared_ptr<const FontParagraph> font_paragraph_geometry(void* font,std::string_view text,float width,bool wrap,bool formatted,const ParagraphViewport* viewport) {
     if(!font||!needs_native_paragraph_shaping(text,formatted)) return {};
     std::lock_guard lock(mutex);
     const auto table=reinterpret_cast<void* const*>(static_cast<const char*>(font)+0x100);
     const auto found=bindings.find(identity(table));
-    if(found==bindings.end()||found->second->black) return {};
-    auto& atlas=*found->second;auto& entry=layout(atlas,font,text,width,wrap,formatted);
+    if(found==bindings.end()) return {};
+    auto& atlas=*found->second;auto& entry=layout(atlas,font,text,width,wrap,formatted,viewport);
     if(entry.geometry) return entry.geometry;
-    auto plan=plan_paragraph_transport(*entry.layout,atlas.supplemental_size,read<float>(font,0x940));
+    ParagraphTransport plan;
+    if(atlas.black) {
+        plan.glyphs=map_cluster_glyphs(*entry.layout,atlas.supplemental_size);
+        if(plan.glyphs.size()>0xfffe) throw std::length_error("Native map transport exceeds capacity");
+        for(std::size_t index=0;index<plan.glyphs.size();++index) {
+            plan.tokens.push_back(plan.text.size());plan.text+=encode(0xf0000+static_cast<std::uint32_t>(index));
+        }
+    } else plan=plan_paragraph_transport(*entry.layout,atlas.supplemental_size,read<float>(font,0x940),viewport);
     const auto bytes=sizeof(FontParagraph)+plan.text.size()+plan.glyphs.size()*(sizeof(NativeGlyph)+64);
     reserve_paragraph(atlas,bytes,&entry);
     auto result=std::make_shared<FontParagraph>();result->layout=entry.layout;

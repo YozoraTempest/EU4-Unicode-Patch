@@ -129,13 +129,13 @@ void paint(void* sprite,std::size_t text_offset,bool background) noexcept {
             gl.enable(0x0c11);gl.scissor(clip[0],clip[1],clip[2],clip[3]);
             const auto left=current->x,top=current->y;
             if(background) {
-                if(current->selection_end>current->selection_begin) {
-                    rectangle(left+current->selection_begin,top,left+current->selection_end,
+                for(const auto& range:current->selections) if(range.end>range.begin) {
+                    rectangle(left+range.begin,top,left+range.end,
                         top+current->height,{0.22f,0.42f,0.68f,0.65f});++selections;
                 }
-            } else if(current->underline_end>current->underline_begin) {
-                rectangle(left+current->underline_begin,top+current->height-current->thickness,
-                    left+current->underline_end,top+current->height,{1,1,1,1});++underlines;
+            } else for(const auto& range:current->underlines) if(range.end>range.begin) {
+                rectangle(left+range.begin,top+current->height-current->thickness,
+                    left+range.end,top+current->height,{1,1,1,1});++underlines;
             }
         }
         if(checking) {

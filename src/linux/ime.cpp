@@ -1,6 +1,8 @@
 #include "linux/native.hpp"
 #include "linux/editor_layout.hpp"
 #include "linux/ime_presentation.hpp"
+#include "linux/font_pages.hpp"
+#include "linux/paragraph.hpp"
 #include "editor_document.hpp"
 #include "formatted_text.hpp"
 #include "unicode_text.hpp"
@@ -28,6 +30,8 @@ struct Projection {
     std::string text;
     int width=0,caret=0,delta=0;
     int begin=0,end=0,selection_begin=0,selection_end=0;
+    std::vector<ImePresentation::Range> underlines,selections;
+    bool document_selection=false;
 } projection;
 bool refreshing=false;
 bool input_active=false;
@@ -73,7 +77,7 @@ void update_rect() {
     const auto height=reinterpret_cast<int(*)(void*)>(font_table[0x70/8])(font);
     int wh[2]={1,std::max(1,height)};
     reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&wh[0],&wh[1]);
-    if(!preedit.empty()&&projection.owner==focused) {
+    if(projection.owner==focused&&(!preedit.empty()||projection.document_selection)) {
         const auto pixels=[&](int value) {
             int size[2]={value,0};
             reinterpret_cast<void(*)(void*,int*,int*)>(0x207c56c)(graphics,&size[0],&size[1]);
@@ -97,9 +101,11 @@ void update_rect() {
         display.width=pixels(projection.width);display.height=std::max(1,wh[1]);
         display.underline_begin=pixels(projection.begin);display.underline_end=pixels(projection.end);
         display.selection_begin=pixels(projection.selection_begin);display.selection_end=pixels(projection.selection_end);
+        for(const auto& range:projection.underlines) display.underlines.push_back({pixels(range.begin),pixels(range.end)});
+        for(const auto& range:projection.selections) display.selections.push_back({pixels(range.begin),pixels(range.end)});
         display.thickness=std::max(1,display.height/16);
         publish_ime_presentation(std::move(display));
-        xy[0]=content[0]+pixels(projection.caret);xy[1]=content[1];
+        if(!preedit.empty()) {xy[0]=content[0]+pixels(projection.caret);xy[1]=content[1];}
     }
     set_rect({xy[0],xy[1],std::max(1,wh[0]),std::max(1,wh[1])});
 }
@@ -113,7 +119,7 @@ void refresh() {
     update_rect();
 }
 void clear() {
-    projection={};clear_ime_presentation();
+    projection={};clear_ime_presentation();clear_editor_view();
     if(preedit.empty()) return;
     preedit.clear();preedit_cursor=preedit_selection=0;refresh();
 }
@@ -131,7 +137,7 @@ void destroy(void* editor) {
     forget_editor_layout(editor);
     if(focused==editor) {
         focused=nullptr;preedit.clear();preedit_cursor=preedit_selection=0;
-        projection={};clear_ime_presentation();
+        projection={};clear_ime_presentation();clear_editor_view();
     }
     destroy_hook->call<void>(editor);
 }
@@ -205,7 +211,7 @@ std::string color_at(std::string_view text,std::size_t position,bool formatted) 
 }
 void preview_text(safetyhook::Context& context) {
     if(preedit.empty()||reinterpret_cast<void*>(context.r14)!=focused||member<bool>(focused,0x262)) return;
-    projection={};clear_ime_presentation();
+    projection={};clear_ime_presentation();clear_editor_view();
     auto row=reinterpret_cast<String*>(context.rsp+0x38);
     auto buffer=static_cast<char*>(focused)+0xc8;
     const auto column=member<std::uint16_t>(buffer,0x54);
@@ -237,6 +243,36 @@ void preview_text(safetyhook::Context& context) {
     const auto measure=[&](std::string_view text) {return width(font,text.data(),static_cast<int>(text.size()),formatted);};
     const auto padding=reinterpret_cast<int(*)(void*,bool)>(table[0xb0/8])(font,true);
     const auto available=std::max(0,static_cast<int>(member<std::uint16_t>(buffer,0x68))-padding-2);
+    if(available>0) if(const auto shaped=font_paragraph_layout(font,line,32767,false,formatted)) {
+        const auto scale=member<float>(font,0x940);
+        const auto caret=shaped->caret(composed.caret-line_begin).x*scale;
+        const auto left=std::clamp(std::round(caret)-available+1,0.f,
+            std::max(0.f,std::ceil(shaped->metrics().width*scale)-available));
+        Projection next;
+        next.owner=focused;next.text=line;next.width=available;next.caret=static_cast<int>(std::round(caret)-left);
+        next.delta=next.caret-static_cast<int>(editor_layout_x(buffer,row->view()).value_or(measure(row->view().substr(0,column))));
+        const auto regions=[&](std::size_t first,std::size_t last) {
+            std::vector<ImePresentation::Range> result;
+            first=std::clamp(first,line_begin,line_end)-line_begin;
+            last=std::clamp(last,line_begin,line_end)-line_begin;
+            for(const auto& region:shaped->selection(std::min(first,last),std::max(first,last))) {
+                const auto begin=static_cast<int>(std::round(region.x*scale)-left);
+                const auto end=static_cast<int>(std::round((region.x+region.width)*scale)-left);
+                result.push_back({begin,end});
+            }
+            return result;
+        };
+        next.underlines=regions(composed.begin,composed.end);
+        if(preedit_selection) next.selections=regions(highlighted.anchor,highlighted.caret);
+        if(!next.underlines.empty()) {next.begin=next.underlines.front().begin;next.end=next.underlines.back().end;}
+        if(!next.selections.empty()) {next.selection_begin=next.selections.front().begin;next.selection_end=next.selections.back().end;}
+        // Shape the complete line once. Only its raster viewport is cropped;
+        // slicing logical text here would change Arabic joining and bidi runs.
+        publish_editor_view(font,std::string(line),{left/scale,available/scale});
+        reinterpret_cast<void*(*)(void*,std::size_t,std::size_t,const char*,std::size_t)>(0x25a3f30)(
+            row,0,row->size,line.data(),line.size());
+        projection=std::move(next);previews.fetch_add(1,std::memory_order_relaxed);return;
+    }
     const FormattedText units(line,formatted);
     const auto& edges=units.prefixes();
     const auto active=*std::lower_bound(edges.begin(),edges.end(),composed.caret-line_begin);
@@ -257,6 +293,8 @@ void preview_text(safetyhook::Context& context) {
     if(preedit_selection) {
         next.selection_begin=advance(highlighted.anchor);next.selection_end=advance(highlighted.caret);
     }
+    next.underlines.push_back({next.begin,next.end});
+    if(preedit_selection) next.selections.push_back({next.selection_begin,next.selection_end});
     // Only the native draw call's owned scratch string is changed. The document,
     // undo state, search query and save data never receive uncommitted text.
     reinterpret_cast<void*(*)(void*,std::size_t,std::size_t,const char*,std::size_t)>(
@@ -266,7 +304,7 @@ void preview_text(safetyhook::Context& context) {
 }
 void preview(safetyhook::Context& context) {
     try {preview_text(context);} catch(...) {
-        projection={};clear_ime_presentation();
+        projection={};clear_ime_presentation();clear_editor_view();
         static bool logged=false;if(!logged) {log("Linux IME display projection failed");logged=true;}
     }
 }
@@ -276,8 +314,27 @@ void caret_position(safetyhook::Context& context) {
     position[0]+=projection.delta;
 }
 void selection_position(safetyhook::Context& context) {
-    if(!preedit.empty()&&reinterpret_cast<void*>(context.r12)==focused&&projection.owner==focused)
-        context.rip=0x2066f16; // Native hide path; the committed selection stays unchanged.
+    if(reinterpret_cast<void*>(context.r12)!=focused) return;
+    if(!preedit.empty()&&projection.owner==focused) {context.rip=0x2066f16;return;}
+    if(!preedit.empty()||member<bool>(focused,0x262)) return;
+    projection={};clear_ime_presentation();
+    auto buffer=static_cast<char*>(focused)+0xc8;
+    if(!member<std::uint64_t>(buffer,0x78)) return;
+    // GetRowNo owns its CString; no engine row pointer survives this callback.
+    String row{};
+    reinterpret_cast<void(*)(String*,void*,int)>(0x20d4d76)(&row,buffer,member<std::uint16_t>(buffer,0x56));
+    struct Destroy {String* value;~Destroy(){reinterpret_cast<void(*)(String*)>(0xd95742)(value);}} destroy{&row};
+    try {
+        const auto regions=editor_layout_selection(buffer,row.view());
+        if(!regions) return;
+        const auto font=member<void*>(buffer,0x98);
+        const auto table=*static_cast<void***>(font);
+        const auto padding=reinterpret_cast<int(*)(void*,bool)>(table[0xb0/8])(font,true);
+        projection.owner=focused;projection.text=row.view();projection.document_selection=true;
+        projection.width=std::max(0,static_cast<int>(member<std::uint16_t>(buffer,0x68))-padding-2);
+        for(const auto& region:*regions) projection.selections.push_back({static_cast<int>(region.x),static_cast<int>(region.x+region.width)});
+        context.rip=0x2066f16; // Hide only the native single rectangle, retaining logical selection.
+    } catch(...) {projection={};}
 }
 }
 void prepare_ime(Hooks& hooks) {

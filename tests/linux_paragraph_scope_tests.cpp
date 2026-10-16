@@ -30,7 +30,7 @@ struct Font {
 namespace eu4unicode::linux_native {
 // Replace only the platform atlas boundary. The test exercises the actual
 // production scope, borrowed String ABI, Pango layout and transport records.
-std::shared_ptr<const FontParagraph> font_paragraph_geometry(void*,std::string_view source,float,bool,bool) {
+std::shared_ptr<const FontParagraph> font_paragraph_geometry(void*,std::string_view source,float,bool,bool,const ParagraphViewport*) {
     ++preparations;return source=="سلام"?fixture:nullptr;
 }
 std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void*,std::string_view source,float width,bool wrap,bool formatted,bool force) {

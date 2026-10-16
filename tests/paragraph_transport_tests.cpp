@@ -2,6 +2,7 @@
 #include "formatted_paragraph.hpp"
 #include "formatted_text.hpp"
 #include "unicode_text.hpp"
+#include "unicode_services.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -29,6 +30,39 @@ struct Canvas {
 }
 int main() {
     using namespace eu4unicode;
+    {
+        const std::string label=u8"A سلام हिन्दी a\u0323\u0301 עברית";
+        ShapedParagraph curved(label,24,480,false);
+        const auto clusters=map_cluster_glyphs(curved,{512,512});
+        Canvas expected,actual;
+        for(const auto& tile:rasterize_paragraph(curved,510,510))
+            expected.paint(static_cast<int>(tile.x),static_cast<int>(tile.y),tile.bitmap.width,tile.bitmap.height,tile.bitmap.alpha);
+        int pen=0;
+        for(const auto& glyph:clusters) {
+            actual.paint(pen+glyph.metrics.x_offset,glyph.metrics.y_offset,glyph.metrics.width,glyph.metrics.height,glyph.alpha);
+            pen+=glyph.metrics.advance;
+        }
+        check(!clusters.empty()&&clusters.size()<grapheme_boundaries(label).size(),"map transport retains contextual clusters");
+        check(pen==static_cast<int>(std::ceil(curved.metrics().width)),"map cluster advances retain the complete shaped width");
+        check(actual.alpha==expected.alpha,"curved map clusters reconstruct the original joined and bidi ink");
+    }
+    for(const float left:{0.f,15.f,61.f}) {
+        ShapedParagraph line(u8"ABC سلام עברית हिन्दी XYZ",24,480,false);
+        ParagraphViewport viewport{left,76};
+        const auto transport=plan_paragraph_transport(line,{256,256},1,&viewport);
+        Canvas full,expected,actual;
+        for(const auto& tile:rasterize_paragraph(line,254,254))
+            full.paint(static_cast<int>(tile.x),static_cast<int>(tile.y),tile.bitmap.width,tile.bitmap.height,tile.bitmap.alpha);
+        for(int y=0;y<Canvas::height;++y) for(int x=0;x<static_cast<int>(viewport.width);++x)
+            expected.alpha[y*Canvas::width+x+Canvas::margin]=full.alpha[y*Canvas::width+x+static_cast<int>(left)+Canvas::margin];
+        int pen=0;
+        for(const auto& glyph:transport.glyphs) {
+            actual.paint(pen+glyph.metrics.x_offset,glyph.metrics.y_offset,glyph.metrics.width,glyph.metrics.height,glyph.alpha);
+            pen+=glyph.metrics.advance;
+        }
+        check(actual.alpha==expected.alpha,"IME viewport crops the complete shaped line without changing joining or bidi context");
+        check(pen==76,"visual viewport preserves the native finite edit width");
+    }
     const std::string source=u8"§Yسلام§! हिन्दी\nעברית a\u0323\u0301\n";
     auto content=std::make_shared<ParagraphText>(source,true);
     ShapedParagraph paragraph(source,24,220,true,{},content);

@@ -1,5 +1,6 @@
 #pragma once
 #include "linux/native.hpp"
+#include "unicode_layout.hpp"
 #include <optional>
 
 namespace eu4unicode::linux_native {
@@ -16,6 +17,7 @@ private:
 };
 bool editor_layout_hit(void* buffer,const String* source,const int* point);
 std::optional<float> editor_layout_x(void* buffer,std::string_view text,bool anchor=false);
+std::optional<std::vector<SelectionRegion>> editor_layout_selection(void* buffer,std::string_view row);
 // Affinity belongs to the document/cursor, survives focus changes and is
 // removed when the owning native editor is destroyed.
 void forget_editor_layout(void* editor) noexcept;

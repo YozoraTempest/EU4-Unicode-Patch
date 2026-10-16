@@ -25,4 +25,7 @@ private:
 NativeGlyph* find_paragraph_glyph(void* const* table,std::uint32_t token) noexcept;
 bool paragraph_transport_source(void* font,std::string_view text) noexcept;
 void report_paragraph_failure(const char* operation,const char* message) noexcept;
+// Owned visual projection only; the identity is never dereferenced here.
+void publish_editor_view(void* font,std::string text,ParagraphViewport viewport);
+void clear_editor_view() noexcept;
 }

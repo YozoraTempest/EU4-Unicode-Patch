@@ -1,9 +1,11 @@
 #pragma once
 #include "linux/native.hpp"
 #include <string>
+#include <vector>
 
 namespace eu4unicode::linux_native {
 struct ImePresentation {
+    struct Range {int begin,end;};
     // Identity only: the draw hook receives the live sprite from the engine.
     // No retained native object is dereferenced through this snapshot.
     void* sprite=nullptr;
@@ -12,6 +14,7 @@ struct ImePresentation {
     int underline_begin=0,underline_end=0;
     int selection_begin=0,selection_end=0;
     int thickness=1;
+    std::vector<Range> underlines,selections;
 };
 void publish_ime_presentation(ImePresentation value);
 void clear_ime_presentation() noexcept;

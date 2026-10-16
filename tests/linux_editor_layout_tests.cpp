@@ -62,6 +62,21 @@ int main() {
         for(std::size_t i=1;i<boundaries.size();++i)
             reversed|=paragraph->caret(boundaries[i]).x<paragraph->caret(boundaries[i-1]).x;
         check(reversed,"fixture contains a real visual/logical ordering reversal");
+        bool multiple=false;
+        for(const auto first:boundaries) for(const auto last:boundaries) if(first<last) {
+            set(editor.bytes,0xc8+0x54,static_cast<std::uint16_t>(first));
+            set(editor.bytes,0xc8+0x92,static_cast<std::uint16_t>(last));
+            const auto regions=editor_layout_selection(editor.buffer(),editor.text);
+            const auto expected=paragraph->selection(first,last);
+            check(regions&&regions->size()==expected.size(),"native selection uses every visual region");
+            for(std::size_t i=0;i<regions->size();++i) {
+                check((*regions)[i].x==std::round(expected[i].x*1.5f),"selection origin follows full-line visual geometry");
+                check((*regions)[i].x+(*regions)[i].width==std::round((expected[i].x+expected[i].width)*1.5f),
+                    "selection edges retain fractional scale without accumulating width error");
+            }
+            multiple|=regions->size()>1;
+        }
+        check(multiple,"fixture exercises disjoint visual selection regions");
         for(int x=0;x<130;++x) {
             const int point[2]={x,0};
             const auto expected=paragraph->hit_test(x/1.5f,0);

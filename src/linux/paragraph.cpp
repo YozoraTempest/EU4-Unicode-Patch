@@ -3,15 +3,27 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <mutex>
+#include <optional>
 
 namespace eu4unicode::linux_native {
 namespace {
 thread_local ParagraphScope* current=nullptr;
 std::atomic<bool> reported_failure=false;
 std::atomic<unsigned> reported_renderers=0;
+struct EditorView {void* font;std::string text;ParagraphViewport viewport;};
+std::mutex view_mutex;
+std::shared_ptr<const EditorView> editor_view;
 bool same_table(void* const* left,void* const* right) noexcept {
     return left&&right&&(left==right||(left[0x41]&&left[0x41]==right[0x41]));
 }
+}
+void publish_editor_view(void* font,std::string text,ParagraphViewport viewport) {
+    auto next=std::make_shared<const EditorView>(EditorView{font,std::move(text),viewport});
+    const std::lock_guard lock(view_mutex);editor_view=std::move(next);
+}
+void clear_editor_view() noexcept {
+    const std::lock_guard lock(view_mutex);editor_view.reset();
 }
 void report_paragraph_failure(const char* operation,const char* message) noexcept {
     if(!reported_failure.exchange(true)) log("Linux paragraph %s failed: %s",operation,message);
@@ -43,7 +55,13 @@ const String* ParagraphScope::prepare(const String* source,float pixels,bool wra
         auto font=const_cast<char*>(reinterpret_cast<const char*>(table_)-0x100);
         float scale=0;std::memcpy(&scale,static_cast<const char*>(font)+0x940,sizeof(scale));
         if(!std::isfinite(scale)||scale<=0||pixels/scale>32767) return source;
-        geometry_=font_paragraph_geometry(font,source->view(),pixels/scale,wrap,formatted);
+        std::optional<ParagraphViewport> viewport;
+        {
+            const std::lock_guard lock(view_mutex);
+            if(editor_view&&editor_view->font==font&&editor_view->text==source->view()) viewport=editor_view->viewport;
+        }
+        geometry_=font_paragraph_geometry(font,source->view(),viewport?32767:pixels/scale,viewport?false:wrap,formatted,
+            viewport?&*viewport:nullptr);
         if(!geometry_) return source;
         text_=geometry_->text;
         if(formatted) {

@@ -180,6 +180,21 @@ std::optional<float> editor_layout_x(void* buffer,std::string_view text,bool anc
     const auto caret=paragraph->caret(column,!anchor&&trailing(buffer,row,column));
     return std::round(caret.x*scale(buffer))+member<int>(member<void*>(buffer,0x98),0x30)+(anchor?3:0);
 }
+std::optional<std::vector<SelectionRegion>> editor_layout_selection(void* buffer,std::string_view text) {
+    if(!eligible(buffer)||member<std::uint16_t>(buffer,0x56)!=member<std::uint16_t>(buffer,0x94)) return {};
+    const auto first=member<std::uint16_t>(buffer,0x54),last=member<std::uint16_t>(buffer,0x92);
+    if(first>text.size()||last>text.size()) return {};
+    const auto paragraph=layout(buffer,text);
+    if(!paragraph) return {};
+    auto regions=paragraph->selection(std::min(first,last),std::max(first,last));
+    const auto factor=scale(buffer);
+    for(auto& region:regions) {
+        const auto right=std::round((region.x+region.width)*factor);
+        region.x=std::round(region.x*factor);region.width=right-region.x;
+        region.y=std::round(region.y*factor);region.height=std::round(region.height*factor);
+    }
+    return regions;
+}
 bool editor_layout_hit(void* buffer,const String* source,const int* point) {
     if(!eligible(buffer)||point[0]<0||point[1]<0) return false;
     const auto paragraph=layout(buffer,source->view());

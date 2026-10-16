@@ -13,7 +13,7 @@ struct FontParagraph {
     std::vector<NativeGlyph> glyphs;
 };
 std::shared_ptr<const ShapedParagraph> font_paragraph_layout(void* font,std::string_view text,float width,bool wrap,bool formatted,bool force=false);
-std::shared_ptr<const FontParagraph> font_paragraph_geometry(void* font,std::string_view text,float width,bool wrap,bool formatted);
+std::shared_ptr<const FontParagraph> font_paragraph_geometry(void* font,std::string_view text,float width,bool wrap,bool formatted,const ParagraphViewport* viewport=nullptr);
 void prepare_font_pages(Hooks&);
 void prepare_font_draw(Hooks&);
 void register_font_pages(void* font);
