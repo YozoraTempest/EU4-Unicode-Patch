@@ -244,6 +244,10 @@ std::shared_ptr<const FontParagraph> font_paragraph_geometry(void* font,std::str
     const auto reserved=atlas.reserved_bytes;
     try {
         for(std::size_t index=0;index<plan.glyphs.size();++index) {
+            const auto& glyph=plan.glyphs[index];
+            if(glyph.metrics.width==0&&glyph.metrics.height==0&&glyph.metrics.advance==0&&glyph.alpha.empty()) {
+                result->glyphs[index]=glyph.metrics;continue;
+            }
             const auto record=pack(atlas,std::move(plan.glyphs[index]));
             result->glyphs[index]=record.glyph;locations[&result->glyphs[index]]={&atlas,record.page};
         }

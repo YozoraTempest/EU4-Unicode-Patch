@@ -80,6 +80,29 @@ int main() {
     auto exhausted_plan=plan_paragraph_transport(paragraph,{256,256},1);
     try {paragraph_token_start(exhausted_plan,0xffffd,0xffffe);} catch(const std::length_error&) {exhausted=true;}
     check(exhausted,"insufficient token range fails before packing");
+    const auto long_source=std::string("@")+std::string(900,'a')+u8" سلام";
+    auto long_content=std::make_shared<ParagraphText>(long_source,false,
+        ParagraphText::IconMeasure{},ParagraphText::ColorLookup{},ParagraphText::IconMeasure{},
+        [](std::uint32_t scalar){return scalar<128?6.f:-1.f;});
+    ShapedParagraph long_paragraph(long_source,16,32767,false,{},long_content);
+    const auto long_transport=plan_paragraph_transport(long_paragraph,{256,256},1);
+    std::size_t chunk=0,barriers=0,generated=0;
+    int long_width=0;
+    for(std::size_t offset=0;offset<long_transport.text.size();) {
+        const auto scalar=decode(std::string_view(long_transport.text).substr(offset));
+        chunk+=scalar.bytes;
+        check(chunk<256,"all native scratch chunks fit the actual buffer");
+        if(generated<long_transport.tokens.size()&&offset==long_transport.tokens[generated]) {
+            const auto& glyph=long_transport.glyphs[generated++];
+            long_width+=glyph.metrics.advance;
+            if(!glyph.metrics.height) {check(glyph.alpha.empty()&&!glyph.metrics.advance,"flush barriers have no ink or advance");++barriers;chunk=0;}
+        } else long_width+=6;
+        offset+=scalar.bytes;
+    }
+    check(barriers>=3&&std::count(long_transport.text.begin(),long_transport.text.end(),'@')==1,
+        "long plain commands flush without treating literal at-signs as flags");
+    check(long_width==static_cast<int>(plan_paragraph_line(long_paragraph,0,1).pixels),
+        "word-buffer barriers preserve the complete unwrapped native advance");
     const std::string mixed=u8"العربية 中 £adm£ हिन्दी @FRA";
     auto objects=std::make_shared<ParagraphText>(mixed,true,[](std::string_view){return 17.f;},
         ParagraphText::ColorLookup{},[](std::string_view){return 23.f;},

@@ -548,6 +548,11 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
         assign_paragraph_tokens(plan,geometry->first_token);
         geometry->draw_text=std::move(transport);
         for(std::size_t index=0;index<glyphs.size();++index) {
+            const auto& glyph=glyphs[index];
+            if(glyph.metrics.width==0&&glyph.metrics.height==0&&glyph.metrics.advance==0&&glyph.alpha.empty()) {
+                geometry->records[index]=glyph.metrics;
+                geometry->glyphs.push_back(&geometry->records[index]);continue;
+            }
             const auto packed=queue_glyph(atlas,std::move(glyphs[index]));
             auto& record=geometry->records[index];record=packed.metrics;
             glyph_pages[&record]={&atlas,packed.page};geometry->glyphs.push_back(&record);

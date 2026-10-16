@@ -23,6 +23,7 @@ public:
     const std::vector<TextStyleRange>& styles() const noexcept { return styles_; }
     const std::vector<std::string>& colors() const noexcept { return colors_; }
     const std::vector<ParagraphIcon>& icons() const noexcept { return icons_; }
+    bool formatted() const noexcept {return formatted_;}
     std::size_t source_byte(std::size_t visible_byte) const;
     std::size_t visible_byte(std::size_t source_byte) const;
 private:
@@ -31,6 +32,7 @@ private:
     std::vector<TextStyleRange> styles_;
     std::vector<std::string> colors_{""};
     std::vector<ParagraphIcon> icons_;
+    bool formatted_;
 };
 bool needs_native_paragraph_shaping(std::string_view source,bool formatted=true) noexcept;
 std::string paragraph_color_transition(std::string_view previous,std::string_view next);

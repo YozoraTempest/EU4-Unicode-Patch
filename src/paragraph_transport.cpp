@@ -53,7 +53,7 @@ ParagraphTransport plan_paragraph_transport(const ShapedParagraph& paragraph,Fon
     auto tiles=rasterize_paragraph(paragraph,page.width-2,page.height-2);
     for(std::size_t line=0;line<paragraph.lines().size();++line) {
         const auto& metrics=paragraph.lines()[line];
-        const auto first=result.glyphs.size(),line_start=result.text.size();
+        const auto first=result.glyphs.size();
         for(auto& tile:tiles) if(tile.line==line) {
             if(!std::isfinite(tile.x)||!std::isfinite(tile.y)||tile.x<-32768||tile.x>32767||
                tile.y-metrics.top<-32768||tile.y-metrics.top>32767)
@@ -70,19 +70,41 @@ ParagraphTransport plan_paragraph_transport(const ShapedParagraph& paragraph,Fon
             const auto placement=std::find_if(paragraph.objects().begin(),paragraph.objects().end(),
                 [&](const auto& object){return object.id==icon.id;});
             if(placement==paragraph.objects().end()) throw std::logic_error("Missing paragraph inline placement");
-            select_color(placement->style);advance_glyph(icon.padding);
+            select_color(placement->style);
+            if(icon.padding) advance_glyph(icon.padding);
             result.text+=content.icons().at(icon.id).command;
         }
-        if(!plan.icons.empty()||result.glyphs.size()==first) {select_color(0);advance_glyph(plan.finish);}
+        if(!plan.icons.empty()||result.glyphs.size()==first) {
+            if(plan.finish||result.glyphs.size()==first) {select_color(0);advance_glyph(plan.finish);}
+        }
         else result.glyphs.back().metrics.advance=static_cast<std::int16_t>(plan.finish);
         if(line+1==paragraph.lines().size()) {result.text+=paragraph_color_transition(color,"");color.clear();}
-        // Match the verified native 256-byte scratch word buffer.
-        if(result.text.size()-line_start>240||std::ceil(metrics.width)>32767)
+        if(std::ceil(metrics.width)>32767)
             throw std::length_error("Native shaped line exceeds transport capacity");
         if(line+1<paragraph.lines().size()) result.text+='\n';
     }
-    if(result.text.size()>32000) throw std::length_error("Native paragraph transport exceeds capacity");
-    return result;
+    // A zero-height native glyph submits the current scratch word without
+    // advancing the pen or adding a line. Break only at whole native commands;
+    // never let the game's 256-byte word buffer split a token or UTF-8 scalar.
+    ParagraphTransport bounded;
+    std::size_t token=0,chunk=0;
+    auto append=[&](ScalarGlyph glyph) {
+        if(bounded.glyphs.size()>=0xfffe) throw std::length_error("Native paragraph transport exceeds capacity");
+        bounded.tokens.push_back(bounded.text.size());
+        bounded.text+=encode(0xf0000+static_cast<std::uint32_t>(bounded.glyphs.size()));
+        bounded.glyphs.push_back(std::move(glyph));
+    };
+    for(std::size_t offset=0;offset<result.text.size();) {
+        const auto unit=native_text_unit(result.text,offset,content.formatted());
+        const auto bytes=unit.end-offset;
+        if(chunk+bytes>240) {append(ScalarGlyph{});chunk=0;}
+        if(token<result.tokens.size()&&result.tokens[token]==offset) append(std::move(result.glyphs[token++]));
+        else bounded.text.append(result.text,offset,bytes);
+        chunk=unit.kind==TextUnitKind::glyph&&unit.scalar=='\n'?0:chunk+bytes;
+        offset=unit.end;
+    }
+    if(bounded.text.size()>32000) throw std::length_error("Native paragraph transport exceeds capacity");
+    return bounded;
 }
 std::uint32_t paragraph_token_start(const ParagraphTransport& plan,std::uint32_t first,std::uint32_t end) {
     if(first<0xf0000||end>0xffffe||first>end||plan.tokens.size()!=plan.glyphs.size())
