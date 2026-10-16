@@ -2,6 +2,14 @@
 
 本接口表只适用于 `docs/linux.md` 中完整哈希匹配的 Steam ELF。地址是 ET_EXEC 虚拟地址，不复用 Windows RVA 或 MSVC 对象布局。`src/linux/profile.cpp` 保存各位置的 16 字节原始指令；插件校验完整文件后，在创建任何挂钩前复核全部位置。
 
+## 2026-10-17 收尾核对
+
+详细实测、固定产物和未测范围见 [四组功能验收](linux-four-feature-validation.md)。`AddNameArea` 的准确契约为 `bool(this, const int*, int, int, int, int, const SProvinceData*)`；其调用者在 `0x1b60a75` 用 AL 累计标签数量。包装器必须保留布尔结果，否则后续 resize 会裁掉已生成区域。复杂国家文字在 `0x1b5dcd9` 替换函数自有 scratch CString，`0x1b5dd9c` 跳过会破坏连写的插空格分支；微调省份在 `0x1b5fde2` 建立每条标签独立的借用作用域。
+
+CCulture 的脚本标识在 `+0x40`，显示译名在 `+0x60`。构造函数的 `0xf4e168` 与 `0xf4e254` 证明该区别；姓名配置使用标识。原生姓名来源仍由游戏选择，赋值/析构仍由游戏负责。Steam 在 `0x16c1e49/0x16c1e4f` 记录实际 SetRichPresence 参数哈希与返回值，只保留长度、UTF-8 有效性和摘要。
+
+外交 `OnFilterOpinions` 的两个查询规范化调用位于 `0x1a87fc4/0x1a87fcc`。它们必须与候选名称的 Unicode 规范化一致，不能先用原生 Latin-1 字节映射破坏输入。范围限定在已核对调用者；原生筛选条件、容器和加载顺序不变。
+
 ## 加载与符号边界
 
 可执行文件导出旧 OpenSSL 接口，包括 `EVP_DigestInit_ex`（`0x24589f0`）和 `CRYPTO_free`（`0x241d920`）。插件通过固定版本 PicoSHA2 在自有上下文中计算完整 SHA-256，避免动态链接不同 OpenSSL 版本的上下文 API。ELF 导出表只保留 `__libc_start_main`，实现与静态依赖采用局部符号；CI 使用导出冲突 EVP 函数的真实 ELF 夹具，核对完整文件哈希和拒绝未知 ELF 的行为。
