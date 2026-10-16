@@ -6,7 +6,9 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <mutex>
 #include <stdexcept>
+#include <unistd.h>
 
 namespace eu4unicode::linux_native {
 namespace {
@@ -17,10 +19,12 @@ struct Affinity {
     std::uint16_t row=0,column=0;
     bool trailing=false;
 };
-thread_local Affinity affinity;
+std::mutex affinity_mutex;
+Affinity affinity;
 SafetyHookInline *caret_hook=nullptr,*anchor_hook=nullptr,*string_caret_hook=nullptr;
 SafetyHookInline *input_hook=nullptr,*mouse_hook=nullptr;
 std::atomic<std::uint64_t> hits{0},moves{0},carets{0},anchors{0};
+std::atomic<unsigned> hit_caret_logs{0};
 
 template<class T> T member(const void* object,std::size_t offset) {
     T value;std::memcpy(&value,static_cast<const char*>(object)+offset,sizeof(T));return value;
@@ -60,12 +64,14 @@ float scale(void* buffer) {
     return result;
 }
 bool trailing(void* buffer,std::uint16_t row,std::uint16_t column) {
+    const std::lock_guard lock(affinity_mutex);
     return affinity.buffer==buffer&&affinity.row==row&&affinity.column==column&&
         affinity.document==document(buffer)&&affinity.trailing;
 }
 void remember(void* buffer,std::uint16_t row,std::uint16_t column,bool value) {
     // Build the snapshot before modifying any native cursor field.
     Affinity next{buffer,std::string(document(buffer)),row,column,value};
+    const std::lock_guard lock(affinity_mutex);
     affinity=std::move(next);
 }
 void rejected(const char* operation) noexcept {
@@ -75,12 +81,9 @@ void rejected(const char* operation) noexcept {
 std::uint32_t position(void* buffer,std::uint32_t native,std::string_view text,bool anchor) {
     const auto row=member<std::uint16_t>(buffer,anchor?0x94:0x56);
     const auto column=member<std::uint16_t>(buffer,anchor?0x92:0x54);
-    if(column>text.size()) return native;
-    const auto paragraph=layout(buffer,text);
-    if(!paragraph) return native;
-    const auto caret=paragraph->caret(column,!anchor&&trailing(buffer,row,column));
-    const auto font=member<void*>(buffer,0x98);
-    const auto x=std::round(caret.x*scale(buffer))+member<int>(font,0x30)+(anchor?3:0);
+    const auto computed=editor_layout_x(buffer,text,anchor);
+    if(!computed) return native;
+    const auto x=*computed;
     if(!std::isfinite(x)||x>UINT16_MAX) throw std::out_of_range("Editor cursor exceeds native pixel range");
     // Keep the native vertical row/padding contract and update its pixel cache.
     const auto result=(native&0xffff0000u)|static_cast<std::uint16_t>(std::max(0.f,x));
@@ -89,6 +92,9 @@ std::uint32_t position(void* buffer,std::uint32_t native,std::string_view text,b
     const auto count=counter.fetch_add(1)+1;
     if(count<=4) log("Linux shaped editor %s row=%u column=%u x=%u trailing=%d",
         anchor?"anchor":"caret",row,column,result&0xffffu,!anchor&&trailing(buffer,row,column));
+    if(!anchor&&hits.load()&&hit_caret_logs.fetch_add(1)<16)
+        log("Linux shaped editor hit-caret column=%u x=%u trailing=%d tid=%ld",column,result&0xffffu,
+            trailing(buffer,row,column),static_cast<long>(gettid()));
     return result;
 }
 std::uint32_t pixels(void* buffer,bool anchor) {
@@ -159,7 +165,18 @@ EditorLayoutScope::EditorLayoutScope(void* editor) noexcept:previous_(active_buf
 }
 EditorLayoutScope::~EditorLayoutScope() {active_buffer=previous_;}
 void forget_editor_layout(void* editor) noexcept {
+    const std::lock_guard lock(affinity_mutex);
     if(affinity.buffer==static_cast<char*>(editor)+0xc8) affinity={};
+}
+std::optional<float> editor_layout_x(void* buffer,std::string_view text,bool anchor) {
+    if(!eligible(buffer)) return {};
+    const auto row=member<std::uint16_t>(buffer,anchor?0x94:0x56);
+    const auto column=member<std::uint16_t>(buffer,anchor?0x92:0x54);
+    if(column>text.size()) return {};
+    const auto paragraph=layout(buffer,text);
+    if(!paragraph) return {};
+    const auto caret=paragraph->caret(column,!anchor&&trailing(buffer,row,column));
+    return std::round(caret.x*scale(buffer))+member<int>(member<void*>(buffer,0x98),0x30)+(anchor?3:0);
 }
 bool editor_layout_hit(void* buffer,const String* source,const int* point) {
     if(!eligible(buffer)||point[0]<0||point[1]<0) return false;
@@ -172,7 +189,8 @@ bool editor_layout_hit(void* buffer,const String* source,const int* point) {
     const std::array<std::uint16_t,2> point_in_text{column,0};
     std::memcpy(static_cast<char*>(buffer)+0x54,point_in_text.data(),sizeof(point_in_text));
     const auto count=hits.fetch_add(1)+1;
-    if(count<=8) log("Linux shaped editor hit x=%d column=%u trailing=%d",point[0],column,hit.trailing);
+    if(count<=8) log("Linux shaped editor hit x=%d column=%u trailing=%d tid=%ld",point[0],column,hit.trailing,
+        static_cast<long>(gettid()));
     return true;
 }
 void prepare_editor_layout(Hooks& hooks) {

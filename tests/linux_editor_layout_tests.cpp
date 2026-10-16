@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <thread>
 
 namespace {
 using namespace eu4unicode;
@@ -67,6 +68,16 @@ int main() {
             check(editor_layout_hit(editor.buffer(),&source,point),"complex hit uses production geometry adapter");
             check(editor.column()==expected.byte_offset,"native column follows visual hit at fractional font scale");
             check(std::binary_search(boundaries.begin(),boundaries.end(),editor.column()),"native byte offset is a complete grapheme boundary");
+            float cross_thread_x=-1;
+            std::thread refresh([&] {
+                EditorLayoutScope update(editor.data());
+                const auto caret=editor_layout_x(editor.buffer(),editor.text);
+                check(caret.has_value(),"native refresh has a shaped caret position");
+                cross_thread_x=*caret;
+            });
+            refresh.join();
+            check(std::abs(cross_thread_x-std::round(paragraph->caret(expected.byte_offset,expected.trailing).x*1.5f))<.1f,
+                "mouse affinity survives a native refresh on another thread");
         }
         const auto column=editor.column();
         const int negative[2]={-1,0};
@@ -89,5 +100,11 @@ int main() {
     check(!editor_layout_hit(editor.buffer(),&source,origin),"scope destruction drops the borrowed native pointer");
     check(source.view()==editor.text,"geometry never modifies the logical source string");
     forget_editor_layout(editor.data());
+    {
+        EditorLayoutScope scope(editor.data());
+        const auto paragraph=font_paragraph_layout(nullptr,editor.text,32767,false,false,false);
+        check(std::abs(*editor_layout_x(editor.buffer(),editor.text)-std::round(paragraph->caret(editor.column()).x*1.5f))<.1f,
+            "destroyed editor affinity is not reused");
+    }
     std::cout<<"Linux editor geometry scope and visual hit checks passed\n";
 }
