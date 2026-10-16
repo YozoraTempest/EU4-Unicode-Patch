@@ -58,6 +58,12 @@ SDL 事件入口为 `0x1ff50b0`，文本分支为 `0x1ff52d7`。原生分支只�
 
 SDL 提交不等于 IME 预编辑。候选窗、组合态定位、鼠标命中精度、拼音搜索和动态字体排版需要独立验证或适配，不能由上述 ABI 推断支持。
 
+独立 `ime.cpp` 接入维护中的 SDL2 ABI 的 `SDL_TEXTEDITING` / `SDL_TEXTEDITING_EXT`，预编辑只写入 `CEditBox::UpdateEditSprite` 在 `0x20669ff` 持有的自有绘制暂存串，真实文档、搜索查询和保存数据不接收未提交文字。扩展事件的字符串由同一 SDL ABI 释放。焦点切换、取消和提交清理组合态，结束输入后恢复原字符事件订阅。
+
+候选区域需要实际屏幕位置。`GetBaseCursorPosition` 只包含父容器中的局部位置，不能作为弹窗内编辑器的最终坐标。原生光标精灵的虚表 `+0x178` 为 `C2dObject::GetScreenPosition`（基类实现 `0x2097208`），返回 XMM0 低64位的两个 float，包含父级变换与对齐。候选位置使用该结果，再沿用原生 `CGraphics::Convert2dCoordinateToScreen`（`0x207c56c`）转换。
+
+`CTextBuffer` 虚表 `+0x1d0`（目标 `0x20d53cc`）返回缓存的光标像素位置，会根据当前行列复用结果，不能用于测量样例字符或预编辑前缀。候选区域高度直接调用当前字体虚表 `+0x70` 的行高方法，前缀宽度使用 `+0x68` 的字符串宽度方法；目标 bitmap 行高实现为 `0x20541d4`，保留字体缩放。SDL/XIM 的 start/length 可能表示高亮范围而非独立插入光标，不能仅凭 start 为0 宣称内部光标移动失败或通过。预编辑下划线、选区及完整命中仍待完善。
+
 ## 多人游戏名称
 
 `PdxSteamGetUserName`（`0x2391b99`）和 `CSteamMatchmakingContext::GetLocalUserName`（`0x2218700`）返回原始 UTF-8。`CFrontendMultiplayerView::Show` 复制名称后，在 `0x1c6e747` 调用 `CString::RemoveControllerCharacters`，在 `0x1c6e751` 调用 `RemoveSpecialCharacters`。前者把单字节 `0xA7` 改为 `s`，会破坏包含该续字节的 Unicode 字符；后者逐字节执行 Latin-1 转写，会破坏完整 UTF-8 名称。

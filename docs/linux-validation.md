@@ -120,3 +120,15 @@ CI **38809455419** 对功能树 `2ac7be0f7bfeb84b3a574d61887565b7ac193d88` 的 W
 测试描述符、启用列表、本地化和字库哈希与修复前的 `font-trace-cfb11fe` 一致。最终记录：7 个动态字形、3 次上传、492 个字体批次，其中152 个为原生索引地图批次；新行长入口执行3 次。无上述错误碎片请求，也没有字体捕获、上传、绘制、绑定、释放或线程边界失败日志。本地化253546 条、拒绝0 条，脚本 BOM5756 次。运行1503.44 秒，正常退出0；默认 userdir 的内容哈希和 mtime 未变。证据为本机 `LATIN1-AND-MAP-QUAD-VALIDATION.md`、`text-row-native-result.json`、`text-row-native-comparison.png`、`text-row-map-gpu-after.png` 及对应原生测试目录。
 
 同一轮查找窗口收到完整 `beijing`，证明 softpipe 的输入延迟不是事件丢失。它能找到北京，但精确模式还错误收进容错候选贝宁。该独立问题由后续搜索分层修正处理；不能把这次发现记录成完整搜索矩阵通过。复杂段落 shaping/bidi、IME 下划线及选区、完整搜索矩阵、真实生成姓名及 Steam 载荷、生命周期压力仍未完成，发布目标保持进行中。
+
+## 搜索分层与 IME 候选位置补测
+
+`a42f16d` 修复原生查找窗口的分层语义：两个 Find 调用点只接收直接 Unicode/普通拼音匹配，容错拼音进入后续原生距离分支，外交的独立过滤策略保持原样。CI38849204167 通过 Windows26/Arch14。真实运行 `search-ime-native-a42f16d`、PID13133，SO SHA256 `914f9825fef80e2c9dc3d7dcd65e08125b631f063a8a7db03deb18b0e739b0bd` 验证了：勾选精确时 beijing 仅保留北京；不勾选时北京排在容错贝宁之前；flx 找到法兰西国家；Fcitx 提交的北京也正确查询。bj 的多个首字母候选已有画面，但该图不证明北京在列表中的具体位置。运行1703.46 秒，正常退出0，默认 userdir 内容和 mtime 未变。
+
+同一轮首次证明行内预编辑进入真实画面：未提交 bei jing 时原生文档为空，Space 后得到北京、字节列6。候选条却偏到弹窗左上方。`babd836` 使用原生光标精灵屏幕位置消除父级变换偏移；其首轮画面仍覆盖输入行，失败记录保留。后续反汇编确认 CTextBuffer 虚表1d0 返回缓存光标位置，不能测量 M 或预编辑前缀。
+
+`30a02fc` 改用原生字体的字符串宽度和行高。CI **38854694127** 通过 Windows26/Arch14。真实运行 `ime-metrics-native-30a02fc`、PID13833，映射 SO SHA256 `a4c0d046206183b52788eb61051f9feb50d56a0a75f85c796d092fabdf8d8b86`，验证候选条位于输入框下方、预编辑可见且文档为空；Escape 清理预编辑但保持输入框焦点和空文档；重新组合并提交后得到两个完整汉字。运行1667.29 秒，正常退出0，默认 userdir 内容和 mtime 未变。172 处 profile 指令均与目标 ELF 完整核对一致。
+
+此轮使用真实 X11/Fcitx 键盘输入及只读原生缓冲快照，没有注入事件或调用运行中的游戏对象。候选位置视觉通过限定在已测查找弹窗、GUI scale1.0。XIM 反选反馈可能令 SDL start/length 表示高亮范围，不能将 start0 或一次 Left 当作内部插入光标正确的证明；预编辑下划线、选区及更多控件/缩放仍待完成。
+
+证据为 `artifacts/linux-four-features-2026-10-15/SEARCH-AND-IME-VALIDATION.md`、`search-ime-native-result.json`、`ime-font-metrics-native-result.json`、原生反汇编、查询快照及对应截图。当前测试结束后已恢复原来的空 Steam LaunchOptions，保留其他当前配置字节，并停止专用离线 Steam 服务，见 `text-row-search-ime-cleanup.json`。完整繁体/混合/英文/外交搜索矩阵、复杂 shaping/bidi、姓名与 Steam 载荷及生命周期压力仍未完成；Linux 发布目标保持进行中。
