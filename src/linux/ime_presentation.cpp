@@ -7,16 +7,19 @@
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <vector>
 
 namespace eu4unicode::linux_native {
 namespace {
 std::mutex mutex;
 std::shared_ptr<const ImePresentation> presentation;
 std::atomic<std::uint64_t> underlines=0,selections=0;
+std::atomic<std::uint64_t> state_checks=0,state_mismatches=0;
 // The verified engine already uses compatibility-profile immediate drawing in
 // GfxDraw2dLines. Decorations own no texture, native sprite or deferred buffer.
 struct Gl {
     void(*get)(unsigned,int*);
+    void(*get_float)(unsigned,float*);
     void(*push_attrib)(unsigned);
     void(*pop_attrib)();
     void(*matrix_mode)(unsigned);
@@ -39,6 +42,32 @@ template<class T> void resolve(T& function,const char* name) {
     function=reinterpret_cast<T>(dlsym(RTLD_DEFAULT,name));
     if(!function) throw std::runtime_error(std::string("Linux IME GL API unavailable: ")+name);
 }
+struct State {
+    std::array<int,28> integers{};
+    std::array<float,36> floats{};
+    std::vector<int> texture_enables;
+    State() {
+        constexpr std::array<unsigned,16> names{0x8b8d,0x0ba0,0x84e0,0x0be2,
+            0x0b71,0x0b44,0x0b50,0x0bc0,0x0b60,0x0bf2,0x0c11,0x0b90,
+            0x80c9,0x80c8,0x80cb,0x80ca};
+        for(std::size_t i=0;i<names.size();++i) gl.get(names[i],&integers[i]);
+        gl.get(0x0ba2,integers.data()+16);gl.get(0x0c10,integers.data()+20);gl.get(0x0c23,integers.data()+24);
+        gl.get_float(0x0ba6,floats.data());gl.get_float(0x0ba7,floats.data()+16);gl.get_float(0x0b00,floats.data()+32);
+        int units=0;gl.get(0x84e2,&units);
+        if(units<1||units>32) throw std::runtime_error("Unexpected native GL texture-unit count");
+        texture_enables.resize(units*4);
+        for(int unit=0;unit<units;++unit) {
+            gl.active_texture(0x84c0+unit);
+            const std::array<unsigned,4> targets{0x0de0,0x0de1,0x806f,0x8513};
+            for(std::size_t i=0;i<targets.size();++i) gl.get(targets[i],&texture_enables[unit*4+i]);
+        }
+        gl.active_texture(integers[2]);
+    }
+    bool same(const State& other) const noexcept {
+        return integers==other.integers&&texture_enables==other.texture_enables&&
+            !std::memcmp(floats.data(),other.floats.data(),sizeof(floats));
+    }
+};
 struct Paint {
     int program=0,mode=0,active=0;
     explicit Paint(const std::array<int,4>& viewport) {
@@ -90,17 +119,29 @@ void paint(void* sprite,std::size_t text_offset,bool background) noexcept {
             clip[2]=std::max(0,right-clip[0]);clip[3]=std::max(0,top-clip[1]);
         }
         if(!clip[2]||!clip[3]) return;
-        Paint scope(viewport);
-        gl.enable(0x0c11);gl.scissor(clip[0],clip[1],clip[2],clip[3]);
-        const auto left=current->x,top=current->y;
-        if(background) {
-            if(current->selection_end>current->selection_begin) {
-                rectangle(left+current->selection_begin,top,left+current->selection_end,
-                    top+current->height,{0.22f,0.42f,0.68f,0.65f});++selections;
+        // Verify restoration on the first real native draws. This checks the
+        // live program, matrices, color, clips, blend factors and every legacy
+        // texture unit, instead of treating a surviving UI as sufficient proof.
+        const bool checking=state_checks.load(std::memory_order_relaxed)<32;
+        const auto before=checking?std::make_unique<State>():nullptr;
+        {
+            Paint scope(viewport);
+            gl.enable(0x0c11);gl.scissor(clip[0],clip[1],clip[2],clip[3]);
+            const auto left=current->x,top=current->y;
+            if(background) {
+                if(current->selection_end>current->selection_begin) {
+                    rectangle(left+current->selection_begin,top,left+current->selection_end,
+                        top+current->height,{0.22f,0.42f,0.68f,0.65f});++selections;
+                }
+            } else if(current->underline_end>current->underline_begin) {
+                rectangle(left+current->underline_begin,top+current->height-current->thickness,
+                    left+current->underline_end,top+current->height,{1,1,1,1});++underlines;
             }
-        } else if(current->underline_end>current->underline_begin) {
-            rectangle(left+current->underline_begin,top+current->height-current->thickness,
-                left+current->underline_end,top+current->height,{1,1,1,1});++underlines;
+        }
+        if(checking) {
+            const State after;++state_checks;
+            if(!before->same(after)&&state_mismatches.fetch_add(1)==0)
+                log("Linux IME decoration GL state restoration mismatch");
         }
     } catch(...) {
         static std::atomic<bool> logged=false;
@@ -121,6 +162,7 @@ void clear_ime_presentation() noexcept {
 }
 void prepare_ime_presentation(Hooks& hooks) {
     resolve(gl.get,"glGetIntegerv");resolve(gl.push_attrib,"glPushAttrib");resolve(gl.pop_attrib,"glPopAttrib");
+    resolve(gl.get_float,"glGetFloatv");
     resolve(gl.matrix_mode,"glMatrixMode");resolve(gl.push_matrix,"glPushMatrix");resolve(gl.pop_matrix,"glPopMatrix");
     resolve(gl.load_identity,"glLoadIdentity");resolve(gl.ortho,"glOrtho");resolve(gl.use_program,"glUseProgram");
     resolve(gl.active_texture,"glActiveTexture");resolve(gl.disable,"glDisable");resolve(gl.enable,"glEnable");
@@ -132,7 +174,8 @@ void prepare_ime_presentation(Hooks& hooks) {
     hooks.add_mid(0x20d9ad4,texture_before);hooks.add_mid(0x20d9ae6,texture_after);
 }
 void report_ime_presentation_counts() noexcept {
-    log("Linux IME decorations underlines=%llu selections=%llu",
-        static_cast<unsigned long long>(underlines.load()),static_cast<unsigned long long>(selections.load()));
+    log("Linux IME decorations underlines=%llu selections=%llu state-checks=%llu state-mismatches=%llu",
+        static_cast<unsigned long long>(underlines.load()),static_cast<unsigned long long>(selections.load()),
+        static_cast<unsigned long long>(state_checks.load()),static_cast<unsigned long long>(state_mismatches.load()));
 }
 }
