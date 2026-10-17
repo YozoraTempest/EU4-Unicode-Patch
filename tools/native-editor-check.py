@@ -10,6 +10,7 @@ def verify(base, fn, hook, engine_string, font_source, callbacks, crt, address_h
     for rva, name, original in (
         (0x1537210, 'editor_width_fit', 'original_editor_width_fit'),
         (0x1539820, 'editor_word_break', 'original_editor_word_break'),
+        (0x1539620, 'construct_editor_space_row', 'original_editor_space_row'),
         (0x1536060, 'editor_caret_position', 'original_editor_caret'),
         (0x1535eb0, 'editor_anchor_position', 'original_editor_anchor'),
         (0x153b170, 'editor_selection', 'original_editor_selection'),
