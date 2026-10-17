@@ -2,7 +2,12 @@
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
 #include "formatted_paragraph.hpp"
+#ifdef _WIN32
 #include <icu.h>
+#else
+#include <unicode/uchar.h>
+#include <unicode/uscript.h>
+#endif
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -17,6 +22,9 @@ bool needs_paragraph_shaping(std::string_view text) noexcept {
         if(scalar.value<0x80||contextual) { text.remove_prefix(scalar.bytes);continue; }
         const auto cp=static_cast<UChar32>(scalar.value);
         const auto category=u_charType(cp);
+        // Private-use bitmap glyphs have no contextual Unicode shaping rules.
+        // Preserve them as native inline objects when another run is shaped.
+        if(category==U_PRIVATE_USE_CHAR) {text.remove_prefix(scalar.bytes);continue;}
         const auto direction=u_charDirection(cp);
         contextual=contextual||category==U_NON_SPACING_MARK||category==U_COMBINING_SPACING_MARK||
             category==U_ENCLOSING_MARK||direction==U_RIGHT_TO_LEFT||direction==U_RIGHT_TO_LEFT_ARABIC||

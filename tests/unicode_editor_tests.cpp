@@ -88,6 +88,16 @@ int main() {
         check(nearest_grapheme_boundary(measured,pixel,measure)==edges[nearest],"pixel hits match the closest complete edge, including ties");
     }
     check(fitting_grapheme_prefix("",10,measure)==0&&nearest_grapheme_boundary("",10,measure)==0,"empty measured editor has one edge");
+    {
+        const std::vector<std::size_t> formatted_edges{0,3,6,9}; // section-color, Han glyph, reset
+        const auto formatted_width=[](std::size_t end) {return end<6?0:12;};
+        check(nearest_text_boundary(formatted_edges,5,formatted_width)==3,
+            "a formatted hit before a Han glyph retains the complete color introducer");
+        check(nearest_text_boundary(formatted_edges,7,formatted_width)==6,
+            "a formatted hit after a Han glyph never splits its UTF-8 or the following reset");
+        check(nearest_text_boundary(formatted_edges,6,formatted_width)==3,"formatted midpoint ties choose the left complete edge");
+        check(nearest_text_boundary({0},50,formatted_width)==0,"empty formatted hits have a single edge");
+    }
     const std::string document=u8"中文 العربية\r\nहिन्दी English\n𠮷e\u0301";
     const std::vector<std::string> native_rows={u8"中文 \n",u8"العربية\r\n",u8"हिन्दी \n","English\n",u8"𠮷e\u0301"};
     std::vector<EditRowInput> input;
@@ -151,5 +161,37 @@ int main() {
     check(rejected,"incomplete IME surrogate input cannot enter presentation state");
     rejected=false;try { composition_preview(chinese,composed,6); } catch(const std::length_error&) { rejected=true; }
     check(rejected,"over-budget preedit leaves committed text intact");
-    std::cout<<"UTF-8 editor interior-byte, selection, commit and budget checks passed.\n";
+    {
+        const std::string scrolling=u8"AB中e\u0301𠮷Z";
+        const auto viewport_edges=grapheme_boundaries(scrolling);
+        const std::vector<int> advances{0,4,11,23,29,42,47};
+        const auto measure_range=[&](std::size_t begin,std::size_t end) {
+            const auto left=std::lower_bound(viewport_edges.begin(),viewport_edges.end(),begin)-viewport_edges.begin();
+            const auto right=std::lower_bound(viewport_edges.begin(),viewport_edges.end(),end)-viewport_edges.begin();
+            check(viewport_edges.at(left)==begin&&viewport_edges.at(right)==end,"viewport width probes preserve whole graphemes");
+            // Removing A also removes a native AB pair adjustment.
+            return advances.at(right)-advances.at(left)+(begin==1&&end>=2?2:0);
+        };
+        for(const auto focus:viewport_edges) for(int pixels=0;pixels<=55;++pixels) {
+            const auto viewport=text_viewport(viewport_edges,focus,pixels,measure_range);
+            check(viewport.begin<=focus&&focus<=viewport.end,"active composition edge stays inside its viewport");
+            check(std::binary_search(viewport_edges.begin(),viewport_edges.end(),viewport.begin)&&
+                std::binary_search(viewport_edges.begin(),viewport_edges.end(),viewport.end),"scrolling never splits combining or supplementary graphemes");
+            check(valid_utf8(scrolling.substr(viewport.begin,viewport.end-viewport.begin)),"scrolled display remains complete UTF-8");
+            if(measure_range(viewport.begin,viewport.end)>pixels)
+                check(std::upper_bound(viewport_edges.begin(),viewport_edges.end(),viewport.begin)==
+                    std::lower_bound(viewport_edges.begin(),viewport_edges.end(),viewport.end),"only a single oversized grapheme may require native clipping");
+            else if(viewport.begin)
+                check(measure_range(*std::prev(std::lower_bound(viewport_edges.begin(),viewport_edges.end(),viewport.begin)),focus)>pixels,
+                    "viewport retains as much leading context as fits at the active edge");
+        }
+        const auto tail=text_viewport(viewport_edges,scrolling.size(),24,measure_range);
+        check(scrolling.substr(tail.begin,tail.end-tail.begin)==u8"e\u0301𠮷Z","long composition exposes its final active segment");
+        const auto full=text_viewport(viewport_edges,scrolling.size(),100,measure_range);
+        check(full.begin==0&&full.end==scrolling.size(),"a fitting composition keeps its complete source");
+        check(text_viewport({0},0,5,measure_range).end==0,"empty viewport has one edge");
+        rejected=false;try { text_viewport(viewport_edges,3,20,measure_range); } catch(const std::invalid_argument&) { rejected=true; }
+        check(rejected,"viewport rejects an active edge inside a UTF-8 scalar");
+    }
+    std::cout<<"UTF-8 editor interior-byte, selection, commit, viewport and budget checks passed.\n";
 }

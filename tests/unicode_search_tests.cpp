@@ -54,6 +54,9 @@ int main() {
         eu4unicode::display_search_distance(u8"长安","ca")==1&&
         eu4unicode::display_search_distance(u8"长安","paris")==-1,"province ranking contract");
     check(eu4unicode::display_search_distance(u8"法兰西","falanix")==2,"tolerant pinyin has a distinct match quality");
+    check(eu4unicode::display_search_distance(u8"北京","beijing")==1&&
+        eu4unicode::display_search_distance(u8"贝宁","beijing")==2,
+        "native direct-match and tolerant-distance tiers must distinguish Beijing from Benin");
     eu4unicode::set_search_options({false,false});
     check(!country_search_contains(u8"重庆","congqing")&&!country_search_contains(u8"南京","lanjing"),"phonetic ambiguity defaults off");
     eu4unicode::set_search_options({false,true});

@@ -163,6 +163,8 @@ const ImageProfile& eu4_1375_profile() {
             {0x1536340,"448b45d0ff50603906440f4ff3488b55","native text/font code"},
             {0x1537210,"48895c240848896c2410488974241848897c2420","editor_width_fit"},
             {0x1539820,"48895c241848896c242057415441574883ec204c","editor_word_break"},
+            {0x1539620,"48895c2408488974241048897c241855488d6c24a9","native space-wrap row constructor"},
+            {0x1539669,"448b4310418d48ff","native space-wrap final byte replacement"},
             {0x1539240,"40534883ec40488bd9c6819000000000e83bb21f00","paste_editor_clipboard"},
             {0x1534250,"48895c242055565741564157488bec4883ec40","paint_editor_ime_rect"},
             {0x1534bb0,"48895c24184889742420555741544156415748","draw_editor_text"},

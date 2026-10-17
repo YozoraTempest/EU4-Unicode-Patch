@@ -1,6 +1,13 @@
 #include "unicode_services.hpp"
 #include "unicode_text.hpp"
+#ifdef _WIN32
 #include <icu.h>
+#else
+#include <unicode/ubrk.h>
+#include <unicode/unorm2.h>
+#include <unicode/ustring.h>
+#include <unicode/utrans.h>
+#endif
 #include <algorithm>
 #include <limits>
 #include <memory>

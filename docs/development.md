@@ -2,6 +2,8 @@
 
 补丁针对已校验的 EU4 1.37.5.0 x64。文本存储为标准 UTF-8，引擎字符串与光标位置使用字节偏移。
 
+Windows 与 Linux 的核心源码和构建定义共用，平台依赖及原生入口分别配置，见[共用结构与支持状态](platforms.md)。本文的 RVA、DirectWrite、D3D9 与 IMM 接入描述属于现有 Windows 实现。
+
 脚本支持 UTF-8 with BOM：解析器初始化时跳过输入开头的 BOM，保留文件原始字节和正文中的 `U+FEFF`。ParaTranz 导出的脚本无需移除 BOM。
 
 ## 模块

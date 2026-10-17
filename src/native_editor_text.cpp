@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 namespace eu4unicode {
+NativeSpaceRow original_editor_space_row=nullptr;
 namespace {
 using Assign=EngineString*(*)(EngineString*,const char*,std::uint64_t);
 using Destroy=void(*)(EngineString*);
@@ -23,6 +24,25 @@ void configure_native_editor_text(void* image) {
     const auto base=static_cast<std::byte*>(image);
     assign=reinterpret_cast<Assign>(base+0x95110);destroy=reinterpret_cast<Destroy>(base+0x95660);
     move=reinterpret_cast<Move>(base+0x1536f50);
+}
+EngineString* construct_editor_space_row(EngineString* row,const EngineString* source) {
+    // The native space-wrap constructor replaces its final byte with LF and
+    // marks it as consumed source. A decorated space needs a synthetic LF so
+    // the complete source grapheme and the native row/source mapping survive.
+    std::string replacement;
+    if(source->size<=32000) {
+        const std::string_view text(source->data(),static_cast<std::size_t>(source->size));
+        if(!text.empty()&&valid_utf8(text)) {
+            const auto boundaries=grapheme_boundaries(text);
+            const auto begin=boundaries[boundaries.size()-2];
+            if(text[begin]==' '&&text.size()-begin>1) {replacement=text;replacement+='\n';}
+        }
+    }
+    if(replacement.empty()) return original_editor_space_row(row,source);
+    *row=EngineString{};row->capacity=15;
+    assign(row,replacement.data(),replacement.size());
+    reinterpret_cast<std::byte*>(row)[32]=std::byte{1};
+    return row;
 }
 NativeEditView native_edit_view(void* widget) {
     const auto base=static_cast<const std::byte*>(widget);

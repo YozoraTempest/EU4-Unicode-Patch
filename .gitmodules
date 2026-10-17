@@ -4,3 +4,9 @@
 [submodule "vendor/minhook"]
 	path = vendor/minhook
 	url = https://github.com/TsudaKageyu/minhook.git
+[submodule "vendor/safetyhook"]
+	path = vendor/safetyhook
+	url = https://github.com/cursey/safetyhook.git
+[submodule "vendor/picosha2"]
+	path = vendor/picosha2
+	url = https://github.com/okdshin/PicoSHA2.git

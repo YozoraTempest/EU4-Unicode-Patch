@@ -26,7 +26,7 @@ bool needs_native_paragraph_shaping(std::string_view source,bool formatted) noex
         return needs_paragraph_shaping(visible);
     } catch(...) { return false; }
 }
-ParagraphText::ParagraphText(std::string_view source,bool formatted,IconMeasure measure,ColorLookup lookup,IconMeasure flags,BitmapMeasure bitmap,IconMeasure symbols):source_(source) {
+ParagraphText::ParagraphText(std::string_view source,bool formatted,IconMeasure measure,ColorLookup lookup,IconMeasure flags,BitmapMeasure bitmap,IconMeasure symbols):source_(source),formatted_(formatted) {
     if(source.size()>32000) throw std::length_error("Formatted paragraph exceeds source capacity");
     struct Unit { std::size_t start,end;std::uint32_t style; };
     std::vector<Unit> units;

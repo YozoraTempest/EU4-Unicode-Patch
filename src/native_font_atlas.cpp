@@ -165,14 +165,20 @@ void release_paragraph_tokens(Atlas& atlas,std::uint32_t first,std::uint32_t cou
     }
     atlas.free_paragraph_tokens.emplace(first,count);
 }
-std::uint32_t allocate_paragraph_tokens(Atlas& atlas,std::uint32_t count) {
+std::uint32_t allocate_paragraph_tokens(Atlas& atlas,const ParagraphTransport& plan) {
+    const auto count=static_cast<std::uint32_t>(plan.glyphs.size());
     for(auto range=atlas.free_paragraph_tokens.begin();range!=atlas.free_paragraph_tokens.end();++range) if(range->second>=count) {
-        const auto first=range->first,remaining=range->second-count;atlas.free_paragraph_tokens.erase(range);
-        if(remaining) atlas.free_paragraph_tokens.emplace(first+count,remaining);
+        const auto first=paragraph_token_start(plan,range->first),end=range->first+range->second;
+        if(first>end||count>end-first) continue;
+        const auto begin=range->first;atlas.free_paragraph_tokens.erase(range);
+        if(begin<first) atlas.free_paragraph_tokens.emplace(begin,first-begin);
+        if(first+count<end) atlas.free_paragraph_tokens.emplace(first+count,end-first-count);
         return first;
     }
-    if(count>0xffffe-atlas.next_paragraph_token) throw std::length_error("Native paragraph transport token budget exhausted");
-    const auto first=atlas.next_paragraph_token;atlas.next_paragraph_token+=count;return first;
+    const auto first=paragraph_token_start(plan,atlas.next_paragraph_token);
+    if(first>atlas.next_paragraph_token)
+        atlas.free_paragraph_tokens.emplace(atlas.next_paragraph_token,first-atlas.next_paragraph_token);
+    atlas.next_paragraph_token=first+count;return first;
 }
 void reserve_paragraph(Atlas& atlas,std::size_t bytes,const Atlas::Paragraph* keep=nullptr) {
     constexpr std::size_t budget=8ull*1024*1024;
@@ -246,53 +252,7 @@ Atlas::Paragraph& paragraph_layout(Atlas& atlas,void* font,std::string_view text
     atlas.paragraph_bytes+=estimate;
     return result;
 }
-std::vector<ScalarGlyph> map_cluster_glyphs(const ShapedParagraph& paragraph,int width,int height) {
-    if(paragraph.lines().size()!=1||!paragraph.objects().empty()) throw std::invalid_argument("Map labels require one plain line");
-    struct Cluster { GlyphBitmap bitmap;float pen,x,y; };
-    std::vector<Cluster> clusters;
-    std::size_t bytes=0;
-    for(const auto& run:paragraph.runs()) {
-        std::vector<float> positions(run.advances.size()+1);
-        for(std::size_t index=0;index<run.advances.size();++index) positions[index+1]=positions[index]+run.advances[index];
-        const bool rtl=(run.bidi_level&1)!=0;
-        for(const auto& cluster:run.clusters) {
-            const auto first=cluster.first_glyph,last=first+cluster.glyph_count;
-            GlyphRun slice{};
-            slice.font_family=run.font_family;slice.bidi_level=run.bidi_level;slice.em_size=run.em_size;
-            slice.baseline_y=run.baseline_y;slice.sideways=run.sideways;slice.face=run.face;
-            slice.measuring=run.measuring;slice.style=run.style;
-            slice.text_start=cluster.text_start;slice.text_length=cluster.text_length;
-            slice.glyphs.assign(run.glyphs.begin()+first,run.glyphs.begin()+last);
-            slice.advances.assign(run.advances.begin()+first,run.advances.begin()+last);
-            slice.offsets.assign(run.offsets.begin()+first,run.offsets.begin()+last);
-            slice.baseline_x=run.baseline_x+(rtl?-positions[first]:positions[first]);
-            auto bitmap=rasterize_glyph_run(slice);
-            if(bitmap.width>static_cast<unsigned>(width-2)||bitmap.height>static_cast<unsigned>(height-2))
-                throw std::length_error("Map cluster exceeds atlas page dimensions");
-            bytes+=bitmap.alpha.size();if(bytes>16ull*1024*1024) throw std::length_error("Map label raster exceeds CPU budget");
-            const auto x=std::floor(slice.baseline_x)+bitmap.left,y=std::floor(slice.baseline_y)+bitmap.top;
-            const auto pen=run.baseline_x+(rtl?-positions[last]:positions[first]);
-            if(!bitmap.width||!bitmap.height) { bitmap.width=bitmap.height=1;bitmap.alpha={0}; }
-            clusters.push_back({std::move(bitmap),pen,x,y});
-        }
-    }
-    std::stable_sort(clusters.begin(),clusters.end(),[](const auto& left,const auto& right){return left.pen<right.pen;});
-    std::vector<ScalarGlyph> result;result.reserve(clusters.size());
-    int pen=0;
-    for(std::size_t index=0;index<clusters.size();++index) {
-        auto& cluster=clusters[index];
-        const auto next=index+1<clusters.size()?std::round(clusters[index+1].pen):std::ceil(paragraph.metrics().width);
-        const auto advance=next-pen,x=std::round(cluster.x)-pen,y=std::round(cluster.y);
-        if(advance<-32768||advance>32767||x<-32768||x>32767||y<-32768||y>32767)
-            throw std::length_error("Map cluster geometry exceeds native capacity");
-        ScalarGlyph glyph{};glyph.metrics.width=static_cast<std::int16_t>(cluster.bitmap.width);
-        glyph.metrics.height=static_cast<std::int16_t>(cluster.bitmap.height);
-        glyph.metrics.x_offset=static_cast<std::int16_t>(x);glyph.metrics.y_offset=static_cast<std::int16_t>(y);
-        glyph.metrics.advance=static_cast<std::int16_t>(advance);glyph.alpha=std::move(cluster.bitmap.alpha);
-        result.push_back(std::move(glyph));pen+=static_cast<int>(advance);
-    }
-    return result;
-}
+
 void prepare_staging(Atlas& a,Page& page,IDirect3DTexture9* texture,bool initial) {
     ComPtr<IDirect3DDevice9> device;
     checked(texture->GetDevice(&device));
@@ -510,59 +470,20 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
     auto& entry=paragraph_layout(atlas,font,text,width,wrap,formatted);
     if(entry.geometry) return entry.geometry;
     // Validate the complete transport before consuming any stable atlas slots.
-    std::vector<ScalarGlyph> glyphs;
-    std::string transport;
-    std::string color;
-    const auto& content=entry.layout->content();
+    ParagraphTransport plan;
+    auto& glyphs=plan.glyphs;
+    auto& transport=plan.text;
     const auto scale=*reinterpret_cast<const float*>(static_cast<const std::byte*>(font)+0x968);
-    auto select_color=[&](std::uint32_t id) {
-        const auto& next=content.colors().at(id);
-        transport+=paragraph_color_transition(color,next);color=next;
-    };
     auto append_glyph=[&](ScalarGlyph glyph) {
         // Final invocation-local token values are assigned after cache eviction.
+        plan.tokens.push_back(transport.size());
         transport+=encode(0xf0000+static_cast<std::uint32_t>(glyphs.size()));
         glyphs.push_back(std::move(glyph));
     };
-    auto advance_glyph=[&](int advance) {
-        ScalarGlyph blank{};blank.metrics.width=blank.metrics.height=1;blank.alpha={0};
-        blank.metrics.advance=static_cast<std::int16_t>(advance);append_glyph(std::move(blank));
-    };
     if(atlas.map) {
-        for(auto& glyph:map_cluster_glyphs(*entry.layout,atlas.supplemental_size.width,atlas.supplemental_size.height)) append_glyph(std::move(glyph));
+        for(auto& glyph:map_cluster_glyphs(*entry.layout,atlas.supplemental_size)) append_glyph(std::move(glyph));
     } else {
-    auto tiles=rasterize_paragraph(*entry.layout,atlas.supplemental_size.width-2,atlas.supplemental_size.height-2);
-    for(std::size_t line=0;line<entry.layout->lines().size();++line) {
-        const auto& metrics=entry.layout->lines()[line];
-        const auto first=glyphs.size(),line_start=transport.size();
-        for(auto& tile:tiles) if(tile.line==line) {
-            if(tile.x<-32768||tile.x>32767||tile.y-metrics.top<-32768||tile.y-metrics.top>32767)
-                throw std::length_error("Native shaped glyph offset exceeds capacity");
-            ScalarGlyph glyph{};
-            glyph.metrics.width=static_cast<std::int16_t>(tile.bitmap.width);
-            glyph.metrics.height=static_cast<std::int16_t>(tile.bitmap.height);
-            glyph.metrics.x_offset=static_cast<std::int16_t>(tile.x);
-            glyph.metrics.y_offset=static_cast<std::int16_t>(tile.y-metrics.top);
-            glyph.alpha=std::move(tile.bitmap.alpha);select_color(tile.style);append_glyph(std::move(glyph));
-        }
-        const auto plan=plan_paragraph_line(*entry.layout,line,scale);
-        for(const auto& icon:plan.icons) {
-            const auto placement=std::find_if(entry.layout->objects().begin(),entry.layout->objects().end(),
-                [&](const auto& object){return object.id==icon.id;});
-            select_color(placement->style);advance_glyph(icon.padding);
-            transport+=content.icons().at(icon.id).command;
-        }
-        if(!plan.icons.empty()||glyphs.size()==first) { select_color(0);advance_glyph(plan.finish); }
-        else glyphs.back().metrics.advance=static_cast<std::int16_t>(plan.finish);
-        if(line+1==entry.layout->lines().size()) {
-            transport+=paragraph_color_transition(color,"");color.clear();
-        }
-        // The native scratch word buffer is 256 bytes. A shaped run is a draw
-        // unit, not an independently wrappable Unicode character.
-        if(transport.size()-line_start>240||std::ceil(metrics.width)>32767)
-            throw std::length_error("Native shaped line exceeds transport capacity");
-        if(line+1<entry.layout->lines().size()) transport+='\n';
-    }
+        plan=plan_paragraph_transport(*entry.layout,atlas.supplemental_size,scale);
     }
     if(transport.size()>32000||glyphs.size()>0xfffe)
         throw std::length_error("Native paragraph transport exceeds capacity");
@@ -576,18 +497,16 @@ std::shared_ptr<const NativeParagraph> font_paragraph_geometry(void* font,std::s
     std::vector<PagePosition> positions;positions.reserve(atlas.pages.size());
     for(const auto& page:atlas.pages) positions.push_back({page->x,page->y,page->row,page->pending.size()});
     const auto reserved_before=atlas.supplemental_reserved_bytes;
-    geometry->first_token=allocate_paragraph_tokens(atlas,static_cast<std::uint32_t>(glyphs.size()));
+    geometry->first_token=allocate_paragraph_tokens(atlas,plan);
     try {
-        for(std::size_t offset=0;offset<transport.size();) {
-            const auto unit=native_text_unit(transport,offset,formatted);
-            if(unit.kind==TextUnitKind::glyph&&unit.scalar>=0xf0000&&unit.scalar<0xf0000+glyphs.size()) {
-                const auto assigned=encode(geometry->first_token+unit.scalar-0xf0000);
-                std::copy(assigned.begin(),assigned.end(),transport.begin()+offset);
-            }
-            offset=unit.end;
-        }
+        assign_paragraph_tokens(plan,geometry->first_token);
         geometry->draw_text=std::move(transport);
         for(std::size_t index=0;index<glyphs.size();++index) {
+            const auto& glyph=glyphs[index];
+            if(glyph.metrics.width==0&&glyph.metrics.height==0&&glyph.metrics.advance==0&&glyph.alpha.empty()) {
+                geometry->records[index]=glyph.metrics;
+                geometry->glyphs.push_back(&geometry->records[index]);continue;
+            }
             const auto packed=queue_glyph(atlas,std::move(glyphs[index]));
             auto& record=geometry->records[index];record=packed.metrics;
             glyph_pages[&record]={&atlas,packed.page};geometry->glyphs.push_back(&record);

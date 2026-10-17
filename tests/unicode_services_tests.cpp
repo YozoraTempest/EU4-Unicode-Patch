@@ -6,7 +6,11 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#ifdef _WIN32
 #include <icu.h>
+#else
+#include <unicode/ubrk.h>
+#endif
 
 void check(bool value,const char* message) {
     if(!value) { std::cerr<<"FAIL: "<<message<<'\n'; std::exit(1); }

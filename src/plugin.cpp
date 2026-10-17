@@ -531,7 +531,12 @@ int editor_word_break(void* widget,const EngineString* text,int fit) {
     const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
     if(result<0||text->size>32000||!eu4unicode::valid_utf8(value)) return result;
     try {
-        return static_cast<int>(eu4unicode::grapheme_prefix(value,static_cast<std::size_t>(result)+1))-1;
+        // Native wrapping consumes the returned space as well. Include its
+        // entire grapheme: rounding a leading space plus combining marks down
+        // yields -1 and makes the row builder repeatedly consume zero bytes.
+        const auto boundaries=eu4unicode::grapheme_boundaries(value);
+        const auto end=std::lower_bound(boundaries.begin(),boundaries.end(),static_cast<std::size_t>(result)+1);
+        return static_cast<int>(*end)-1;
     } catch(...) { log("Unicode editor word boundary failed; word break excluded."); return -1; }
 }
 void editor_arrow(void* widget,bool right) {
@@ -1609,6 +1614,8 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_width_fit))!=MH_OK ||
            MH_CreateHook(image+0x1539820,reinterpret_cast<void*>(editor_word_break),
              reinterpret_cast<void**>(&original_editor_word_break))!=MH_OK ||
+           MH_CreateHook(image+0x1539620,reinterpret_cast<void*>(eu4unicode::construct_editor_space_row),
+             reinterpret_cast<void**>(&eu4unicode::original_editor_space_row))!=MH_OK ||
            MH_CreateHook(image+0x1539240,reinterpret_cast<void*>(paste_editor_clipboard),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x1534250,reinterpret_cast<void*>(paint_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_paint))!=MH_OK ||

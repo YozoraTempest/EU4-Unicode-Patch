@@ -2,6 +2,7 @@
 #include "engine_string.hpp"
 #include "glyph_registry.hpp"
 #include "shaped_paragraph.hpp"
+#include "paragraph_transport.hpp"
 
 namespace eu4unicode {
 struct NativeParagraph {
@@ -32,11 +33,4 @@ int measure_paragraph_height(void* font,const EngineString* source,int width,int
 void configure_paragraph_log(void(*log)(const char*)) noexcept;
 using NativeParagraphColor=bool(*)(void*,unsigned char,std::uint32_t*);
 extern NativeParagraphColor native_paragraph_color;
-struct NativeLineAdvance {
-    struct Icon { std::uint32_t id;int padding; };
-    std::vector<Icon> icons;
-    int finish;
-    float pixels;
-};
-NativeLineAdvance plan_paragraph_line(const ShapedParagraph& paragraph,std::size_t line,float scale);
 }

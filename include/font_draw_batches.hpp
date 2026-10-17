@@ -20,5 +20,7 @@ void check_font_page_budget(std::uint64_t supplemental_bytes,std::uint64_t initi
 void tag_font_vertices(MapFontVertex* vertices,std::size_t count,std::uint32_t page) noexcept;
 void tag_font_vertices(PopupFontVertex* vertices,std::size_t count,std::uint32_t page) noexcept;
 std::vector<FontDrawBatch> split_font_quads(std::vector<MapFontVertex>& vertices,const std::vector<FontPageSize>& pages);
+// Native Linux map geometry is two independent triangles per glyph.
+std::vector<FontDrawBatch> split_font_triangles(std::vector<MapFontVertex>& vertices,const std::vector<FontPageSize>& pages);
 std::vector<FontDrawBatch> split_popup_glyphs(std::vector<PopupFontVertex>& vertices,const std::vector<FontPageSize>& pages);
 }
