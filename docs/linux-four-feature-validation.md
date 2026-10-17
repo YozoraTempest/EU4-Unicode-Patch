@@ -59,9 +59,26 @@ d8d7cde7349f240f4284bb0adb0f99cc0309da342011665aff496aec0812b682
 
 最终仅结束本任务的游戏，退出码 0。专用 Steam 服务及输入桥已停止；默认用户目录内容和 mtime 完全一致，夹具源资源哈希一致。启动项清理保护曾拒绝覆盖，随后确认当前 EU4 启动选项已经为空，以只读核验保留当前 VDF 字节。
 
+## 最终 Windows 原生回归（2026-10-17）
+
+在同一 CI **38973692833** 生成的 `EU4UnicodePatch-1.37.5-v0.1.14.zip` 上，用当前 Windows Steam EU4 1.37.5（`release_1.37.5`，revision `835bfdf8ca24c291a1b3f1b5bc72d47e7df1ae18`）重新运行了 14 组真实原生登记和资源加载夹具。游戏 EXE SHA256 为 `9ad3efe1af169f40ee577f9dae5debbc87af6fb8b5450fb345ebf110dc4d771a`；本次实际映射的 `eu4_unicode_patch.dll` SHA256 为 `3e63ec7995d401419d544f2279b6221cd37e48c69b2d5d546e95644654b3e9a1`，`VERSION.dll` 为 `d8d7cde7349f240f4284bb0adb0f99cc0309da342011665aff496aec0812b682`。每组都使用独立 userdir，运行器只读采集原生进程快照，没有 Frida 或远程写入。
+
+14/14 组进入主菜单，14/14 组确认补丁 DLL 已加载，0 组出现修复错误。唯一启用的 UTF-8 候选在旧工坊登记或本地副本登记先后两种顺序下都被选中；中文外交文本 `宿敌`、`敌对关系` 和 `gfx/fonts/zh-hans-map` 在 12 个应加载中文资源的组中均实际出现。依赖探针的正反启用列表仍按原始名称 `Chinese Language Mod for 1.37` 匹配并覆盖 `宿敌（依赖覆盖验证）`。ZIP 形态的主汉化也分别覆盖了未启用候选先出现和已启用候选先出现两种路径。
+
+全未启用组保留原生首项并保持英文及地图字库缺失；两个同时启用组和“未启用项先出现、两个启用项随后出现”组均保留原生首项，并记录 `native-multiple-enabled` 冲突。这是本次限定语义的预期结果，不扩展为同时加载多份同名模组。
+
+详细证据见 `D:/Astra-Paradox/artifacts/windows-regression-2026-10-17/windows-regression-report.md`、`windows-regression-report.json`、`comparison.json`、`sources-before.json`，以及每组的 `launch.json`、`native-state.json`、`setup.log`、`error.log` 和 `eu4_unicode_patch.log`。原生进程已全部退出，未留下本任务启动的 EU4 进程。
+
+另外复跑了 CI Windows 构建目录中的 10 个可执行共享核心测试和 `executable_check.exe`。EXE 的 354 处代码/数据检查通过；玩家字库 D3D9、分页 GPU、IME、模组登记、姓名顺序、段落、旧文本和格式化测试通过。`native_font_atlas_tests --system-only` 因本机系统字体已经覆盖测试用 U+323B0 而不满足“系统缺字”的测试前置条件，返回 1；同一测试的 `--player` 模式通过，原始日志保留在 `D:/Astra-Paradox/artifacts/windows-regression-2026-10-17/ci-local-rerun/`。
+
+同一最终 DLL 还通过了无游戏入口的原生布局和导入回归：16 个宽度用例、1,589 个布局用例、11 个截断退出、6 个 UI 页面发射、6 个几何范围、4 个按钮格式参数、4 个地图标签适配、7 个多行编辑器，以及 8 个原生脚本词法导入值全部通过。测试映射当前 EXE、校验 354 处原生站点并使用 CI linker map，没有启动游戏或注入 Frida。
+
+用户随后明确允许注入后，又在最终 DLL 上完成了两次真实 Windows 进程观察。路径回归对 ASCII、中文、补充平面、Emoji、U+10FFFF、5 字节容量和 10 个高位/大小写比较方向全部通过；启动导入回归实际捕获 `FE_SINGLE_PLAYER`、`FE_MULTI_PLAYER`、`FE_TUTORIAL` 三个中文键的导入和注册 UTF-8 字节，脚本错误为 0。证据为 `D:/Astra-Paradox/artifacts/windows-regression-2026-10-17/private/path-trace.jsonl` 和 `import-trace.jsonl`；两个被附加的游戏进程均由测试器结束。
+
 ## 发布前仍未覆盖的范围
 
-- 本轮 Windows DLL 有 CI/包哈希验证，没有新的 Windows 原生游戏矩阵。
+- 本轮 Windows 已完成 14 组模组登记、原始名称依赖和资源挂载原生回归；四组 Linux 专属输入、段落和外交交互的 Windows UI 操作矩阵仍未覆盖。
+- Windows 共享核心二次回归中仅有系统字体缺字对照因本机字体覆盖而不满足前置条件；这不代表补丁功能失败，换用具有相同字体前置条件的 CI/隔离环境后才能把该对照记为通过。
 - 更广的编辑控件、密码框、缩放矩阵，缓存淘汰/token 耗尽压力测试仍待完成。
 - 实体 GPU、Wayland、其他发行版和旧系统 ABI 未验证。
 - Steam 好友端远程显示未验证；accepted=1 只证明真实本地接口交接。
