@@ -110,7 +110,10 @@ def verify(base, fn, hook, engine_string, font_source, callbacks, crt, address_h
     for sample, width in (('中文 English\nالعربية 123\nहिन्दी e\u0301𠮷', 110),
                           ('A中\r\nالعربية\r\nहिन्दी', 90),
                           ('中文 English العربية हिन्दी 中文 English', 55),
-                          ('中文\n\nالعربية\n', 110), ('', 55)):
+                          ('中文\n\nالعربية\n', 110), ('', 55),
+                          ('A \u0301中Z', 11), (' \u0301中Z', 11),
+                          ('A \u0301 \u0301中Z', 11)):
+        print('Native row fixture: ' + ascii(sample) + ', width=' + str(width), flush=True)
         widget = create_editor(sample, width)
         original = sample.encode()
         row_vector = get_rows(widget)
