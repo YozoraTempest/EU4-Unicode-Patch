@@ -57,7 +57,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04]
+        include:
+          - os: ubuntu-22.04
+            compiler_package: gcc-12 g++-12
+            cc: gcc-12
+            cxx: g++-12
+          - os: ubuntu-24.04
+            compiler_package: ''
+            cc: gcc
+            cxx: g++
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
@@ -68,7 +76,7 @@ jobs:
             build-essential cmake ninja-build python3 git file binutils pkg-config \
             libicu-dev libpango1.0-dev libpangocairo-1.0-0 \
             libfontconfig1-dev libcairo2-dev libharfbuzz-dev libfreetype6-dev \
-            fonts-noto-core fonts-noto-cjk
+            fonts-noto-core fonts-noto-cjk ${{ matrix.compiler_package }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
@@ -76,6 +84,8 @@ jobs:
       - name: Build and test generic Linux plugin
         env:
           CTEST_EXCLUDE_REGEX: paragraph_transport
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
         run: bash tools/ci-linux-core.sh
       - name: Save generic Linux package and diagnostics
         if: always()

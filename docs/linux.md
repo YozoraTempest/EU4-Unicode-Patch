@@ -29,9 +29,10 @@ Ubuntu 22.04/24.04：
 ```sh
 sudo apt install build-essential cmake ninja-build python3 git file binutils pkg-config \
     libicu-dev libpango1.0-dev libpangocairo-1.0-0 libfontconfig1-dev \
-    libcairo2-dev libharfbuzz-dev libfreetype6-dev fonts-noto-core fonts-noto-cjk
+    libcairo2-dev libharfbuzz-dev libfreetype6-dev fonts-noto-core fonts-noto-cjk \
+    gcc-12 g++-12
 git submodule update --init --recursive
-bash tools/ci-linux-core.sh
+CC=gcc-12 CXX=g++-12 bash tools/ci-linux-core.sh
 ```
 
 CI 在同一次运行中构建 Windows、Arch 和 Ubuntu，保存核心测试、Linux 预加载入口测试和产物依赖信息。`build/linux-package` 包含 `.so`、启动脚本、许可证、SHA256 和动态依赖清单。SafetyHook、Zydis 和 PicoSHA2 使用固定版本；挂钩只在游戏 `main` 之前、单线程状态下安装，失败时撤销本次安装并拒绝启动游戏。
