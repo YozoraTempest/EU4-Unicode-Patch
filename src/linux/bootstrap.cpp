@@ -1,4 +1,5 @@
 #include "linux/native.hpp"
+#include "icu_runtime.hpp"
 #include "linux/editor_layout.hpp"
 #include "linux/editor_mutation.hpp"
 #include "linux/font_pages.hpp"
@@ -26,6 +27,7 @@ FILE* logfile=nullptr;
 int patched_main(int argc,char** argv,char** envp) {
     if(!verify_executable()) return 1;
     try {
+        icu_runtime::ensure_loaded();
         verify_profile();
         hooks=new Hooks;
         prepare_localization(*hooks);

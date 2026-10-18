@@ -8,7 +8,7 @@
 
 - `cmake/shared-core.cmake` 集中定义九个共享库、依赖和拼音数据生成。
 - `cmake/windows.cmake` 配置 Windows ICU 导入、MASM、原生适配、DLL、现有工具与测试。
-- `cmake/linux-core.cmake` 配置上游 ICU、PIC、Arch 核心测试及 Linux ELF 游戏插件。
+- `cmake/linux-core.cmake` 配置 ICU 头文件、运行时 ICU 解析、PIC、Linux 核心测试及 ELF 游戏插件。
 
 Windows 的 `native_editor_text.cpp` 和 `native_search.cpp` 通过 `target_sources` 加入现有目标；共享构建定义不包含这两个原生适配实现。现有 CMake 目标名称及使用这些实现的 Windows 消费者保持原有链接契约。
 
@@ -40,8 +40,8 @@ Windows 的 `native_editor_text.cpp` 和 `native_search.cpp` 通过 `target_sour
 
 ## 当前支持状态
 
-Windows 构建生成 DLL，Linux 构建生成 `libeu4_unicode.so`。Arch CI 验证九个共享库、拼音模糊搜索、Pango 排版、段落传输与真实预加载入口的转发及未知 ELF 拒绝行为；原生游戏实测另外进行。
+Windows 构建生成 DLL，Linux 构建生成 `libeu4_unicode.so`。Linux CI 在 Arch、Ubuntu 22.04 和 Ubuntu 24.04 验证九个共享库、拼音模糊搜索、Pango 排版、段落传输与真实预加载入口的转发及未知 ELF 拒绝行为；原生游戏实测另外进行。
 
-Linux 接口依据来自已安装的 Steam EU4 1.37.5 原生程序，详见 [Linux 接口表](linux-native-profile.md)。插件以 Arch 为当前依赖 ABI 基准，其他发行版、完整 IME 和功能覆盖不能由核心测试结果推断。
+Linux 接口依据来自已安装的 Steam EU4 1.37.5 原生程序，详见 [Linux 接口表](linux-native-profile.md)。插件不再在 ELF 依赖中固定 ICU 主版本；Ubuntu LTS 和 Arch 共享同一套 ICU C API 运行时解析，Steam Linux Runtime 和其他发行版仍需实际验证。
 
-同一次 CI 运行同时验证 Windows 与 Arch 并保存两平台产物。当前 Linux 包为 CI 测试产物；Release 发布流程没有随本次适配自动发布。
+同一次 CI 运行同时验证 Windows、Arch 和 Ubuntu 22.04/24.04，并保存各平台产物。Linux 包仍只针对 x86_64 原生 EU4 1.37.5；运行库差异由启动时的 ICU 解析和 SDL 路径发现处理。
