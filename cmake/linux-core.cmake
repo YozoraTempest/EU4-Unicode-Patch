@@ -1,7 +1,18 @@
 # Shared algorithms and the separately verified native Linux ELF adapter.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(ICU REQUIRED COMPONENTS uc i18n)
-set(EU4_UNICODE_ICU_LIBRARIES ICU::uc ICU::i18n)
+# Do not link the plugin to ICU::uc or ICU::i18n. ICU's ELF symbols carry the
+# installed major version (for example _74 or _78), which would make one
+# preloaded plugin package distro-specific. icu_runtime resolves the small C
+# API surface used by this project from the host's installed ICU pair.
+include_directories(SYSTEM ${ICU_INCLUDE_DIRS})
+add_compile_definitions(U_DISABLE_RENAMING=1)
+add_library(icu_runtime STATIC src/icu_runtime.cpp)
+target_include_directories(icu_runtime PUBLIC include)
+target_link_libraries(icu_runtime PUBLIC ${CMAKE_DL_LIBS})
+target_compile_features(icu_runtime PRIVATE cxx_std_23)
+target_compile_options(icu_runtime PRIVATE -Wall -Wextra -Wpedantic)
+set(EU4_UNICODE_ICU_LIBRARIES icu_runtime)
 include(cmake/shared-core.cmake)
 enable_testing()
 
@@ -68,7 +79,7 @@ target_include_directories(EU4UnicodePatchLinux PRIVATE include vendor/picosha2)
 target_compile_features(EU4UnicodePatchLinux PRIVATE cxx_std_23)
 target_compile_options(EU4UnicodePatchLinux PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(EU4UnicodePatchLinux PRIVATE unicode_text unicode_services formatted_text unicode_editor unicode_search name_policy glyph_registry scalar_glyph font_draw_batches paragraph_transport
-    safetyhook::safetyhook ${CMAKE_DL_LIBS})
+    icu_runtime safetyhook::safetyhook ${CMAKE_DL_LIBS})
 set_target_properties(EU4UnicodePatchLinux PROPERTIES OUTPUT_NAME eu4_unicode)
 target_link_options(EU4UnicodePatchLinux PRIVATE
     "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/linux/exports.map")

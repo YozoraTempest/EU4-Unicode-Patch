@@ -10,8 +10,8 @@ if [[ ! -r "$patch_dir/libeu4_unicode.so" ]]; then
     printf '%s\n' 'libeu4_unicode.so is missing beside launch-linux.sh.' >&2
     exit 1
 fi
-# Arch libraries use the host ABI. Execute the native game before Steam's
-# container command; retain the Steam client's App ID, IPC and runtime paths.
+# Execute the native game before Steam's container command; retain the Steam
+# client's App ID, IPC and runtime paths.
 # The explicit game path and separator avoid guessing inside Steam wrappers.
 if [[ $1 == --steam ]]; then
     shift
@@ -35,10 +35,23 @@ if [[ $1 == --steam ]]; then
     cd -- "$native_directory"
 fi
 # The game's embedded SDL 2.0.4 lacks a working IME context in this profile.
-# Its official dynamic API uses the maintained SDL2 ABI supplied by Arch.
-export SDL_DYNAMIC_API="${SDL_DYNAMIC_API:-/usr/lib/libSDL2-2.0.so.0}"
+# Respect an explicit runtime choice first, then discover the conventional
+# SDL2 ABI path used by Ubuntu, Arch and Steam Runtime installations.
+if [[ -z ${SDL_DYNAMIC_API:-} ]]; then
+    for candidate in \
+        "$patch_dir/lib/libSDL2-2.0.so.0" \
+        /usr/lib/x86_64-linux-gnu/libSDL2-2.0.so.0 \
+        /usr/lib64/libSDL2-2.0.so.0 \
+        /usr/lib/libSDL2-2.0.so.0; do
+        if [[ -r $candidate ]]; then
+            export SDL_DYNAMIC_API="$candidate"
+            break
+        fi
+    done
+fi
 # Steam can force LC_ALL=C. XIM then cannot convert committed Chinese text.
-# Arch provides C.UTF-8 with the same C numeric conventions and UTF-8 ctype.
+# glibc distributions provide C.UTF-8 with the same C numeric conventions and
+# UTF-8 ctype.
 case ${LC_ALL:-} in
     C|POSIX) export LC_ALL=C.UTF-8 ;;
 esac

@@ -43,6 +43,7 @@ jobs:
           retention-days: 14
           path: |
             build/arch-*.txt
+            build/ctest-linux-results.xml
             build/ctest-arch-results.xml
             build/Testing/Temporary/LastTest.log
             build/*_tests
@@ -52,6 +53,53 @@ jobs:
             build/EU4UnicodePatch-linux-*.tar.gz
             build/linux-package-sha256.txt
             build/elf-evidence/*.txt
+  ubuntu-generic:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            compiler_package: gcc-12 g++-12
+            cc: gcc-12
+            cxx: g++-12
+          - os: ubuntu-24.04
+            compiler_package: ''
+            cc: gcc
+            cxx: g++
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - name: Install generic Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential cmake ninja-build python3 git file binutils pkg-config \
+            libicu-dev libpango1.0-dev libpangocairo-1.0-0 \
+            libfontconfig1-dev libcairo2-dev libharfbuzz-dev libfreetype6-dev \
+            fonts-noto-core fonts-noto-cjk ${{ matrix.compiler_package }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Build and test generic Linux plugin
+        env:
+          CTEST_EXCLUDE_REGEX: paragraph_transport
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: bash tools/ci-linux-core.sh
+      - name: Save generic Linux package and diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-generic-${{ matrix.os }}-${{ github.sha }}
+          retention-days: 14
+          path: |
+            build/linux-*.txt
+            build/ctest-linux-results.xml
+            build/Testing/Temporary/LastTest.log
+            build/linux-package/**
+            build/EU4UnicodePatch-linux-*.tar.gz
+            build/linux-package-sha256.txt
   build:
     runs-on: windows-2022
     timeout-minutes: 30
