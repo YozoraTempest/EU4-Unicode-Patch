@@ -362,8 +362,11 @@ GlyphBitmap rasterize_glyph_run(const GlyphRun& run) {
     double x=0,y=0,ink_width=0,ink_height=0;
     cairo_recording_surface_ink_extents(measure.get(),&x,&y,&ink_width,&ink_height);
     if(ink_width==0||ink_height==0) return {};
-    const auto left=std::floor(x),top=std::floor(y);
-    const auto width=std::ceil(x+ink_width)-left,height=std::ceil(y+ink_height)-top;
+    // Recording extents use glyph metrics; Cairo's subpixel glyph mask can
+    // reach one pixel beyond them. A tight target clips that fringe in the
+    // image compositor. Render with a guard, then retain only actual ink.
+    const auto left=std::floor(x)-1,top=std::floor(y)-1;
+    const auto width=std::ceil(x+ink_width)-left+1,height=std::ceil(y+ink_height)-top+1;
     if(!std::isfinite(width)||!std::isfinite(height)||width<0||height<0||width>16384||height>16384||width*height>64*1024*1024||
        std::abs(left)>INT_MAX||std::abs(top)>INT_MAX) throw std::length_error("Shaped glyph bitmap exceeds raster budget");
     GlyphBitmap result{static_cast<std::uint32_t>(width),static_cast<std::uint32_t>(height),static_cast<int>(left),static_cast<int>(top),{}};
@@ -373,9 +376,21 @@ GlyphBitmap rasterize_glyph_run(const GlyphRun& run) {
     cairo_set_scaled_font(raster.get(),font);cairo_set_source_rgba(raster.get(),1,1,1,1);
     for(auto& glyph:glyphs) { glyph.x-=left;glyph.y-=top; }
     cairo_show_glyphs(raster.get(),glyphs.data(),glyphs.size());checked(cairo_status(raster.get()));cairo_surface_flush(surface.get());
-    result.alpha.resize(static_cast<std::size_t>(result.width)*result.height);
     const auto stride=cairo_image_surface_get_stride(surface.get());const auto data=cairo_image_surface_get_data(surface.get());
-    for(std::size_t row=0;row<result.height;++row) std::memcpy(result.alpha.data()+row*result.width,data+row*stride,result.width);
+    std::uint32_t first_x=result.width,first_y=result.height,last_x=0,last_y=0;
+    for(std::uint32_t row=0;row<result.height;++row) for(std::uint32_t column=0;column<result.width;++column) {
+        if(!data[row*stride+column]) continue;
+        first_x=std::min(first_x,column);first_y=std::min(first_y,row);
+        last_x=std::max(last_x,column+1);last_y=std::max(last_y,row+1);
+    }
+    if(first_x==result.width) return {};
+    if(std::abs(left+first_x)>INT_MAX||std::abs(top+first_y)>INT_MAX)
+        throw std::length_error("Shaped glyph ink offset exceeds raster capacity");
+    result.left=static_cast<int>(left+first_x);result.top=static_cast<int>(top+first_y);
+    result.width=last_x-first_x;result.height=last_y-first_y;
+    result.alpha.resize(static_cast<std::size_t>(result.width)*result.height);
+    for(std::uint32_t row=0;row<result.height;++row)
+        std::memcpy(result.alpha.data()+row*result.width,data+(first_y+row)*stride+first_x,result.width);
     return result;
 }
 RasterImage TextLayout::rasterize() const {

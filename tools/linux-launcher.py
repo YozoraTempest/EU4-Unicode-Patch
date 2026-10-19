@@ -75,6 +75,11 @@ def install(package, game, settings, destination, backup):
         if not target.is_file() or target.read_bytes() != content:
             atomic_write(target, content)
         target.chmod(0o755 if name.endswith(".sh") else 0o644)
+    for name in ("config.ini", "pinyin.txt"):
+        source = package / name
+        target = destination / name
+        if source.is_file() and not target.exists():
+            atomic_write(target, source.read_bytes())
     if (package / "LICENSE").is_file():
         atomic_write(destination / "LICENSE", (package / "LICENSE").read_bytes())
     if (package / "licenses").is_dir() and package != destination:

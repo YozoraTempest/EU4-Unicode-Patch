@@ -91,9 +91,17 @@ int main(int argc,char** argv) {
     check(integer_moved.left==original.left&&integer_moved.top==original.top&&
         integer_moved.width==original.width&&integer_moved.height==original.height&&integer_moved.alpha==original.alpha,
         "integer baseline translation preserves local atlas pixels");
-    translated.baseline_x+=.25f;
-    const auto phased=rasterize_glyph_run(translated);
-    check(phased.alpha!=original.alpha,"fractional baseline phase affects raster coverage");
+    // Some Cairo backends quantize glyphs to integer positions: a quarter
+    // pixel can leave alpha unchanged while a later phase moves the ink.
+    // Compare placement as well as the cropped mask across the phase cycle.
+    bool phase_affects_ink=false;
+    for(const float phase:{.25f,.5f,.75f}) {
+        auto phased_run=translated;phased_run.baseline_x+=phase;
+        const auto phased=rasterize_glyph_run(phased_run);
+        phase_affects_ink=phase_affects_ink||phased.left!=original.left||phased.top!=original.top||
+            phased.width!=original.width||phased.height!=original.height||phased.alpha!=original.alpha;
+    }
+    check(phase_affects_ink,"fractional baseline phases affect raster coverage or ink placement");
     bool incomplete=false,nonfinite=false;
     try { auto invalid=detached.front();invalid.offsets.pop_back();rasterize_glyph_run(invalid); }
     catch(const std::invalid_argument&) { incomplete=true; }

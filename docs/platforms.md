@@ -18,6 +18,7 @@ Windows 的 `native_editor_text.cpp` 和 `native_search.cpp` 通过 `target_sour
 | --- | --- |
 | UTF-8、字素与行边界、Unicode 服务 | 同一源码，由各平台提供 ICU 链接目标 |
 | 格式化文本、编辑模型、拼音搜索 | 同一算法、同一拼音数据生成规则与核心测试 |
+| YAML 编码和搜索配置 | 同一 UTF-8/BOM 签名规则、INI 解析器和词典加载器 |
 | 字形登记、字体路径规则、绘制批次 | 同一数据及算法源码 |
 | 版本管理 | 共用根目录 `VERSION` |
 | 汉化、本地化及字体素材 | 在隔离 Linux 副本中使用原资源，描述符路径适配到本地环境 |
@@ -30,10 +31,10 @@ Windows 的 `native_editor_text.cpp` 和 `native_search.cpp` 通过 `target_sour
 | 接口 | Windows 现有实现 | Linux 原生目标 |
 | --- | --- | --- |
 | 加载入口与指令挂钩 | version API 代理、MinHook、MASM | LD_PRELOAD、SafetyHook、main 之前安装 |
-| 可执行文件校验 | PE 映像、代码及内存权限检查 | ELF ABI、完整 SHA256、每个原生位置的指令 |
+| 可执行文件校验 | PE 映像、代码及内存权限检查 | ELF ABI、主程序映射、每个原生位置的指令；SHA256 仅作诊断 |
 | 字体布局与栅格化 | DirectWrite | 原模组 BMFont 优先，Pango/Cairo/Fontconfig 提供动态缺字与复杂段落 |
 | 图集、纹理与绘制 | D3D9 与 Windows 游戏调用 | Linux 原生 UI、缓存纹理、顶点及地图字形调用 |
-| 输入法与控件接入 | IMM、Windows 消息及 SDL 事件入口 | SDL 提交与预编辑、原生 CEditBox、字素编辑及所测控件的鼠标命中；复杂文字编辑几何仍待接入 |
+| 输入法与控件接入 | IMM、Windows 消息及 SDL 事件入口 | SDL 提交与预编辑、原生 CEditBox、字素编辑及所测控件的鼠标命中、复杂编辑几何及 Ctrl+A 全选 |
 | 模组登记 | Windows 原生容器、字符串和登记上下文 | 独立 Linux 扫描上下文及原生描述符赋值 |
 
 共享 Unicode 语义，平台层负责转换原生参数和资源。指令地址、引擎字符串、容器成员偏移与析构规则不跨平台复用；不得用现有 Windows 数据样例代替 Linux ABI 验证。
@@ -45,3 +46,18 @@ Windows 构建生成 DLL，Linux 构建生成 `libeu4_unicode.so`。Linux CI 在
 Linux 接口依据来自已安装的 Steam EU4 1.37.5 原生程序，详见 [Linux 接口表](linux-native-profile.md)。插件不再在 ELF 依赖中固定 ICU 主版本；Ubuntu LTS 和 Arch 共享同一套 ICU C API 运行时解析，Steam Linux Runtime 和其他发行版仍需实际验证。
 
 同一次 CI 运行同时验证 Windows、Arch 和 Ubuntu 22.04/24.04，并保存各平台产物。Linux 包仍只针对 x86_64 原生 EU4 1.37.5；运行库差异由启动时的 ICU 解析和 SDL 路径发现处理。
+
+## 玩家功能对齐要求
+
+Windows 和 Linux 的下列玩家功能采用同一行为要求，并在同一 PR 的 CI 验证：
+
+| 功能 | 两平台要求 | 共用回归测试 |
+| --- | --- | --- |
+| 游戏程序校验 | 哈希只作诊断；仍检查 ABI、必要指令及内存权限 | 各平台 executable/profile 测试 |
+| 本地化与脚本编码 | UTF-8 无 BOM 和带 BOM 均接受，保留正文 U+FEFF | `yaml_input`、`native_yaml`、原生解析器验证工具 |
+| 旧 52 汉化 | 本地化 CP1252 包装转义、GUI/文化/历史脚本原始旧转码导入为 UTF-8 | `legacy_text`、原生 script/YAML 验证 |
+| 搜索配置与自定义拼音 | 共用配置解析、默认值、词典语法和匹配算法 | `search_resources`、`unicode_search`、`pinyin_fuzzy` |
+| 中文日期及标题 | 中文年月日、战役与围城标题语序一致 | `localized_format`，另验证各平台原生适配 |
+| Ctrl+A | 全选当前控件已提交的文档，空文档不保留旧选区 | `native_editor_select_all`、原生按键接口验证 |
+
+这张表规定本轮功能的共同验收条件。单元测试及原生接口测试不代替两平台完整 GUI、输入法和战役回归；平台适配差异仍须分别记录实测证据。

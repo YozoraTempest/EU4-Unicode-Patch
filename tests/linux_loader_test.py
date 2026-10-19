@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory(prefix="eu4-linux-loader-") as directory:
         assert b"fixture main called" not in refused.stdout
         log = (case / "eu4_unicode_linux.log").read_text()
         assert "Executable SHA256="+hashlib.sha256(payload).hexdigest() in log
-        assert "Refused: unsupported executable" in log
+        assert "Refused: Native instruction outside executable mapping" in log
         assert "hooks enabled" not in log
     package=Path(directory)/"package"
     package.mkdir()
@@ -61,4 +61,4 @@ with tempfile.TemporaryDirectory(prefix="eu4-linux-loader-") as directory:
             cwd=package,env=locale_env,capture_output=True,text=True,timeout=10)
         assert locale_probe.returncode==0,(locale,locale_probe.stderr)
         assert locale_probe.stdout.strip()=="UTF-8",(locale,locale_probe.stdout)
-print("Native preload forwarding, crypto-symbol isolation and exact file-hash refusal passed")
+print("Native preload forwarding, crypto-symbol isolation and native image/instruction refusal passed")

@@ -2,6 +2,7 @@
 #include "unicode_text.hpp"
 #include <array>
 #include <cstdint>
+#include <cstring>
 
 namespace eu4unicode {
 namespace {
@@ -77,6 +78,22 @@ LegacyText decode_legacy_text(std::string_view text,LegacyPayload payload) {
     if(high_surrogate) fail(LegacyError::unpaired_surrogate,surrogate_offset);
     return result;
 }
+LegacyText import_legacy_script_buffer(char* buffer,std::size_t capacity,unsigned token_type) {
+    LegacyText result;
+    if(token_type!=2&&token_type!=15) return result;
+    const auto end=static_cast<const char*>(std::memchr(buffer,0,capacity));
+    if(!end) result.error=LegacyError::unterminated_token;
+    else {
+        const std::string_view value(buffer,static_cast<std::size_t>(end-buffer));
+        if(!contains_legacy_escape(value)) return result;
+        result=decode_legacy_text(value,LegacyPayload::raw_bytes);
+        if(result.error==LegacyError::none&&result.text.size()>=capacity)
+            result.error=LegacyError::token_overflow;
+    }
+    if(result.error!=LegacyError::none) {if(capacity) buffer[0]=0;}
+    else std::memcpy(buffer,result.text.c_str(),result.text.size()+1);
+    return result;
+}
 const char* legacy_error_name(LegacyError error) noexcept {
     switch(error) {
     case LegacyError::none:return "none";
@@ -85,6 +102,8 @@ const char* legacy_error_name(LegacyError error) noexcept {
     case LegacyError::invalid_payload:return "invalid CP1252 payload character";
     case LegacyError::invalid_unit:return "invalid legacy UTF-16 unit";
     case LegacyError::unpaired_surrogate:return "unpaired legacy surrogate";
+    case LegacyError::unterminated_token:return "unterminated script token";
+    case LegacyError::token_overflow:return "converted script token exceeds native buffer";
     }
     return "unknown legacy decoding error";
 }
