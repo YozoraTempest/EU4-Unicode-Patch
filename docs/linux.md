@@ -19,7 +19,7 @@ Linux 插件接入原生 YAML 本地化、脚本 BOM 与旧双字节词元导入
 Arch：
 
 ```sh
-sudo pacman -Syu --needed base-devel cmake ninja python git icu file binutils sdl2-compat pango cairo fontconfig noto-fonts noto-fonts-cjk
+sudo pacman -Syu --needed base-devel cmake ninja python git icu file binutils sdl2-compat pango cairo fontconfig noto-fonts noto-fonts-cjk ttf-dejavu
 git submodule update --init --recursive
 bash tools/ci-linux-core.sh
 ```
@@ -29,7 +29,7 @@ Ubuntu 22.04/24.04：
 ```sh
 sudo apt install build-essential cmake ninja-build python3 git file binutils pkg-config \
     libicu-dev libpango1.0-dev libpangocairo-1.0-0 libfontconfig1-dev \
-    libcairo2-dev libharfbuzz-dev libfreetype6-dev fonts-noto-core fonts-noto-cjk \
+    libcairo2-dev libharfbuzz-dev libfreetype6-dev fonts-noto-core fonts-noto-cjk fonts-dejavu-core \
     gcc-12 g++-12
 git submodule update --init --recursive
 CC=gcc-12 CXX=g++-12 bash tools/ci-linux-core.sh

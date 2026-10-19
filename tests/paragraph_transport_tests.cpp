@@ -14,16 +14,19 @@ using namespace eu4unicode;
 void check(bool condition,const char* message) {
     if(!condition) {std::cerr<<"FAIL: "<<message<<'\n';std::exit(1);}
 }
+enum class Composite { maximum,additive };
 struct Canvas {
     static constexpr int width=512,height=512,margin=32;
     std::vector<unsigned char> alpha=std::vector<unsigned char>(width*height);
-    void paint(int x,int y,unsigned w,unsigned h,const std::vector<std::uint8_t>& pixels) {
+    void paint(int x,int y,unsigned w,unsigned h,const std::vector<std::uint8_t>& pixels,Composite op=Composite::maximum) {
         check(pixels.size()==static_cast<std::size_t>(w)*h,"transport bitmap retains complete pixels");
         for(unsigned row=0;row<h;++row) for(unsigned column=0;column<w;++column) {
             const auto px=x+static_cast<int>(column)+margin,py=y+static_cast<int>(row)+margin;
             check(px>=0&&py>=0&&px<width&&py<height,"transport ink stays within test canvas");
             auto& target=alpha[py*width+px];
-            target=std::max(target,pixels[row*w+column]);
+            const auto source=pixels[row*w+column];
+            target=op==Composite::maximum?std::max(target,source):
+                static_cast<unsigned char>(std::min(255,int(target)+source));
         }
     }
 };
@@ -34,29 +37,50 @@ int main() {
         const std::string label=u8"A سلام हिन्दी a\u0323\u0301 עברית";
         ShapedParagraph curved(label,24,480,false);
         const auto clusters=map_cluster_glyphs(curved,{512,512});
-        Canvas expected,actual;
+        Canvas expected,actual,additive;
         for(const auto& tile:rasterize_paragraph(curved,510,510))
             expected.paint(static_cast<int>(tile.x),static_cast<int>(tile.y),tile.bitmap.width,tile.bitmap.height,tile.bitmap.alpha);
         int pen=0;
         for(const auto& glyph:clusters) {
             actual.paint(pen+glyph.metrics.x_offset,glyph.metrics.y_offset,glyph.metrics.width,glyph.metrics.height,glyph.alpha);
+            additive.paint(pen+glyph.metrics.x_offset,glyph.metrics.y_offset,glyph.metrics.width,glyph.metrics.height,glyph.alpha,Composite::additive);
             pen+=glyph.metrics.advance;
         }
         std::size_t cluster_count=0;
         for(const auto& run:curved.runs()) cluster_count+=run.clusters.size();
         check(!clusters.empty()&&clusters.size()==cluster_count,"map transport retains every contextual cluster");
         check(pen==static_cast<int>(std::ceil(curved.metrics().width)),"map cluster advances retain the complete shaped width");
-        unsigned long long difference=0,coverage=0;std::size_t changed=0,ink_pixels=0;
+        unsigned long long difference=0,coverage=0;std::size_t changed=0;
         for(std::size_t i=0;i<actual.alpha.size();++i) {
             difference+=std::abs(int(actual.alpha[i])-int(expected.alpha[i]));
-            coverage+=expected.alpha[i];changed+=actual.alpha[i]!=expected.alpha[i];ink_pixels+=expected.alpha[i]!=0;
+            coverage+=expected.alpha[i];changed+=actual.alpha[i]!=expected.alpha[i];
         }
-        // Shaping is identical. Rasterizing separate clusters can change a
-        // few overlapping antialiased edge pixels on Cairo and DirectWrite.
-        // A position/order error moves whole glyphs and exceeds both bounds.
+        // Whole-run renderers merge overlapping glyph masks differently.
+        // Max, source-over and saturating addition all lie in this envelope.
+        // Outside overlaps the two bounds coincide, requiring exact pixels.
+        const auto covered=[](const Canvas& reference,const Canvas& maximum,const Canvas& sum) {
+            for(std::size_t i=0;i<reference.alpha.size();++i)
+                if(reference.alpha[i]<maximum.alpha[i]||reference.alpha[i]>sum.alpha[i]) return false;
+            return true;
+        };
         std::cout<<"map raster changed="<<changed<<" difference="<<difference<<" coverage="<<coverage<<'\n';
-        check(difference*200<=coverage&&changed*50<=ink_pixels,
-            "curved map clusters retain joined and bidi ink within the glyph-edge raster tolerance");
+        if(!covered(expected,actual,additive)) {
+            for(std::size_t i=0;i<expected.alpha.size();++i) {
+                if(expected.alpha[i]>=actual.alpha[i]&&expected.alpha[i]<=additive.alpha[i]) continue;
+                std::cerr<<"map coverage mismatch at "<<static_cast<int>(i%Canvas::width)-Canvas::margin<<','
+                    <<static_cast<int>(i/Canvas::width)-Canvas::margin<<" reference="<<int(expected.alpha[i])
+                    <<" maximum="<<int(actual.alpha[i])<<" additive="<<int(additive.alpha[i])<<'\n';
+                break;
+            }
+        }
+        check(covered(expected,actual,additive),"curved map clusters preserve every pixel within the exact overlap coverage bounds");
+        // A missing or moved edge must fail even when its total area is tiny.
+        auto damaged=actual,damaged_sum=additive;
+        const auto edge=std::find_if(expected.alpha.begin(),expected.alpha.end(),[](auto value){return value>0;});
+        check(edge!=expected.alpha.end(),"map reference contains visible ink");
+        const auto edge_index=static_cast<std::size_t>(edge-expected.alpha.begin());
+        damaged.alpha[edge_index]=damaged_sum.alpha[edge_index]=0;
+        check(!covered(expected,damaged,damaged_sum),"coverage check detects a single missing ink pixel");
     }
     for(const float left:{0.f,15.f,61.f}) {
         ShapedParagraph line(u8"ABC سلام עברית हिन्दी XYZ",24,480,false);

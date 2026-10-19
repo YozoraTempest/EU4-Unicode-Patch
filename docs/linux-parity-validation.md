@@ -1,5 +1,7 @@
 # Linux 功能对齐验证
 
+**2026-10-20 更正：** 下文保留前几轮测试记录；此前将 `paragraph_transport` 仅描述为环境容差不准确。后续已定位并修复真实的子像素边缘裁切，同时纠正测试的重叠掩码比较。当前本机完整测试为 28/28，通过项包含原失败项；Ubuntu CI 也已恢复该项。详见 [段落栅格诊断与修复](paragraph-raster-validation.md)。
+
 本次改动增加 Linux 脚本旧转码、搜索资源、中文日期/标题、基于指令的程序校验，以及两平台 Ctrl+A。后续对齐也补齐了 Windows 无 BOM YAML 入口；两平台共用 `yaml_parse_buffer`，并以 `native_yaml` 验证 Windows 缓冲区和回调契约。Windows 搜索切换为同一 `search_resources` 加载器，保留已有 UTF-16LE INI。玩家行为的共同验收项见 [platforms.md](platforms.md#玩家功能对齐要求)。下列旧测试数量对应前一轮 Linux 改动，后续验证需单独记录。
 
 ## 本地自动测试

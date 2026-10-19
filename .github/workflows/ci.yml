@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Install Arch build dependencies
-        run: pacman -Syu --noconfirm --needed base-devel cmake ninja python git icu file binutils pango cairo fontconfig noto-fonts noto-fonts-cjk
+        run: pacman -Syu --noconfirm --needed base-devel cmake ninja python git icu file binutils pango cairo fontconfig noto-fonts noto-fonts-cjk ttf-dejavu
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
@@ -76,14 +76,13 @@ jobs:
             build-essential cmake ninja-build python3 git file binutils pkg-config \
             libicu-dev libpango1.0-dev libpangocairo-1.0-0 \
             libfontconfig1-dev libcairo2-dev libharfbuzz-dev libfreetype6-dev \
-            fonts-noto-core fonts-noto-cjk ${{ matrix.compiler_package }}
+            fonts-noto-core fonts-noto-cjk fonts-dejavu-core ${{ matrix.compiler_package }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
       - name: Build and test generic Linux plugin
         env:
-          CTEST_EXCLUDE_REGEX: paragraph_transport
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
         run: bash tools/ci-linux-core.sh
