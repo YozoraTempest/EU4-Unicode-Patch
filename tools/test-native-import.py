@@ -199,11 +199,6 @@ def language_callback(value,line,context):
 @C.CFUNCTYPE(None,C.c_void_p,C.c_char_p,C.c_char_p,C.c_int,C.c_int,C.c_bool)
 def registration(collection,key,value,line,version,replace):
     yaml_values.append((collection,key,value,line,version,replace))
-@C.CFUNCTYPE(C.c_void_p,C.c_void_p,C.c_int,C.c_size_t)
-def fill(target,value,size):
-    C.memset(target,value,size)
-    return target
-hook(0x1a337f0,fill)
 pointer('register_imported_text',C.cast(registration,C.c_void_p).value)
 hook(0x16fd600,language_callback)
 hook(0x16fd650,symbol('import_legacy_localization'))
