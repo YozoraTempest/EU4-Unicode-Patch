@@ -4,7 +4,7 @@
 
 Windows 与 Linux 的核心源码和构建定义共用，平台依赖及原生入口分别配置，见[共用结构与支持状态](platforms.md)。本文的 RVA、DirectWrite、D3D9 与 IMM 接入描述属于现有 Windows 实现。
 
-脚本支持 UTF-8 with BOM：解析器初始化时跳过输入开头的 BOM，保留文件原始字节和正文中的 `U+FEFF`。ParaTranz 导出的脚本无需移除 BOM。
+Windows 与 Linux 的本地化 YAML 和文本脚本均接受无 BOM 或带 BOM 的 UTF-8。本地化由共享 `yaml_parse_buffer` 判断编码，在各平台原生解析入口借用临时带签名缓冲区；不改写模组文件。脚本在初始化时跳过输入开头的 BOM，保留正文中的 `U+FEFF`。旧 52 本地化及脚本文本继续分别按 CP1252 包装转义和原始双字节转义导入。
 
 ## 模块
 
@@ -13,6 +13,7 @@ Windows 与 Linux 的核心源码和构建定义共用，平台依赖及原生�
 | `unicode_text` / `unicode_services` | UTFCPP 编解码，ICU 字素、行边界与搜索键 |
 | `unicode_editor` / `editor_document` / `native_editor_text` | 字素编辑、多行位置映射、撤销历史与字节预算 |
 | `unicode_search` / `unicode_pinyin` / `native_search` | 中文与拼音匹配、词组读音及国家／省份搜索适配 |
+| `yaml_input` / `native_yaml` | 共享 YAML 签名规则及 Windows 原生解析器缓冲区适配 |
 | `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
 | `legacy_text` / `native_legacy_import` | EU4dll 旧转义解码、本地化注册与脚本文本导入 |
 | `native_name_order` | 分开的姓／名按人物文化拼接，保留旧姓氏标记与模组规则 |
@@ -89,7 +90,7 @@ UI 绘制、测宽和换行共用 DirectWrite 布局；颜色标记不切断塑�
 
 ## 输入与保存
 
-编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。
+两平台均支持 `Ctrl+A` 全选当前编辑控件的已提交文本；输入法预编辑时该键由输入法状态处理。编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。
 
 搜索接入外交国家列表与省份查找，支持中文、全拼、首字母、部分拼音、混合输入及简繁匹配。名称按当前显示内容建立索引，词组读音来自固定版本的 `phrase-pinyin-data`，其余汉字由系统 ICU 转写。
 
@@ -101,7 +102,7 @@ typo_tolerance=1
 fuzzy_pinyin=1
 ```
 
-`typo_tolerance` 默认 `1`，`fuzzy_pinyin` 默认 `0`。模糊音支持 `zh/z`、`ch/c`、`sh/s`、`n/l`、`en/eng` 和 `in/ing`；设为 `0` 可分别关闭。
+两平台使用同一个 `search_resources` 解析器，配置支持 UTF-8 和 UTF-8 BOM；为保留 Windows 已有配置，带 BOM 的 UTF-16LE INI 也继续接受。`typo_tolerance` 默认 `1`，`fuzzy_pinyin` 默认 `0`。模糊音支持 `zh/z`、`ch/c`、`sh/s`、`n/l`、`en/eng` 和 `in/ing`；设为 `0` 可分别关闭。
 
 特殊读音可写入游戏目录的 `plugins/eu4_unicode_patch/pinyin.txt`，支持 UTF-8 和 UTF-8 BOM，重启游戏后生效。每个汉字对应一个拼音音节，重复词组可添加不同读音，`#` 开头为注释：
 

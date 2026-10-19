@@ -1,6 +1,6 @@
 # Linux 功能对齐验证
 
-本次改动增加 Linux 脚本旧转码、搜索资源、中文日期/标题、基于指令的程序校验，以及两平台 Ctrl+A。Linux YAML 额外支持无 BOM 的 UTF-8。Windows YAML 入口本轮未修改；跨平台本地化素材仍建议保留 UTF-8 BOM，不能把脚本的 BOM 验证视为 Windows YAML 无 BOM 的验证。
+本次改动增加 Linux 脚本旧转码、搜索资源、中文日期/标题、基于指令的程序校验，以及两平台 Ctrl+A。后续对齐也补齐了 Windows 无 BOM YAML 入口；两平台共用 `yaml_parse_buffer`，并以 `native_yaml` 验证 Windows 缓冲区和回调契约。Windows 搜索切换为同一 `search_resources` 加载器，保留已有 UTF-16LE INI。玩家行为的共同验收项见 [platforms.md](platforms.md#玩家功能对齐要求)。下列旧测试数量对应前一轮 Linux 改动，后续验证需单独记录。
 
 ## 本地自动测试
 

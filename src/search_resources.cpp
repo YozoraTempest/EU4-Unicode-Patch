@@ -1,5 +1,6 @@
 #include "search_resources.hpp"
 #include "unicode_pinyin.hpp"
+#include <utf8.h>
 #include <charconv>
 #include <fstream>
 #include <iterator>
@@ -29,6 +30,18 @@ std::string read(const std::filesystem::path& path) {
 }
 }
 SearchOptions parse_search_config(std::string_view content) {
+    // Windows profile APIs also accepted UTF-16LE INI files. Keep that existing
+    // format when both platforms use this loader; dictionaries remain UTF-8.
+    std::string converted;
+    if(content.substr(0,2)=="\xff\xfe") {
+        if(content.size()%2) throw std::invalid_argument("Truncated UTF-16 search configuration");
+        std::u16string wide;
+        for(std::size_t i=2;i<content.size();i+=2)
+            wide.push_back(static_cast<char16_t>(static_cast<unsigned char>(content[i])|
+                (static_cast<unsigned char>(content[i+1])<<8)));
+        utf8::utf16to8(wide.begin(),wide.end(),std::back_inserter(converted));
+        content=converted;
+    }
     SearchOptions result{true,false};
     if(content.substr(0,3)=="\xef\xbb\xbf") content.remove_prefix(3);
     bool search=false;

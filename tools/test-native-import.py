@@ -1,7 +1,7 @@
 """Check legacy import hooks against mapped EU4 code, without starting a game.
 
-Use 64-bit Windows Python and a CI-built DLL with its linker map. Native lexer
-code runs in this process with a memory input and mocked allocation/lookup.
+Use 64-bit Windows Python and a CI-built DLL with its linker map. Native script
+and YAML parsers run with memory inputs and controlled registration/allocation.
 The game's entry point and any running game are never accessed.
 """
 import argparse
@@ -17,6 +17,7 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--executable', type=Path, required=True)
 parser.add_argument('--build-directory', type=Path, required=True)
+parser.add_argument('--report', type=Path, help='Write native parser verification evidence as JSON')
 parser.add_argument('--script-values', type=Path, help='Optional JSON list with raw text in hex')
 args = parser.parse_args()
 assert os.name == 'nt' and C.sizeof(C.c_void_p) == 8 and __debug__
@@ -179,3 +180,67 @@ if args.script_values:
         verify(bytes.fromhex(record['hex']))
     count += len(records)
 print(f'PASS: {count} script values parsed by native EU4 lexer and normalized by the CI import hook.')
+
+# The Windows optimizer specializes YmlParse for its two native callbacks.
+# Hook those verified callback entries as well as the production YAML adapter.
+class YamlBytes(C.Structure):
+    _fields_ = [('begin',C.c_void_p),('end',C.c_void_p),('capacity',C.c_void_p)]
+class LocalizationContext(C.Structure):
+    _fields_ = [('line',C.c_int),('replace',C.c_bool),('padding',C.c_byte*11),('collection',C.c_void_p)]
+def engine_bytes(value):
+    string = EngineString.from_address(value)
+    pointer = string.storage.pointer if string.capacity >= 16 else value
+    return C.string_at(pointer,string.size)
+yaml_languages = []
+yaml_values = []
+@C.CFUNCTYPE(None,C.c_void_p,C.c_int,C.c_void_p)
+def language_callback(value,line,context):
+    yaml_languages.append((engine_bytes(value),line,context))
+@C.CFUNCTYPE(None,C.c_void_p,C.c_char_p,C.c_char_p,C.c_int,C.c_int,C.c_bool)
+def registration(collection,key,value,line,version,replace):
+    yaml_values.append((collection,key,value,line,version,replace))
+@C.CFUNCTYPE(C.c_void_p,C.c_void_p,C.c_int,C.c_size_t)
+def fill(target,value,size):
+    C.memset(target,value,size)
+    return target
+hook(0x1a337f0,fill)
+pointer('register_imported_text',C.cast(registration,C.c_void_p).value)
+hook(0x16fd600,language_callback)
+hook(0x16fd650,symbol('import_legacy_localization'))
+hook(0x16fc3d0,symbol('parse_utf8_yaml'),'original_yaml_parse')
+parse_yaml = C.CFUNCTYPE(None,C.c_void_p,C.POINTER(YamlBytes),C.c_char_p,C.c_void_p,C.c_void_p,C.c_void_p)(base+0x16fc3d0)
+context = LocalizationContext(2,True)
+context.collection = 0x1234
+records = []
+for bom in (False,True):
+    for payload,expected in [
+        ('中文𠀀'.encode(),'中文𠀀'.encode()),
+        (b'\x10-N\x11\x0eN\x12\xc3\xb9R\x13it','中一对絛'.encode()),
+        ('§Y中文§! \ufeff'.encode(),'§Y中文§! \ufeff'.encode()),
+    ]:
+        name = f'EU4_NATIVE_YAML_{len(records)}'.encode()
+        source = (b'\xef\xbb\xbf' if bom else b'')+b'l_english:\r\n '+name+b':0 "'+payload+b'"\r\n'
+        storage = C.create_string_buffer(source)
+        address = C.addressof(storage)
+        vector = YamlBytes(address,address+len(source),address+len(source))
+        before = len(yaml_values)
+        parse_yaml(None,C.byref(vector),b'native-contract.yml',C.cast(language_callback,C.c_void_p),
+                   C.c_void_p(symbol('import_legacy_localization')),C.byref(context))
+        assert storage.raw[:-1] == source, 'YAML source buffer changed'
+        assert len(yaml_values) == before+1, yaml_values
+        collection,key,value,line,version,replace = yaml_values[-1]
+        assert (collection,key,value,version,replace) == (0x1234,name,expected,0,True), yaml_values[-1]
+        assert yaml_languages[-1][0] == b'l_english'
+        assert yaml_languages[-1][2] == C.addressof(context)
+        records.append({'bom':bom,'key':name.decode(),'expected_utf8_hex':expected.hex(),'line':line})
+signatures = fn('native_yaml_signatures',C.c_uint64)()
+assert signatures == 3, signatures
+print(f'PASS: {len(records)} YAML values parsed by native EU4 with UTF-8/BOM, legacy escapes and supplementary characters.')
+if args.report:
+    args.report.parent.mkdir(parents=True,exist_ok=True)
+    args.report.write_text(json.dumps({
+        'executable_sha256':hashlib.sha256(args.executable.read_bytes()).hexdigest(),
+        'patch_dll_sha256':info['patch_dll_sha256'],'source_commit':info['source_commit'],
+        'script_values_passed':count,'yaml_values':records,'yaml_signatures_supplied':signatures,
+        'game_entrypoint_started':False,
+    },ensure_ascii=False,indent=2)+'\n',encoding='utf-8')

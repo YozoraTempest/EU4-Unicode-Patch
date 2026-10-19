@@ -12,6 +12,11 @@ int main() {
         const auto options=parse_search_config(bom+"; comment\r\n[other]\ntypo_tolerance=1\n[SEARCH]\n TYPO_TOLERANCE = 0\r\nFuzzy_Pinyin=1\n");
         check(!options.typo_tolerance&&options.fuzzy_pinyin,"INI section, case, whitespace and BOM");
     }
+    const std::u16string wide=u"[search]\r\ntypo_tolerance=0\r\nfuzzy_pinyin=1\r\n";
+    std::string utf16="\xff\xfe";
+    for(const auto unit:wide) {utf16+=static_cast<char>(unit&255);utf16+=static_cast<char>(unit>>8);}
+    const auto legacy_options=parse_search_config(utf16);
+    check(!legacy_options.typo_tolerance&&legacy_options.fuzzy_pinyin,"existing Windows UTF-16LE config preserved on both platforms");
     check(parse_search_config("[search]\ntypo_tolerance=bad\nfuzzy_pinyin=\n").typo_tolerance,"invalid values keep defaults");
     const auto path=std::filesystem::temp_directory_path()/("eu4-search-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(path);

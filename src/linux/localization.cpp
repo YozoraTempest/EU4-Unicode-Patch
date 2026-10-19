@@ -2,7 +2,7 @@
 #include "legacy_text.hpp"
 #include "unicode_text.hpp"
 #include <atomic>
-#include <vector>
+#include "yaml_input.hpp"
 
 namespace eu4unicode::linux_native {
 namespace {
@@ -23,12 +23,9 @@ using KeyCallback=void(*)(const String*,const String*,int,int,void*);
 void parse_yaml(void* file,const YamlBytes* input,const char* name,LanguageCallback language,KeyCallback key,void* context) {
     const auto size=input->begin?static_cast<std::size_t>(input->end-input->begin):0;
     const auto bytes=std::string_view(reinterpret_cast<const char*>(input->begin),size);
-    if(size&&bytes.substr(0,3)!="\xef\xbb\xbf"&&valid_utf8(bytes)) {
-        // Normalize only the parse buffer; source files and string ownership
-        // stay native. The engine itself still consumes its required signature.
-        std::vector<unsigned char> normalized{0xef,0xbb,0xbf};
-        normalized.insert(normalized.end(),input->begin,input->end);
-        const YamlBytes buffer{normalized.data(),normalized.data()+normalized.size(),normalized.data()+normalized.size()};
+    if(const auto normalized=yaml_parse_buffer(bytes)) {
+        const auto begin=reinterpret_cast<const unsigned char*>(normalized->data());
+        const YamlBytes buffer{begin,begin+normalized->size(),begin+normalized->size()};
         ++yaml_signatures;
         yaml_hook->call<void>(file,&buffer,name,language,key,context);
     } else yaml_hook->call<void>(file,input,name,language,key,context);
