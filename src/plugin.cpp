@@ -646,6 +646,10 @@ bool editor_key(void* widget,const KeyEvent* event) {
     try {
         if(event->key==27&&eu4unicode::exit_native_editor()) return true;
         const auto composing=eu4unicode::native_ime_owns_edit_keys();
+        if((event->key=='a'||event->key=='A')&&event->modifiers==1) {
+            if(!composing) {eu4unicode::native_edit_select_all(widget);clear_editor_affinity();}
+            return true;
+        }
         if(composing&&(event->key==8||event->key==127||event->key==13||
            (event->key>=0x4000004a&&event->key<=0x40000052))) return true;
         if(event->key=='z'&&(event->modifiers==1||event->modifiers==5)) {

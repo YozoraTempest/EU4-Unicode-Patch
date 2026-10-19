@@ -9,12 +9,14 @@
 #include <atomic>
 #include <cstring>
 #include <stdexcept>
+#include <limits>
 
 namespace eu4unicode::linux_native {
 namespace {
 SafetyHookInline *event_ctor=nullptr,*event_access=nullptr,*event_string=nullptr,*event_any=nullptr;
 SafetyHookInline *edit_input=nullptr,*backspace_hook=nullptr,*delete_hook=nullptr;
 SafetyHookInline *hit_hook=nullptr;
+SafetyHookInline *key_hook=nullptr;
 thread_local const void* text_event=nullptr;
 thread_local std::uint32_t text_scalar=0;
 std::atomic<std::uint64_t> packets{0},scalars{0},edited{0};
@@ -106,6 +108,21 @@ std::string_view text_of(void* buffer) {
 std::size_t position(void* buffer) {
     const int result=reinterpret_cast<int(*)(void*)>(0x20d602c)(buffer);
     return result<0?0:static_cast<std::size_t>(result);
+}
+bool key(void* buffer,const void* event) {
+    const auto keycode=read<int>(reinterpret_cast<std::uintptr_t>(event));
+    const auto modifiers=read<unsigned>(reinterpret_cast<std::uintptr_t>(event)+8);
+    if((keycode=='a'||keycode=='A')&&modifiers==1) {
+        const auto text=text_of(buffer);
+        if(valid_utf8(text)&&text.size()<=static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+            reinterpret_cast<void(*)(void*,int,int)>(0x20d7528)(buffer,0,static_cast<int>(text.size()));
+            if(text.empty()) static_cast<unsigned char*>(buffer)[0x90]=0;
+            forget_editor_buffer(buffer);
+            reinterpret_cast<void(*)(void*)>((*static_cast<void***>(buffer))[0x208/8])(buffer);
+            return true;
+        }
+    }
+    return key_hook->call<bool>(buffer,event);
 }
 void move_left(safetyhook::Context& c) {
     auto buffer=reinterpret_cast<void*>(c.rbx);
@@ -212,6 +229,7 @@ void prepare_editor_input(Hooks& hooks) {
     backspace_hook=&hooks.add_inline(0x20d8210,reinterpret_cast<void*>(backspace));
     delete_hook=&hooks.add_inline(0x20d8480,reinterpret_cast<void*>(erase));
     hit_hook=&hooks.add_inline(0x20d5142,reinterpret_cast<void*>(hit));
+    key_hook=&hooks.add_inline(0x20d568c,reinterpret_cast<void*>(key));
     hooks.add_mid(0x1ff52d7,deliver);
     hooks.add_mid(0x20d784d,move_left);
     hooks.add_mid(0x20d7932,move_right);

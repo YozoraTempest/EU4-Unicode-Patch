@@ -6,7 +6,7 @@
 
 适用于 **EU4 1.37.5.0 Inca / Windows x64**。
 
-另有 **Steam Linux 原生版 / x86_64 通用 glibc 构建**，与 Windows 共用 Unicode 核心并分别构建原生插件。支持通过 P 社启动器加载，安装一次后 Steam 启动选项留空，也可使用自动恢复集成的启动项；安装方法、严格的游戏版本校验及功能范围见 [Linux 原生适配](docs/linux.md)。Linux 包按宿主机 ICU 主版本运行时加载，使用 Ubuntu LTS 和 Arch 进行构建检查；Steam Linux Runtime 仍需单独验证。运行时仍需要系统提供 Pango、Cairo、Fontconfig、SDL2 兼容库和 glibc。
+另有 **Steam Linux 原生版 / x86_64 通用 glibc 构建**，与 Windows 共用 Unicode 核心并分别构建原生插件。支持通过 P 社启动器加载，安装一次后 Steam 启动选项留空，也可使用自动恢复集成的启动项；安装方法、游戏布局与指令校验及功能范围见 [Linux 原生适配](docs/linux.md)。Linux 包按宿主机 ICU 主版本运行时加载，使用 Ubuntu LTS 和 Arch 进行构建检查；Steam Linux Runtime 仍需单独验证。运行时仍需要系统提供 Pango、Cairo、Fontconfig、SDL2 兼容库和 glibc。
 
 [正式版与可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/latest) · [Nightly 测试版](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
 
@@ -15,7 +15,7 @@
 - **标准 UTF-8**：本地化和编辑文本保留标准 UTF-8，支持 UTF-8 BOM 与 ParaTranz 导出文件，便于直接编辑、维护和分享汉化。
 - **旧汉化包直接使用**：本地化、GUI 和脚本中的 EU4dll 双字节转义在导入时转换为 UTF-8，无需修改原汉化文件。
 - **生僻字支持**：支持“𠮷”等补充平面汉字，字形由所用字体提供。
-- **中文输入与编辑**：支持输入法候选窗和未提交拼音；单行、多行编辑按字素边界处理光标、整字退格与选区替换。`Esc` 取消未提交输入并退出输入状态，`Ctrl+Z` 撤销，`Ctrl+Shift+Z` 重做。
+- **中文输入与编辑**：支持输入法候选窗和未提交拼音；单行、多行编辑按字素边界处理光标、整字退格与选区替换。`Esc` 取消未提交输入并退出输入状态，`Ctrl+A` 全选，`Ctrl+Z` 撤销，`Ctrl+Shift+Z` 重做。
 - **中文与拼音搜索**：外交国家列表与省份查找支持中文、全拼、首字母、部分拼音及混合输入，例如用 `法兰西`、`falanxi`、`flx` 或 `法lanxi` 查找法兰西。支持简繁匹配和词组读音，长全拼容忍一次输错，模糊音匹配可[按需开启](docs/development.md#输入与保存)。
 - **复杂文字排版**：支持阿拉伯文连写、从右向左文字、天城文组合字与附加符号；颜色、国旗、点数及货币图标参与整段排版，地图文字按字形簇适配领土布局。
 - **系统与模组字体**：优先使用系统字体，额外字库作为可选包提供；保留模组已有字形、字号和字宽，缺字按需补齐。

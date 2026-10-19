@@ -1,9 +1,12 @@
 #include "linux/native.hpp"
 #include "unicode_search.hpp"
 #include "unicode_text.hpp"
+#include "search_resources.hpp"
 #include <algorithm>
 #include <atomic>
 #include <string>
+#include <dlfcn.h>
+#include <filesystem>
 
 namespace eu4unicode::linux_native {
 namespace {
@@ -60,6 +63,15 @@ int distance(const String* name,const String* query) {
 }
 }
 void prepare_search(Hooks& hooks) {
+    Dl_info library{};
+    if(!dladdr(reinterpret_cast<void*>(prepare_search),&library)||!library.dli_fname)
+        throw std::runtime_error("Cannot locate Linux search resources");
+    try {
+        const auto custom=load_search_resources(std::filesystem::path(library.dli_fname).parent_path());
+        const auto options=search_options();
+        log("Search resources loaded: custom-dictionary=%d typo-tolerance=%d fuzzy-pinyin=%d",
+            custom,options.typo_tolerance,options.fuzzy_pinyin);
+    } catch(const std::exception& error) {log("Search resources rejected: %s",error.what());}
     verify_site(0x25a3f30);
     // OnFilterOpinions normalizes the query before the result loop sees it.
     // Its bytewise Latin-1 cleanup must share the candidate's UTF-8 policy.

@@ -21,6 +21,7 @@ std::optional<std::vector<SelectionRegion>> editor_layout_selection(void* buffer
 // Affinity belongs to the document/cursor, survives focus changes and is
 // removed when the owning native editor is destroyed.
 void forget_editor_layout(void* editor) noexcept;
+void forget_editor_buffer(void* buffer) noexcept;
 void prepare_editor_layout(Hooks&);
 void report_editor_layout_counts() noexcept;
 }

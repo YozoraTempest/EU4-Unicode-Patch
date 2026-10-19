@@ -30,10 +30,10 @@ Windows 的 `native_editor_text.cpp` 和 `native_search.cpp` 通过 `target_sour
 | 接口 | Windows 现有实现 | Linux 原生目标 |
 | --- | --- | --- |
 | 加载入口与指令挂钩 | version API 代理、MinHook、MASM | LD_PRELOAD、SafetyHook、main 之前安装 |
-| 可执行文件校验 | PE 映像、代码及内存权限检查 | ELF ABI、完整 SHA256、每个原生位置的指令 |
+| 可执行文件校验 | PE 映像、代码及内存权限检查 | ELF ABI、主程序映射、每个原生位置的指令；SHA256 仅作诊断 |
 | 字体布局与栅格化 | DirectWrite | 原模组 BMFont 优先，Pango/Cairo/Fontconfig 提供动态缺字与复杂段落 |
 | 图集、纹理与绘制 | D3D9 与 Windows 游戏调用 | Linux 原生 UI、缓存纹理、顶点及地图字形调用 |
-| 输入法与控件接入 | IMM、Windows 消息及 SDL 事件入口 | SDL 提交与预编辑、原生 CEditBox、字素编辑及所测控件的鼠标命中；复杂文字编辑几何仍待接入 |
+| 输入法与控件接入 | IMM、Windows 消息及 SDL 事件入口 | SDL 提交与预编辑、原生 CEditBox、字素编辑及所测控件的鼠标命中、复杂编辑几何及 Ctrl+A 全选 |
 | 模组登记 | Windows 原生容器、字符串和登记上下文 | 独立 Linux 扫描上下文及原生描述符赋值 |
 
 共享 Unicode 语义，平台层负责转换原生参数和资源。指令地址、引擎字符串、容器成员偏移与析构规则不跨平台复用；不得用现有 Windows 数据样例代替 Linux ABI 验证。

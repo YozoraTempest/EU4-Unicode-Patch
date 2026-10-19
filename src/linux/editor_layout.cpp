@@ -167,8 +167,11 @@ EditorLayoutScope::EditorLayoutScope(void* editor) noexcept:previous_(active_buf
 }
 EditorLayoutScope::~EditorLayoutScope() {active_buffer=previous_;}
 void forget_editor_layout(void* editor) noexcept {
+    forget_editor_buffer(static_cast<char*>(editor)+0xc8);
+}
+void forget_editor_buffer(void* buffer) noexcept {
     const std::lock_guard lock(affinity_mutex);
-    affinities.erase(static_cast<char*>(editor)+0xc8);
+    affinities.erase(buffer);
 }
 std::optional<float> editor_layout_x(void* buffer,std::string_view text,bool anchor) {
     if(!eligible(buffer)) return {};

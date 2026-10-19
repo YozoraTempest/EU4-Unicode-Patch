@@ -2,7 +2,7 @@
 
 目标为 Steam EU4 1.37.5 Linux x86_64 原生游戏，发布包面向 glibc 发行版。Windows 与 Linux 共用同一项目、版本及九个 Unicode 核心库，分别生成 Windows DLL 和 Linux `libeu4_unicode.so`。平台构建边界见 [platforms.md](platforms.md)，原生接口依据见 [linux-native-profile.md](linux-native-profile.md)。
 
-Linux 插件接入原生 YAML 本地化、脚本 BOM、BMFont 字库解析、UI 与地图字形绘制、SDL 文本提交及编辑控件，并处理未启用的同名模组抢占登记。它使用汉化模组已有的字体资源；正文换行复用共享 ICU 边界，保持原生字宽、颜色和行距。
+Linux 插件接入原生 YAML 本地化、脚本 BOM 与旧双字节词元导入、BMFont 字库解析、UI 与地图字形绘制、SDL 文本提交及编辑控件，并处理未启用的同名模组抢占登记。它使用汉化模组已有的字体资源；正文换行复用共享 ICU 边界，保持原生字宽、颜色和行距。
 
 四组功能的主路径现已实装并分组完成原生验收：IME 的真实预编辑、提交和双向选区，复杂 UI/地图文字，查找器与外交中文/拼音筛选，以及稳定文化 ID 的姓名顺序和真实 Steam UTF-8 状态载荷。九组查找器矩阵和复杂预编辑视口保留各自产物证据；最终产物另测外交四组查询、多区域高亮、真实姓名和地图索引绘制。范围与固定哈希见 [四组功能验收](linux-four-feature-validation.md)。更多控件、缩放、压力测试及完整发布矩阵仍未完成。
 
@@ -79,9 +79,36 @@ bash "/absolute/path/to/patch/uninstall-paradox-launcher.sh" "/absolute/path/to/
 
 安装目录是游戏目录中的 `.eu4-unicode/`。游戏包装器先进入游戏目录，然后使用相对路径 `./.eu4-unicode/libeu4_unicode.so` 预加载补丁，以避免 `LD_PRELOAD` 把安装路径中的空格当成库名分隔符。启动器传入的全部游戏参数保持原值。
 
-补丁只处理文件名为 `eu4` 的主程序，首先校验 ELF ABI 和完整 SHA256，随后校验每个挂钩及原生调用位置的指令。未知版本拒绝安装挂钩，原因写入游戏目录中的 `eu4_unicode_linux.log`。正常加载时包含 `Linux native hooks enabled`。
+补丁只处理文件名为 `eu4` 的主程序，首先校验 ELF ABI，记录完整 SHA256 作为诊断，再检查主程序的可读可执行映射和每个挂钩及原生调用位置的指令。与 Windows 一样，哈希变化本身不拒绝加载；程序布局或关键指令不兼容时拒绝安装挂钩，原因写入游戏目录中的 `eu4_unicode_linux.log`。正常加载时包含 `Linux native hooks enabled`。
 
 启动脚本保留用户显式设置的 `SDL_DYNAMIC_API`，否则寻找可用的 SDL2 库路径。明确的 `LC_ALL=C` / `POSIX` 会转换为 `C.UTF-8`。输入法服务仍须由桌面正常配置；现有真实输入测试使用 Fcitx5、X11/XIM。Steam Linux Runtime 容器的运行库版本仍需单独验证；发行版核心测试不代表容器、启动器画面或全部游戏交互已经验证。
+
+## 文本编码、中文格式与全选
+
+Linux 本地化 `.yml` 和 GUI、文化、历史等文本脚本均接受无 BOM 或带 BOM 的 UTF-8。本地化解析器需要的签名只补到临时解析缓冲区，不改写模组文件；脚本只消耗文件开头的 BOM，正文中的 U+FEFF 保留。旧汉化本地化的 CP1252 包装转义和脚本词元中的原始双字节转义分别在导入时转为 UTF-8。
+
+脚本转换保留词元类别、回看状态与引擎内存所有权；截断转义和转换后超过固定缓冲区的词元会记录错误并停止该次解析。支持旧转码不等于允许格式错误，例如本地化键重复的 `:0:0` 仍需由模组修正。
+
+中文日期与年月调整为年在前，中文战役与围城标题调整为“地名之战／之围”；原生非中文格式保持不变。`Ctrl+A` 全选原生文档，包括中文、组合字符及多行文字；输入法组合期间不改变真实文档选区。Windows 补丁也提供 `Ctrl+A`。
+
+## 自定义拼音词典与搜索配置
+
+安装后编辑游戏目录 `.eu4-unicode/config.ini`，重启游戏生效：
+
+```ini
+[search]
+typo_tolerance=1
+fuzzy_pinyin=0
+```
+
+`typo_tolerance` 控制拼音输入容错，`fuzzy_pinyin` 控制模糊音；`0` 关闭、`1` 开启，默认值与 Windows 相同。自定义词典放在同一目录的 `pinyin.txt`，例如：
+
+```text
+重庆: chong qing | zhong qing
+𠮷野: ji ye
+```
+
+配置和词典支持 UTF-8 及 UTF-8 BOM。直接预加载 `.so` 时，两文件放在该 `.so` 旁。安装器会复制补丁包中提供的配置与词典，重复安装或修复启动器集成时保留玩家已有文件。词典错误会记录到补丁日志，不覆盖已载入的有效读音。
 
 ## 可选：跳过 P 社启动器的直接启动
 

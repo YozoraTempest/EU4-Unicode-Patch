@@ -25,6 +25,18 @@ void configure_native_editor_text(void* image) {
     assign=reinterpret_cast<Assign>(base+0x95110);destroy=reinterpret_cast<Destroy>(base+0x95660);
     move=reinterpret_cast<Move>(base+0x1536f50);
 }
+void configure_native_editor_text(NativeEditorTextApi api) {
+    assign=api.assign;destroy=api.destroy;move=api.move;
+}
+void native_edit_select_all(void* widget) {
+    const auto view=native_edit_view(widget);
+    native_edit_caret(widget,view.text.size());
+    word(widget,0x92)=word(widget,0x94)=0;
+    static_cast<std::byte*>(widget)[0x90]=static_cast<std::byte>(!view.text.empty());
+    assign(reinterpret_cast<EngineString*>(static_cast<std::byte*>(widget)+0x70),view.text.data(),view.text.size());
+    // Selection changes redraw the caret without emitting a text-change event.
+    reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
+}
 EngineString* construct_editor_space_row(EngineString* row,const EngineString* source) {
     // The native space-wrap constructor replaces its final byte with LF and
     // marks it as consumed source. A decorated space needs a synthetic LF so

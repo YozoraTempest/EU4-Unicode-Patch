@@ -24,7 +24,7 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/pinyin_data.inc
         "${PINYIN_SOURCE}/LICENSE" "${PINYIN_SOURCE}/source.json"
     VERBATIM)
 add_library(unicode_search STATIC
-    src/unicode_search.cpp src/unicode_search_fuzzy.cpp src/unicode_pinyin.cpp
+    src/unicode_search.cpp src/unicode_search_fuzzy.cpp src/unicode_pinyin.cpp src/search_resources.cpp
     "${CMAKE_CURRENT_BINARY_DIR}/generated/pinyin_data.inc")
 target_include_directories(unicode_search PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(unicode_search PUBLIC unicode_services)
@@ -39,3 +39,13 @@ target_include_directories(font_assets PUBLIC include)
 
 add_library(name_policy STATIC src/name_policy.cpp)
 target_link_libraries(name_policy PUBLIC unicode_services)
+
+add_executable(search_resources_tests tests/search_resources_tests.cpp)
+target_link_libraries(search_resources_tests PRIVATE unicode_search)
+add_test(NAME search_resources COMMAND search_resources_tests)
+add_executable(native_editor_select_all_tests tests/native_editor_select_all_tests.cpp)
+if(NOT WIN32)
+    target_sources(native_editor_select_all_tests PRIVATE src/native_editor_text.cpp)
+endif()
+target_link_libraries(native_editor_select_all_tests PRIVATE unicode_editor)
+add_test(NAME native_editor_select_all COMMAND native_editor_select_all_tests)

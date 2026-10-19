@@ -61,21 +61,12 @@ void import_legacy_localization(const EngineString* key,const EngineString* valu
     } catch(...) {diagnose("localization",context->line,key_text,0,"text import failed");}
 }
 bool convert_legacy_script_token(NativeScriptLexer* lexer) noexcept {
-    if(lexer->token_type!=2&&lexer->token_type!=15) return true;
-    const auto end=static_cast<const char*>(std::memchr(lexer->text,0,sizeof(lexer->text)));
-    if(!end) {script_error(lexer,0,"unterminated script token");lexer->text[0]=0;return false;}
-    const auto text=std::string_view(lexer->text,static_cast<std::size_t>(end-lexer->text));
-    if(!contains_legacy_escape(text)) return true;
     try {
-        const auto decoded=decode_legacy_text(text,LegacyPayload::raw_bytes);
+        const auto decoded=import_legacy_script_buffer(lexer->text,sizeof(lexer->text),lexer->token_type);
         if(decoded.error!=LegacyError::none) {
             script_error(lexer,decoded.error_offset,legacy_error_name(decoded.error));lexer->text[0]=0;return false;
         }
-        if(decoded.text.size()>=sizeof(lexer->text)) {
-            script_error(lexer,0,"converted script token exceeds native buffer");lexer->text[0]=0;return false;
-        }
-        std::memcpy(lexer->text,decoded.text.c_str(),decoded.text.size()+1);
-        record(decoded,script);
+        if(decoded.sequences) record(decoded,script);
         return true;
     } catch(...) {script_error(lexer,0,"text import failed");lexer->text[0]=0;return false;}
 }

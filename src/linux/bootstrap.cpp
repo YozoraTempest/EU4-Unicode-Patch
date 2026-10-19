@@ -4,6 +4,7 @@
 #include "linux/editor_mutation.hpp"
 #include "linux/font_pages.hpp"
 #include "linux/ime_presentation.hpp"
+#include "linux/script_legacy.hpp"
 #include <dlfcn.h>
 #include <elf.h>
 #include <picosha2.h>
@@ -32,6 +33,8 @@ int patched_main(int argc,char** argv,char** envp) {
         hooks=new Hooks;
         prepare_localization(*hooks);
         prepare_script_bom(*hooks);
+        prepare_script_legacy(*hooks);
+        prepare_localized_format(*hooks);
         prepare_bitmap_fonts(*hooks);
         prepare_font_pages(*hooks);
         prepare_font_draw(*hooks);
@@ -61,6 +64,8 @@ int patched_main(int argc,char** argv,char** envp) {
     report_font_draw_counts();
     report_map_counts();
     report_script_counts();
+    report_script_legacy_counts();
+    report_localized_format_counts();
     report_input_counts();
     report_editor_layout_counts();
     report_editor_mutation_counts();
@@ -104,9 +109,8 @@ bool verify_executable() {
     for(std::size_t i=0;i<digest.size();++i)
         std::snprintf(hash+i*2,3,"%02x",static_cast<unsigned int>(digest[i]));
     log("Executable SHA256=%s",hash);
-    if(std::strcmp(hash,"af115d3b0e54a05eca0198ed569db90ca225728afda03b5ac4ded251520a7ce3")) {
-        log("Refused: unsupported executable");return false;
-    }
+    // As on Windows, the digest identifies the image for diagnostics. The
+    // mapped image and every native instruction are checked before installing.
     // SafetyHook's Linux backend does not suspend other threads. Install all
     // hooks before main, and refuse a preloader that has already started workers.
     unsigned int threads=0;

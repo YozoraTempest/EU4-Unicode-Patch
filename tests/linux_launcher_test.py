@@ -38,6 +38,8 @@ with tempfile.TemporaryDirectory(prefix="eu4-paradox-launcher-") as temporary:
     for name in scripts:
         shutil.copyfile(tools / name, package / name)
         (package / name).chmod(0o755)
+    (package / "config.ini").write_text("[search]\ntypo_tolerance=0\n")
+    (package / "pinyin.txt").write_text("𠮷野: ji ye\n")
     # The helper's real executable remains bash, so the real preloader must
     # forward it. Bash options also catch any injected -skiplauncher argument.
     (game / "eu4").symlink_to(shutil.which("bash"))
@@ -57,8 +59,13 @@ with tempfile.TemporaryDirectory(prefix="eu4-paradox-launcher-") as temporary:
     expected = dict(initial, exePath=wrapper)
     assert configured == expected, configured
     assert backup.read_bytes() == original
+    assert (game / ".eu4-unicode/config.ini").read_bytes() == (package / "config.ini").read_bytes()
+    assert (game / ".eu4-unicode/pinyin.txt").read_bytes() == (package / "pinyin.txt").read_bytes()
+    custom_config = "[search]\nfuzzy_pinyin=1\n"
+    (game / ".eu4-unicode/config.ini").write_text(custom_config)
     mtimes = {p: p.stat().st_mtime_ns for p in [settings, backup, game / ".eu4-unicode/libeu4_unicode.so"]}
     run(install, root)
+    assert (game / ".eu4-unicode/config.ini").read_text() == custom_config
     assert mtimes == {p: p.stat().st_mtime_ns for p in mtimes}
 
     arguments = ["-enabletelemetry", "-gdpr-compliant", "-userdir=/test user data", "-mod=mod/中文.mod"]
@@ -87,7 +94,7 @@ with tempfile.TemporaryDirectory(prefix="eu4-paradox-launcher-") as temporary:
     assert "fixture main called" not in real.stdout
     log = (game / "eu4_unicode_linux.log").read_text()
     assert "Executable SHA256=" + hashlib.sha256(fixture.read_bytes()).hexdigest() in log
-    assert "Refused: unsupported executable" in log
+    assert "Refused: Native instruction outside executable mapping" in log
 
     # Uninstall restores original bytes; if the launcher updated another field,
     # restore only exePath so that new settings are preserved.

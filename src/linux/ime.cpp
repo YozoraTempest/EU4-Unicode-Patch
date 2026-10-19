@@ -194,6 +194,8 @@ int poll(void* event) {
             // The IME owns navigation and cancellation until commit. Its SDL
             // editing/commit events still pass through the ordinary poll queue.
             const auto key=read<std::int32_t>(static_cast<const char*>(event)+20);
+            const auto modifiers=read<std::uint16_t>(static_cast<const char*>(event)+24);
+            if((key=='a'||key=='A')&&(modifiers&0x00c0)) continue;
             if(key==8||key==13||key==27||key==127||(key>=0x40000049&&key<=0x40000052)) continue;
         }
         return 1;

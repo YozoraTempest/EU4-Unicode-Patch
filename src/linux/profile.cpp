@@ -1,13 +1,28 @@
 // Verified against the native Steam EU4 1.37.5 x86_64 ELF.
-// Full-file SHA256 is checked before any address is dereferenced.
+// Main-image mappings and instructions are checked before dereferencing sites.
 #include "linux/native.hpp"
 #include <array>
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
+#include <fstream>
+#include <sstream>
+#include <link.h>
+#include <unistd.h>
+#include <cstdio>
 namespace eu4unicode::linux_native {
 namespace {
 struct Site {std::uintptr_t address;std::array<unsigned char,16> bytes;};
 constexpr Site sites[]={
+    {0x2366224,{0x55,0x41,0x57,0x41,0x56,0x41,0x55,0x41,0x54,0x53,0x48,0x81,0xec,0xc8,0x2,0x0}},
+    {0x255e44e,{0x55,0x41,0x57,0x41,0x56,0x41,0x55,0x41,0x54,0x53,0x48,0x81,0xec,0x18,0x2,0x0}},
+    {0x1fe8dce,{0x55,0x41,0x57,0x41,0x56,0x41,0x55,0x41,0x54,0x53,0x48,0x81,0xec,0x68,0x8,0x0}},
+    {0x137952c,{0x41,0x56,0x53,0x48,0x81,0xec,0x88,0x0,0x0,0x0,0x48,0x89,0xf3,0x49,0x89,0xfe}},
+    {0x1379fd8,{0x55,0x41,0x57,0x41,0x56,0x41,0x54,0x53,0x48,0x81,0xec,0x80,0x0,0x0,0x0,0x48}},
+    {0xf05b32,{0x41,0x56,0x53,0x48,0x83,0xec,0x28,0x48,0x89,0xf3,0x49,0x89,0xfe,0xe8,0xe4,0x55}},
+    {0x1612348,{0x48,0x8b,0x7f,0x20,0xe9,0xa1,0xe5,0x6,0x0,0x90,0x48,0x8b,0x7f,0x10,0xe9,0x97}},
+    {0x1c67247,{0xe8,0x82,0x1b,0x38,0x0,0x48,0x8d,0x74,0x24,0x8,0x4c,0x89,0xf7,0xe8,0x41,0xc8}},
+    {0x20d568c,{0x55,0x41,0x57,0x41,0x56,0x41,0x54,0x53,0x48,0x83,0xec,0x20,0x49,0x89,0xf6,0x49}},
     {0x1a87fcc,{0xe8,0x73,0x4d,0xac,0x0,0x48,0x89,0xdf,0x48,0x83,0xc4,0x8,0x5b,0x41,0x5c,0x41}},
     {0x1a87fc4,{0xe8,0xe9,0x4e,0xac,0x0,0x4c,0x89,0xf7,0xe8,0x73,0x4d,0xac,0x0,0x48,0x89,0xdf}},
     {0xf4e254,{0x48,0x8b,0x73,0x40,0x49,0x89,0xe4,0x4c,0x89,0xe7,0x31,0xd2,0x31,0xc9,0xe8,0x48}},
@@ -241,16 +256,64 @@ constexpr Site sites[]={
     {0x207c508,{0xf3,0x0f,0x2a,0x06,0xf3,0x0f,0x59,0x87,0xb0,0x04,0x00,0x00,0xf3,0x0f,0x2a,0x4e}},
     {0x2066869,{0x41,0x29,0x06,0x48,0xc1,0xe8,0x20,0x41,0x29,0x46,0x04,0x41,0x80,0xbc,0x24,0x62}},
 };
+struct Mapping {std::uintptr_t begin,end;};
+std::vector<Mapping> code_mappings() {
+    std::vector<Mapping> image;
+    dl_iterate_phdr([](dl_phdr_info* info,std::size_t,void* output) {
+        if(info->dlpi_name&&*info->dlpi_name) return 0;
+        auto& ranges=*static_cast<std::vector<Mapping>*>(output);
+        for(std::size_t i=0;i<info->dlpi_phnum;++i) {
+            const auto& header=info->dlpi_phdr[i];
+            if(header.p_type==PT_LOAD&&(header.p_flags&(PF_R|PF_X))==(PF_R|PF_X)) {
+                const auto start=info->dlpi_addr+header.p_vaddr;
+                ranges.push_back({start,start+header.p_memsz});
+            }
+        }
+        return 1;
+    },&image);
+    std::ifstream input("/proc/self/maps");
+    std::vector<Mapping> result;
+    std::string line;
+    while(std::getline(input,line)) {
+        std::istringstream row(line);
+        std::string range,permissions,offset,device;std::uint64_t inode=0;
+        if(!(row>>range>>permissions>>offset>>device>>inode)||
+           permissions.size()<3||permissions[0]!='r'||permissions[2]!='x') continue;
+        const auto dash=range.find('-');
+        if(dash==std::string::npos) continue;
+        const auto begin=std::stoull(range.substr(0,dash),nullptr,16),end=std::stoull(range.substr(dash+1),nullptr,16);
+        for(const auto& native:image) {
+            const auto first=std::max<std::uintptr_t>(begin,native.begin),last=std::min<std::uintptr_t>(end,native.end);
+            if(first<last) result.push_back({first,last});
+        }
+    }
+    return result;
+}
+void require_mapped(std::uintptr_t address,std::size_t bytes,const std::vector<Mapping>& mappings) {
+    for(const auto& map:mappings)
+        if(address>=map.begin&&address<map.end&&bytes<=map.end-address) return;
+    throw std::runtime_error("Native instruction outside executable mapping at "+std::to_string(address));
+}
+}
+void verify_native_instructions(std::uintptr_t address,std::span<const unsigned char> expected) {
+    require_mapped(address,expected.size(),code_mappings());
+    if(std::memcmp(reinterpret_cast<void*>(address),expected.data(),expected.size()))
+        throw std::runtime_error("Native instruction mismatch at "+std::to_string(address));
 }
 void verify_site(std::uintptr_t address) {
     for(const auto& site:sites) if(site.address==address) {
-        if(std::memcmp(reinterpret_cast<void*>(address),site.bytes.data(),site.bytes.size()))
-            throw std::runtime_error("Native instruction mismatch at "+std::to_string(address));
+        verify_native_instructions(address,site.bytes);
         return;
     }
     throw std::runtime_error("Unverified native address "+std::to_string(address));
 }
 void verify_profile() {
-    for(const auto& site:sites) verify_site(site.address);
+    const auto mappings=code_mappings();
+    for(const auto& site:sites) {
+        require_mapped(site.address,site.bytes.size(),mappings);
+        if(std::memcmp(reinterpret_cast<void*>(site.address),site.bytes.data(),site.bytes.size()))
+            throw std::runtime_error("Native instruction mismatch at "+std::to_string(site.address));
+    }
+    log("Executable compatibility checks passed: %zu native sites",std::size(sites));
 }
 }
