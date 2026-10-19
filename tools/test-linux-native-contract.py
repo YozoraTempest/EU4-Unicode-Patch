@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 
@@ -36,10 +37,18 @@ env["LD_LIBRARY_PATH"] = ":".join(libraries)
 records = []
 
 
-def run(name, executable, accepted):
+def run(name, executable, accepted, custom_search=False):
     directory = output / name
     directory.mkdir()
-    result = subprocess.run([str(executable)], cwd=directory, env=env,
+    case_env = env.copy()
+    if custom_search:
+        shutil.copyfile(plugin, directory / plugin.name)
+        shutil.copyfile(helper, directory / helper.name)
+        (directory / "config.ini").write_bytes(b"\xef\xbb\xbf[SEARCH]\r\ntypo_tolerance=0\r\nfuzzy_pinyin=1\r\n")
+        (directory / "pinyin.txt").write_bytes("\ufeff𠮷野: ji ye\r\n".encode("utf-8"))
+        # Relative preload paths also cover an installation directory with spaces.
+        case_env["LD_PRELOAD"] = f"./{helper.name}:./{plugin.name}"
+    result = subprocess.run([str(executable)], cwd=directory, env=case_env,
                             capture_output=True, text=True, timeout=30)
     (directory / "stdout.txt").write_text(result.stdout)
     (directory / "stderr.txt").write_text(result.stderr)
@@ -53,6 +62,8 @@ def run(name, executable, accepted):
         assert "Localization imported=4 rejected=0" in log
         assert "Native YAML UTF-8 signatures supplied=2" in log
         assert "Native legacy script tokens=4 sequences=8 rejected=0" in log
+        if custom_search:
+            assert "custom-dictionary=1 typo-tolerance=0 fuzzy-pinyin=1" in log
     else:
         assert result.returncode == 1, (name, result.returncode, result.stderr)
         assert "Native instruction mismatch" in log
@@ -61,6 +72,7 @@ def run(name, executable, accepted):
 
 
 run("original", game, True)
+run("custom search resources", game, True, custom_search=True)
 variant = output / "variant"
 variant.mkdir()
 modified = variant / "eu4"
