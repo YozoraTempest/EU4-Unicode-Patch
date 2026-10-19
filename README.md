@@ -6,7 +6,7 @@
 
 适用于 **EU4 1.37.5.0 Inca / Windows x64**。
 
-另有 **Steam Linux 原生版 / x86_64 通用 glibc 构建**，与 Windows 共用 Unicode 核心并分别构建原生插件。安装方法、严格的游戏版本校验及功能范围见 [Linux 原生适配](docs/linux.md)。Linux 包按宿主机 ICU 主版本运行时加载，使用 Ubuntu LTS 和 Arch 进行构建检查；Steam Linux Runtime 仍需单独验证。运行时仍需要系统提供 Pango、Cairo、Fontconfig、SDL2 兼容库和 glibc。
+另有 **Steam Linux 原生版 / x86_64 通用 glibc 构建**，与 Windows 共用 Unicode 核心并分别构建原生插件。支持通过 P 社启动器加载，安装一次后 Steam 启动选项留空，也可使用自动恢复集成的启动项；安装方法、严格的游戏版本校验及功能范围见 [Linux 原生适配](docs/linux.md)。Linux 包按宿主机 ICU 主版本运行时加载，使用 Ubuntu LTS 和 Arch 进行构建检查；Steam Linux Runtime 仍需单独验证。运行时仍需要系统提供 Pango、Cairo、Fontconfig、SDL2 兼容库和 glibc。
 
 [正式版与可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/latest) · [Nightly 测试版](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
 

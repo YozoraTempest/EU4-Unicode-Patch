@@ -95,4 +95,8 @@ add_test(NAME linux_loader COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_SOURCE_DIR}/tests/linux_loader_test.py"
     "$<TARGET_FILE:EU4UnicodePatchLinux>" "$<TARGET_FILE:linux_loader_fixture>"
     "${CMAKE_SOURCE_DIR}/tools/launch-linux.sh")
+add_test(NAME linux_launcher COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_SOURCE_DIR}/tests/linux_launcher_test.py"
+    "$<TARGET_FILE:EU4UnicodePatchLinux>" "$<TARGET_FILE:linux_loader_fixture>"
+    "${CMAKE_SOURCE_DIR}/tools")
 message(STATUS "Building the native EU4 1.37.5 Linux x86_64 plugin.")

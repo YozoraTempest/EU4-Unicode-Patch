@@ -3,13 +3,15 @@ set -euo pipefail
 patch_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if [[ $# -eq 0 ]]; then
     printf '%s\n' 'Usage: launch-linux.sh GAME_COMMAND [ARGUMENT ...]' \
-        'Steam: launch-linux.sh --steam /path/to/eu4 [GAME_ARGUMENT ...] -- %command%' >&2
+        'Steam: launch-linux.sh --steam /path/to/eu4 [GAME_ARGUMENT ...] -- %command%' \
+        'Paradox Launcher: use install-paradox-launcher.sh once, then leave Steam launch options empty.' >&2
     exit 2
 fi
 if [[ ! -r "$patch_dir/libeu4_unicode.so" ]]; then
     printf '%s\n' 'libeu4_unicode.so is missing beside launch-linux.sh.' >&2
     exit 1
 fi
+preload_library="$patch_dir/libeu4_unicode.so"
 # Execute the native game before Steam's container command; retain the Steam
 # client's App ID, IPC and runtime paths.
 # The explicit game path and separator avoid guessing inside Steam wrappers.
@@ -34,6 +36,19 @@ if [[ $1 == --steam ]]; then
     set -- "$native_directory/eu4" -skiplauncher "${native_arguments[@]}"
     cd -- "$native_directory"
 fi
+# The Paradox Launcher invokes only this game wrapper. Keep its arguments
+# unchanged and use a relative preload path: LD_PRELOAD cannot quote the
+# spaces in Steam's usual "Europa Universalis IV" installation directory.
+if [[ $1 == --paradox ]]; then
+    shift
+    if [[ ${patch_dir##*/} != .eu4-unicode || ! -x "$patch_dir/../eu4" ]]; then
+        printf '%s\n' 'Paradox mode requires an installed .eu4-unicode directory beside eu4.' >&2
+        exit 2
+    fi
+    cd -- "$patch_dir/.."
+    preload_library=./.eu4-unicode/libeu4_unicode.so
+    set -- ./eu4 "$@"
+fi
 # The game's embedded SDL 2.0.4 lacks a working IME context in this profile.
 # Respect an explicit runtime choice first, then discover the conventional
 # SDL2 ABI path used by Ubuntu, Arch and Steam Runtime installations.
@@ -55,5 +70,5 @@ fi
 case ${LC_ALL:-} in
     C|POSIX) export LC_ALL=C.UTF-8 ;;
 esac
-export LD_PRELOAD="$patch_dir/libeu4_unicode.so${LD_PRELOAD:+:$LD_PRELOAD}"
+export LD_PRELOAD="$preload_library${LD_PRELOAD:+:$LD_PRELOAD}"
 exec "$@"

@@ -39,21 +39,59 @@ CI 在同一次运行中构建 Windows、Arch 和 Ubuntu，保存核心测试、
 
 插件依赖系统 glibc、libstdc++、Pango、Cairo、Fontconfig 和 ICU 运行库。ICU 的 C API 不再作为 ELF 的直接 `NEEDED` 依赖；启动时会在宿主机中寻找匹配的 `libicuuc` 与 `libicui18n` 主版本，并解析项目使用的 API。这样 Ubuntu 的 ICU 74、Arch 的 ICU 78 等版本可以使用同一插件，缺少 ICU 时会在 `eu4_unicode_linux.log` 中明确拒绝。SHA-256 使用固定版本的 PicoSHA2；游戏导出旧 OpenSSL 符号，因此插件不混用系统 OpenSSL 上下文。ELF 只导出加载入口，内部实现及静态依赖符号保持局部绑定。
 
-## 加载
+## 保留 P 社启动器（推荐）
 
-将 CI 的 Linux `tar.gz` 包完整解压到路径不含空白字符的独立目录，例如 `~/.local/share/eu4-unicode-patch`，保留 `.so` 与 `launch-linux.sh` 的相邻位置。`LD_PRELOAD` 使用空白字符分隔库路径；游戏自身的路径由命令参数保留，可以含空格。tar 包保存启动脚本的执行权限；GitHub 的原始 artifact ZIP 不保存该权限。Steam 启动选项可使用：
+下载并解压 Linux `tar.gz` 包，使用以下任一种方式。两种方式都保留 **Steam → dowser → P 社启动器 → EU4**：在启动器中选择播放集、模组和 DLC，点击开始游戏后才加载补丁。补丁目录和游戏目录均可包含空格。
+
+### 方案一：安装一次，Steam 启动选项留空
+
+退出游戏和 P 社启动器，使用终端运行：
+
+```sh
+bash "/absolute/path/to/patch/install-paradox-launcher.sh" "/absolute/path/to/Europa Universalis IV"
+```
+
+安装和卸载需要 Python 3，无需管理员权限。安装器备份原始 `launcher-settings.json`，只把 `exePath` 改为 `./.eu4-unicode/eu4-unicode-game.sh`，保留 `exeArgs` 和其他配置。随后清空 EU4 的 Steam 启动选项，照常从 Steam 和 P 社启动器进入游戏。
+
+### 方案二：填写 Steam 启动项，自动恢复集成
+
+将下面一整行填入 Steam → EU4 → 属性 → 通用 → 启动选项：
+
+```sh
+bash "/absolute/path/to/patch/start-paradox-launcher.sh" "/absolute/path/to/Europa Universalis IV" -- %command%
+```
+
+此脚本先安装或恢复集成，再原样执行 Steam 的 `%command%`，不向 dowser 或 P 社启动器预加载补丁。它不会跳过 P 社启动器，也不会添加 `-skiplauncher`。请替换两个目录路径，保留双引号、`--` 和 `%command%`。
+
+### Steam 验证完整性和卸载
+
+Steam 验证完整性可能恢复 `launcher-settings.json`。方案一需重新执行安装命令；方案二会在下次 Steam 启动时恢复。游戏更新后的可执行文件仍须通过补丁版本检查。
+
+卸载前退出游戏与 P 社启动器，运行：
+
+```sh
+bash "/absolute/path/to/patch/uninstall-paradox-launcher.sh" "/absolute/path/to/Europa Universalis IV"
+```
+
+卸载恢复备份中的游戏入口，保留启动器后来修改的其他配置、原始设置备份及许可证。使用方案二时还需清空 Steam 启动选项，以免下次启动重新安装。
+
+### 运行方式与诊断
+
+安装目录是游戏目录中的 `.eu4-unicode/`。游戏包装器先进入游戏目录，然后使用相对路径 `./.eu4-unicode/libeu4_unicode.so` 预加载补丁，以避免 `LD_PRELOAD` 把安装路径中的空格当成库名分隔符。启动器传入的全部游戏参数保持原值。
+
+补丁只处理文件名为 `eu4` 的主程序，首先校验 ELF ABI 和完整 SHA256，随后校验每个挂钩及原生调用位置的指令。未知版本拒绝安装挂钩，原因写入游戏目录中的 `eu4_unicode_linux.log`。正常加载时包含 `Linux native hooks enabled`。
+
+启动脚本保留用户显式设置的 `SDL_DYNAMIC_API`，否则寻找可用的 SDL2 库路径。明确的 `LC_ALL=C` / `POSIX` 会转换为 `C.UTF-8`。输入法服务仍须由桌面正常配置；现有真实输入测试使用 Fcitx5、X11/XIM。Steam Linux Runtime 容器的运行库版本仍需单独验证；发行版核心测试不代表容器、启动器画面或全部游戏交互已经验证。
+
+## 可选：跳过 P 社启动器的直接启动
+
+仅在明确需要直接进入游戏时使用原有的 `--steam` 模式：
 
 ```sh
 "/absolute/path/to/patch/launch-linux.sh" --steam "/absolute/path/to/Europa Universalis IV/eu4" -- %command%
 ```
 
-Steam 模式在游戏目录直接运行指定的 Linux `eu4`，继承 Steam 客户端的 App ID、IPC 和运行库路径。额外游戏参数放在 `--` 之前，例如 `-debug`；`--` 后保留 Steam 的原始命令信息。命令行直接运行仍可使用 `launch-linux.sh GAME_COMMAND [ARGUMENT ...]`。
-
-脚本通过 `LD_PRELOAD` 加载插件。插件只处理文件名为 `eu4` 的主程序，首先校验 ELF ABI 和完整 SHA256，随后校验每个挂钩及原生调用位置的指令。未知版本拒绝安装挂钩，原因写入游戏工作目录中的 `eu4_unicode_linux.log`。
-
-启动脚本首先保留用户显式设置的 `SDL_DYNAMIC_API`，否则按包内 `lib/`、Ubuntu 多架构目录、`lib64`、`/usr/lib` 的顺序寻找 `libSDL2-2.0.so.0`。游戏内嵌 SDL 2.0.4 在已调查配置中没有建立可用的输入法上下文；SDL2 兼容库提供受维护的 SDL2 ABI。实测使用 Fcitx5 拼音、X11/XIM 和本地输入法服务。桌面必须先正确配置输入法；查找弹窗及多人过滤框中的候选位置、预编辑视口、下划线和高亮、取消和中文提交已有原生实测。SDL/XIM 的非空 start/length 反馈按高亮范围显示，不把它解释为额外的独立插入光标。
-
-Steam 可能向游戏传入 `LC_ALL=C`，导致 XIM 候选可以显示却无法提交中文。启动器将明确的 `C` / `POSIX` 设置转换为宿主机提供的 `C.UTF-8`，保留 C 数字格式并启用 UTF-8 字符转换；其他明确设置保持原值。输入法环境变量仍使用桌面配置，Fcitx 的已验证配置包含 `XMODIFIERS=@im=fcitx`。
+此模式添加 `-skiplauncher`，直接运行指定的游戏。补丁解压目录不能含空白字符，游戏目录可以含空格。希望保留 P 社启动器时请使用前面的方案一或方案二。
 
 已调查的游戏是原生 Linux ELF64 x86_64、ET_EXEC，完整 SHA256 为：
 
