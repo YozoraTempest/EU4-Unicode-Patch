@@ -1,0 +1,37 @@
+EU4 Unicode Patch — Linux / Paradox Launcher
+
+适用：EU4 1.37.5 Linux x86_64 原生版。
+本包保留 Steam → P 社启动器 → 游戏的启动流程。
+在 P 社启动器中选择播放集、模组和 DLC，点击“开始游戏”后才加载补丁。
+
+方案一：安装一次，Steam 启动选项留空（推荐）
+1. 完全退出游戏和 P 社启动器，将本包解压到任意目录。
+2. 在终端运行（按实际路径替换）：
+   bash "/补丁目录/install-paradox-launcher.sh" "/游戏目录/Europa Universalis IV"
+3. 清空 EU4 的 Steam 启动选项，照常从 Steam 启动。
+
+方案二：填写启动选项，保留 P 社启动器并自动恢复安装
+Steam → EU4 → 属性 → 通用 → 启动选项，填写一行：
+   bash "/补丁目录/start-paradox-launcher.sh" "/游戏目录/Europa Universalis IV" -- %command%
+此脚本会检查并安装补丁，然后继续运行 Steam 原来的命令。
+不会跳过 P 社启动器，不会向启动器预加载补丁。
+补丁解压目录和游戏目录均可包含空格；保留路径的双引号及 %command%。
+
+Steam 验证完整性／游戏更新
+Steam 可能还原 launcher-settings.json。方案一需要重跑安装命令；方案二会在下次启动时恢复。
+新游戏版本仍须符合补丁的可执行文件检查；恢复安装不代表支持新游戏版本。
+
+卸载
+退出游戏和 P 社启动器后运行：
+   bash "/补丁目录/uninstall-paradox-launcher.sh" "/游戏目录/Europa Universalis IV"
+清空 Steam 启动选项。卸载恢复原游戏入口，并保留原始设置备份及许可证。
+
+排查
+安装和卸载需要 Python 3。没有必要使用 sudo。
+补丁安装在游戏目录的 .eu4-unicode/，原设置备份为 .eu4-unicode/launcher-settings.json.original。
+游戏启动后检查游戏目录中的 eu4_unicode_linux.log，正常包含 Linux native hooks enabled。
+运行时仍需要与该构建兼容的 glibc、libstdc++、ICU、Pango、Cairo、Fontconfig 和 SDL2。
+Steam Linux Runtime 容器的运行库版本需要另行验证；不能用发行版核心测试替代真实启动器和游戏验证。
+
+launch-linux.sh --steam 是可选的直接启动模式，会跳过 P 社启动器。
+希望保留 P 社启动器时请使用上面的方案一或方案二。

@@ -42,12 +42,15 @@ ctest "${ctest_args[@]}"
 
 package_dir="$build_dir/linux-package"
 mkdir -p "$package_dir/licenses"
-cp "$build_dir/libeu4_unicode.so" tools/launch-linux.sh LICENSE "$package_dir/"
+cp "$build_dir/libeu4_unicode.so" tools/launch-linux.sh tools/eu4-unicode-game.sh \
+    tools/install-paradox-launcher.sh tools/uninstall-paradox-launcher.sh \
+    tools/start-paradox-launcher.sh tools/linux-launcher.py LICENSE "$package_dir/"
+cp docs/linux-install.txt "$package_dir/README.txt"
 cp vendor/safetyhook/LICENSE "$package_dir/licenses/SafetyHook.txt"
 cp vendor/picosha2/LICENSE "$package_dir/licenses/PicoSHA2.txt"
 cp "$build_dir/_deps/zydis-src/LICENSE" "$package_dir/licenses/Zydis.txt"
 cp "$build_dir/_deps/zydis-src/dependencies/zycore/LICENSE" "$package_dir/licenses/Zycore.txt"
-chmod +x "$package_dir/launch-linux.sh"
+chmod +x "$package_dir/"*.sh
 file "$build_dir/libeu4_unicode.so" > "$package_dir/elf.txt"
 readelf -d "$build_dir/libeu4_unicode.so" > "$package_dir/dynamic.txt"
 ldd "$build_dir/libeu4_unicode.so" > "$package_dir/dependencies.txt"
@@ -58,7 +61,7 @@ fi
 LD_PRELOAD="$(realpath "$build_dir/libeu4_unicode.so")" /usr/bin/true
 (
     cd "$package_dir"
-    sha256sum libeu4_unicode.so launch-linux.sh > SHA256SUMS
+    sha256sum libeu4_unicode.so ./*.sh linux-launcher.py README.txt > SHA256SUMS
 )
 
 linux_archive="EU4UnicodePatch-linux-x86_64-v$(cat VERSION).tar.gz"
