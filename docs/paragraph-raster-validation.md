@@ -27,12 +27,14 @@ Linux 的 `rasterize_glyph_run` 用 Cairo recording surface 的 ink extents 分�
 
 ## 独立回归与 CI
 
-`linux_glyph_raster` 使用固定的 DejaVu Sans 家族，对 6 组文字和 7 个字号执行 42 次直接 Pango/A8 与生产栅格器的逐像素比较，覆盖组合文字、RTL、升降部以及四种子像素相位。参考和产品都使用 A8；不能拿 ARGB32 的不同 Cairo 合成路径作为逐像素 alpha 字库基准。
+`linux_glyph_raster` 使用固定的 DejaVu Sans 家族，对 6 组文字、7 个字号和 4 种水平相位执行 168 次直接 Pango/A8 与生产栅格器的逐像素比较，覆盖组合文字、RTL、升降部以及四种子像素相位。参考和产品都使用 A8；不能拿 ARGB32 的不同 Cairo 合成路径作为逐像素 alpha 字库基准。
+
+Ubuntu 22.04 的 Cairo 1.16 将 glyph 位置取整。裁掉透明边框后，四分之一像素移动可能既不改变实际覆盖，也不改变 alpha；原 `unicode_layout` 测试强制要求 alpha 改变，属于错误假设。该断言改为遍历相位并同时检查覆盖与位置；168 组独立绘制对比另外逐像素验证实际 Cairo 取整结果。没有按版本跳过测试。
 
 修复前后的本地验证：
 
 - 将旧栅格器换回、新测试保持不变：`paragraph_transport` 和 `linux_glyph_raster` 均失败，0/2 通过。地图首次越界像素为 `(172,19)`：参考 alpha 为 52，实际最大值和累计值均为 0。
-- 恢复修复后的实现：完整 CTest 28/28 通过，零跳过；42 次直接 Pango 对比均完全一致。
+- 恢复修复后的实现：完整 CTest 28/28 通过，零跳过；168 次直接 Pango 对比均完全一致。
 - 未增加原有百分比阈值；共享比较已用逐像素覆盖约束取代阈值。
 - Ubuntu CI 移除 `paragraph_transport` 排除项，Arch 和 Ubuntu 都安装 DejaVu 测试字体并运行完整测试。游戏运行时仍使用原有模组字体及字体回退策略，DejaVu 是测试依赖。
 
