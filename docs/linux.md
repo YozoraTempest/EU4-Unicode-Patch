@@ -41,8 +41,12 @@ Fedora 43/44（使用 DNF 的 x86_64 系统）：
 
 ```sh
 sudo dnf install python3 libstdc++ libicu pango cairo fontconfig sdl2-compat \
-    google-noto-sans-fonts google-noto-sans-cjk-fonts dejavu-sans-fonts
+    google-noto-sans-fonts google-noto-sans-cjk-fonts dejavu-sans-fonts \
+    google-noto-sans-arabic-fonts google-noto-sans-hebrew-fonts \
+    google-noto-sans-devanagari-fonts google-noto-sans-thai-fonts
 ```
+
+Fedora 按文字系统拆分 Noto 字体包；Latin 与 CJK 字体不包含天城文、泰文等字形。上面的字体列表覆盖中文及复杂段落测试使用的文字，避免缺字时落到没有墨迹的 `.notdef` 字形。
 
 从源码构建时，再安装开发依赖并运行同一个构建脚本：
 

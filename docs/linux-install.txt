@@ -33,6 +33,8 @@ Steam 可能还原 launcher-settings.json。方案一需要重跑安装命令；
 运行时仍需要与该构建兼容的 glibc、libstdc++、ICU、Pango、Cairo、Fontconfig 和 SDL2。
 Fedora 43/44 的 DNF 系统安装依赖：
    sudo dnf install python3 libstdc++ libicu pango cairo fontconfig sdl2-compat google-noto-sans-fonts google-noto-sans-cjk-fonts dejavu-sans-fonts
+阿拉伯文、希伯来文、印地文和泰文段落还需对应字体：
+   sudo dnf install google-noto-sans-arabic-fonts google-noto-sans-hebrew-fonts google-noto-sans-devanagari-fonts google-noto-sans-thai-fonts
 Fedora 使用同一个通用包与上述 P 社启动器流程。容器 CI 验证运行库和启动器集成；真实桌面输入法、GPU 与战役仍需实机验证。
 Steam Linux Runtime 容器的运行库版本需要另行验证；不能用发行版核心测试替代真实启动器和游戏验证。
 
