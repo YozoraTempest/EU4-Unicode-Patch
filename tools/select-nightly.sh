@@ -17,3 +17,4 @@ fi
 
 build_date=$(TZ=CST-8 date +%Y%m%d)
 printf 'date=%s\n' "$build_date" >> "$GITHUB_OUTPUT"
+printf 'commit=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

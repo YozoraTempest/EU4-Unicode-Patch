@@ -1,5 +1,4 @@
 name: Nightly
-
 on:
   workflow_dispatch:
     inputs:
@@ -7,23 +6,17 @@ on:
         description: develop commit SHA (empty = current develop)
         required: false
         type: string
-
 permissions:
   contents: read
-
 concurrency:
   group: nightly-release
   cancel-in-progress: false
-
 jobs:
-  nightly:
-    runs-on: windows-2022
-    timeout-minutes: 30
-    permissions:
-      contents: write
-    defaults:
-      run:
-        shell: sh -e {0}
+  source:
+    runs-on: ubuntu-24.04
+    outputs:
+      commit: ${{ steps.select.outputs.commit }}
+      date: ${{ steps.select.outputs.date }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,38 +24,16 @@ jobs:
           fetch-depth: 0
           submodules: recursive
           persist-credentials: false
-      - name: Select develop commit and build date
-        id: source
+      - id: select
         env:
           REQUESTED_COMMIT: ${{ inputs.commit }}
-        run: sh ./tools/select-nightly.sh
-      - name: Check existing release
-        id: preflight
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BUILD_DATE: ${{ steps.source.outputs.date }}
-        run: pwsh -NoProfile -File ./tools/publish-release.ps1 -Channel Nightly -BuildDate "$BUILD_DATE" -CheckOnly
-      - name: Build, test and package
-        if: steps.preflight.outputs.skip != 'true'
-        env:
-          BUILD_DATE: ${{ steps.source.outputs.date }}
-        run: pwsh -NoProfile -File ./tools/ci.ps1 -Channel Nightly -BuildDate "$BUILD_DATE"
-      - name: Save diagnostics
-        if: always() && steps.preflight.outputs.skip != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: nightly-${{ github.run_id }}
-          retention-days: 30
-          path: |
-            build/*.json
-            build/*.xml
-            build/*.log
-            build/*.pdb
-            build/*.map
-            build/open-font-preview.png
-      - name: Publish nightly
-        if: steps.preflight.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BUILD_DATE: ${{ steps.source.outputs.date }}
-        run: pwsh -NoProfile -File ./tools/publish-release.ps1 -Channel Nightly -BuildDate "$BUILD_DATE"
+        run: sh tools/select-nightly.sh
+  release:
+    needs: source
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build-release.yml
+    with:
+      source: ${{ needs.source.outputs.commit }}
+      channel: Nightly
+      build_date: ${{ needs.source.outputs.date }}

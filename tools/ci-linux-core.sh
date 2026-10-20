@@ -62,9 +62,11 @@ if grep -Eq 'libicu(uc|i18n|data)\.so' "$package_dir/dynamic.txt"; then
     exit 1
 fi
 LD_PRELOAD="$(realpath "$build_dir/libeu4_unicode.so")" /usr/bin/true
+python3 tools/linux-build-info.py --build-directory "$build_dir" --channel "${RELEASE_CHANNEL:-Release}" --build-date "${BUILD_DATE:-}" --excluded-tests "$ctest_exclude"
+cp "$build_dir/linux-build-info.json" "$package_dir/build-info.json"
 (
     cd "$package_dir"
-    sha256sum libeu4_unicode.so ./*.sh linux-launcher.py config.ini README.txt > SHA256SUMS
+    sha256sum libeu4_unicode.so ./*.sh linux-launcher.py config.ini README.txt build-info.json > SHA256SUMS
 )
 
 linux_archive="EU4UnicodePatch-linux-x86_64-v$(cat VERSION).tar.gz"
@@ -73,3 +75,6 @@ tar -C "$package_dir" -czf "$build_dir/$linux_archive" .
     cd "$build_dir"
     sha256sum "$linux_archive" > linux-package-sha256.txt
 )
+
+python3 tools/package-diagnostics.py --platform linux --build-directory "$build_dir" --channel "${RELEASE_CHANNEL:-Release}" --build-date "${BUILD_DATE:-}"
+python3 tests/diagnostics_package_test.py --platform linux --stage "$build_dir/diagnostics-linux"

@@ -179,3 +179,18 @@ Frida 探针需要独立 Python 环境、Frida 和 psutil；剪贴板探针另�
 `tools/trace-*.py` 跟踪原生调用，`tools/verify-*.py` 检查编辑、绘制和设备行为。
 
 动态 GPU 探针在外交搜索框聚焦后使用 `private/dynamic-font-arm.txt` 开始、`private/dynamic-font-finish.txt` 结束。`--player` 改为验证普通目录中的正式 DLL。
+
+## 统一发布与独立诊断包
+
+正式版在 develop 合并到 main 后触发，Nightly 仍由 workflow_dispatch 选择 develop 提交；两者调用同一个 `build-release.yml`。预检固定源码 SHA 和北京时间构建日期，然后复用完整 CI。Windows 与 Ubuntu 22.04 分别构建，同次运行中的 Arch、Ubuntu 24.04、Fedora 43/44 检查也必须通过，才允许汇总附件。
+
+`release_info.py` 是版本、标签与附件名称的共同来源。`release_bundle.py` 检查 Windows 的自动验证记录、两平台测试报告、实际补丁哈希、诊断工具哈希和源提交，生成五个独立压缩包、`release-manifest.json` 和 `SHA256SUMS.txt`。Linux 发布包来自 Ubuntu 22.04；发行版验证产物不作为另一种玩家补丁发布。
+
+- Windows 主包保留已有的四文件布局及名称约定。
+- 可选字体包独立发布。
+- Linux 通用包只新增用于识别构建的 `build-info.json`。
+- Windows 诊断 ZIP 和 Linux 诊断 tar.gz 独立发布，工具不进入补丁或字体压缩包。
+
+`publish_release.py` 先校验完整本地附件，再上传草稿；远端必须具有完整附件集合、正确大小与 SHA256，才能公开。发布失败时保留草稿，重复运行检查已公开版本的提交、清单和远端 digest；不会覆盖已经公开的不同构建。正式版必须提升 VERSION 并准备对应更新记录。旧 PowerShell 发布入口转交同一 Python 发布实现。
+
+诊断包调用系统运行时与字体探针，Linux 额外检查 ELF、运行依赖和启动器集成，Windows 额外运行现有的只读程序指令检查。探针只使用自己的进程，不加载游戏补丁或执行游戏入口；正在运行的游戏模块另行读取，未运行时不会认定实际游戏库路径已经验证。报告及操作方法见 [诊断说明](diagnostics.md)。

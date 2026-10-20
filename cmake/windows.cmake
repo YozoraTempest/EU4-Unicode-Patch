@@ -190,3 +190,10 @@ add_test(NAME font_assets COMMAND font_assets_tests)
 add_test(NAME font_draw_batches COMMAND font_draw_batches_tests)
 add_test(NAME font_cache COMMAND font_cache_tests "${CMAKE_CURRENT_BINARY_DIR}/runtime-font-assets")
 add_test(NAME version_proxy COMMAND version_proxy_tests $<TARGET_FILE:version_proxy>)
+
+# Distributed only in the separate diagnostic archive.
+add_executable(diagnostic_probe tools/diagnostic-probe.cpp)
+target_link_libraries(diagnostic_probe PRIVATE unicode_layout unicode_services)
+target_compile_options(diagnostic_probe PRIVATE /W4 /utf-8 /EHsc)
+add_test(NAME diagnostic_probe COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_SOURCE_DIR}/tests/diagnostic_probe_test.py" "$<TARGET_FILE:diagnostic_probe>")

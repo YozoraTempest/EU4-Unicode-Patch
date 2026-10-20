@@ -43,3 +43,15 @@ python3 "$project_root/tests/linux_launcher_test.py" \
     "$package_dir/libeu4_unicode.so" "$fixture" "$package_dir" \
     | tee "$output_dir/launcher.log"
 printf '%s\n' 'Generic package preload and Paradox Launcher integration checks passed.'
+
+# The independent diagnostic artifact must also start with runtime dependencies only.
+diagnostic_archives=("$artifact_dir"/EU4UnicodePatch-diagnostics-linux-x86_64-*.tar.gz)
+if [[ ${#diagnostic_archives[@]} -ne 1 || ! -f ${diagnostic_archives[0]} ]]; then
+    printf '%s\n' 'Expected one independent Linux diagnostic archive.' >&2
+    exit 1
+fi
+mkdir "$output_dir/diagnostics"
+tar -xzf "${diagnostic_archives[0]}" -C "$output_dir/diagnostics"
+python3 "$project_root/tests/diagnostic_probe_test.py" "$output_dir/diagnostics/diagnostic_probe"
+python3 "$project_root/tests/diagnostics_package_test.py" --platform linux --stage "$output_dir/diagnostics" --payload-directory "$package_dir" \
+    | tee "$output_dir/diagnostics.log"

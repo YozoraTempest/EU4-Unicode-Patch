@@ -128,3 +128,10 @@ add_library(linux_native_contract SHARED tools/linux-native-contract.cpp)
 target_include_directories(linux_native_contract PRIVATE include)
 target_compile_features(linux_native_contract PRIVATE cxx_std_23)
 target_link_libraries(linux_native_contract PRIVATE safetyhook::safetyhook ${CMAKE_DL_LIBS})
+
+# Distributed only in the separate diagnostic archive.
+add_executable(diagnostic_probe tools/diagnostic-probe.cpp)
+target_link_libraries(diagnostic_probe PRIVATE unicode_layout unicode_services)
+target_compile_options(diagnostic_probe PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME diagnostic_probe COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_SOURCE_DIR}/tests/diagnostic_probe_test.py" "$<TARGET_FILE:diagnostic_probe>")

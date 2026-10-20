@@ -1,0 +1,22 @@
+EU4 Unicode Patch 独立诊断工具 @PATCH_RELEASE@
+
+本工具与补丁分开下载、解压；无需复制进游戏目录，不修改游戏、模组或启动器设置。
+不要求管理员权限。仅在指定的输出目录生成 JSON 和文本报告，不上传任何数据。
+
+Windows（系统自带 Windows PowerShell 5.1，无需 Python）
+双击 diagnose-windows.cmd 自动查找 Steam 安装；也可运行：
+  diagnose-windows.cmd -GameDirectory "D:\SteamLibrary\steamapps\common\Europa Universalis IV" -OutputDirectory "D:\Reports"
+
+Linux（需要 Python 3）
+  bash diagnose-linux.sh "/path/to/Europa Universalis IV" --output-directory "/path/to/reports"
+可用 --patch-directory 指向尚未安装的补丁目录；不指定游戏目录时查找常规 Steam 安装位置。
+安装多个游戏副本时应明确指定游戏目录。Flatpak/Steam Runtime 的检查应在实际运行环境内执行。
+
+报告包含系统、补丁版本及哈希、安装位置、启动器入口、运行库检查、系统字体覆盖、最近补丁日志中的关键行。
+Windows 另外检查原生游戏布局和关键指令，不执行游戏入口。Linux ELF 架构检查不替代加载时的关键指令校验。
+诊断进程使用的库与正在运行的游戏实际加载的库分开记录；没有运行游戏或无读取权限时不会声称已验证游戏加载。
+缺字检查使用系统字体；模组或可选私有字体会改变游戏中的实际覆盖。工具不负责修复或下载运行库。
+哈希差异只说明与本诊断版本不同，不能单独证明补丁或游戏不兼容。
+
+退出码：0 表示未发现失败项（可能仍有警告），1 表示发现问题且已生成报告，2 表示参数或工具启动错误。
+需要反馈时提供新生成的 .json 与 .txt 报告。报告含本地安装路径；请按自己的意愿分享。

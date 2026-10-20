@@ -60,6 +60,10 @@ Europa Universalis IV/
 
 系统字体缺字时，再下载可选字体包，同样解压覆盖到游戏目录后重启。已安装字体包时仍优先使用系统字体；移除 `plugins/eu4_unicode_patch/fonts/` 即可取消可选字库。字体缓存由补丁在启动时生成于 `gfx/fonts/eu4-unicode/cache/`，无需另行下载。
 
+## 独立诊断工具
+
+遇到安装、启动、缺字或运行库问题时，可从同一 Release 单独下载 `EU4UnicodePatch-diagnostics-windows-x86_64-*.zip` 或 `EU4UnicodePatch-diagnostics-linux-x86_64-*.tar.gz`。诊断工具无需放进游戏目录，也不会修改游戏和启动器设置；Windows 不需要 Python，Linux 需要 Python 3。它会生成 JSON 与文本报告，具体操作见 [诊断说明](docs/diagnostics.md)。诊断压缩包独立于主补丁及字体包。
+
 ## 卸载
 
 退出游戏，删除 `plugins/eu4_unicode_patch.dll`、`plugins/eu4_unicode_patch/`、`plugins/eu4_unicode_patch.log`、`gfx/fonts/eu4-unicode/`、`EU4UnicodePatch.README.txt` 和可选包的 `EU4UnicodePatch.FONTS.txt`。恢复备份的 `VERSION.dll`；此前没有加载器时，删除本包的 `VERSION.dll`。其他插件仍需加载器时，保留或重新安装所需加载器。
