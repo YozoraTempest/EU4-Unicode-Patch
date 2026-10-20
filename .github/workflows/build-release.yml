@@ -1,0 +1,59 @@
+name: Build and publish complete release
+on:
+  workflow_call:
+    inputs:
+      source:
+        type: string
+        required: true
+      channel:
+        type: string
+        required: true
+      build_date:
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source }}
+          persist-credentials: false
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+          BUILD_DATE: ${{ inputs.build_date }}
+        run: python3 tools/publish_release.py --channel "$RELEASE_CHANNEL" --build-date "$BUILD_DATE" --check-only
+  validate:
+    needs: preflight
+    if: needs.preflight.outputs.skip != 'true'
+    uses: ./.github/workflows/ci.yml
+    with:
+      source: ${{ inputs.source }}
+      channel: ${{ inputs.channel }}
+      build_date: ${{ inputs.build_date }}
+  publish:
+    needs: [preflight, validate]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.validate.outputs.bundle_artifact }}
+          path: build/release-bundle
+      - name: Verify, upload to draft, check remote digests and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+          BUILD_DATE: ${{ inputs.build_date }}
+        run: python3 tools/publish_release.py --channel "$RELEASE_CHANNEL" --build-date "$BUILD_DATE" --bundle-directory build/release-bundle

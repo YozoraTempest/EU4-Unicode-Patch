@@ -1,6 +1,20 @@
 name: CI
 
 on:
+  workflow_call:
+    inputs:
+      source:
+        type: string
+        required: true
+      channel:
+        type: string
+        default: Release
+      build_date:
+        type: string
+        default: ''
+    outputs:
+      bundle_artifact:
+        value: ${{ jobs.bundle.outputs.artifact_name }}
   push:
     branches: [main, develop]
     paths-ignore:
@@ -16,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -26,9 +40,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Install Arch build dependencies
-        run: pacman -Syu --noconfirm --needed base-devel cmake ninja python git icu file binutils pango cairo fontconfig noto-fonts noto-fonts-cjk ttf-dejavu
+        run: pacman -Syu --noconfirm --needed base-devel cmake ninja python git icu file binutils pango cairo fontconfig noto-fonts noto-fonts-cjk ttf-dejavu sdl2-compat
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source || github.sha }}
           submodules: recursive
           persist-credentials: false
       - name: Build and test native Linux plugin and shared core
@@ -52,6 +67,8 @@ jobs:
             build/linux-package/**
             build/EU4UnicodePatch-linux-*.tar.gz
             build/linux-package-sha256.txt
+            build/linux-build-info.json
+            build/EU4UnicodePatch-diagnostics-linux-*.tar.gz
             build/elf-evidence/*.txt
   ubuntu-generic:
     strategy:
@@ -76,15 +93,18 @@ jobs:
             build-essential cmake ninja-build python3 git file binutils pkg-config \
             libicu-dev libpango1.0-dev libpangocairo-1.0-0 \
             libfontconfig1-dev libcairo2-dev libharfbuzz-dev libfreetype6-dev \
-            fonts-noto-core fonts-noto-cjk fonts-dejavu-core ${{ matrix.compiler_package }}
+            fonts-noto-core fonts-noto-cjk fonts-dejavu-core libsdl2-2.0-0 ${{ matrix.compiler_package }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source || github.sha }}
           submodules: recursive
           persist-credentials: false
       - name: Build and test generic Linux plugin
         env:
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
+          RELEASE_CHANNEL: ${{ inputs.channel || 'Release' }}
+          BUILD_DATE: ${{ inputs.build_date || '' }}
         run: bash tools/ci-linux-core.sh
       - name: Save generic Linux package and diagnostics
         if: always()
@@ -100,6 +120,8 @@ jobs:
             build/linux-package/**
             build/EU4UnicodePatch-linux-*.tar.gz
             build/linux-package-sha256.txt
+            build/linux-build-info.json
+            build/EU4UnicodePatch-diagnostics-linux-*.tar.gz
   fedora-core:
     needs: ubuntu-generic
     strategy:
@@ -118,6 +140,7 @@ jobs:
           dnf install -y python3 git binutils tar gzip libstdc++ libicu pango cairo fontconfig sdl2-compat
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source || github.sha }}
           submodules: recursive
           persist-credentials: false
       - name: Download the Ubuntu 22.04 generic package
@@ -157,10 +180,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source || github.sha }}
           submodules: recursive
           persist-credentials: false
       - name: Build, test and check player packages
-        run: pwsh -NoProfile -File ./tools/ci.ps1
+        env:
+          RELEASE_CHANNEL: ${{ inputs.channel || 'Release' }}
+          BUILD_DATE: ${{ inputs.build_date || '' }}
+        run: pwsh -NoProfile -File ./tools/ci.ps1 -Channel "$RELEASE_CHANNEL" -BuildDate "$BUILD_DATE"
       - name: Save packages and diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -187,3 +214,39 @@ jobs:
             build/native_mod_registry_tests.exe
             build/native_ime_tests.exe
             build/open-font-preview.png
+
+  bundle:
+    needs: [build, ubuntu-generic, arch-core, fedora-core]
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact_name: ${{ steps.identity.outputs.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ci-${{ github.sha }}
+          path: build/windows-artifacts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: linux-generic-ubuntu-22.04-${{ github.sha }}
+          path: build/linux-artifacts
+      - name: Test release gates and draft publication behavior
+        run: python3 tests/release_pipeline_tests.py
+      - name: Assemble the same-commit cross-platform release
+        env:
+          RELEASE_CHANNEL: ${{ inputs.channel || 'Release' }}
+          BUILD_DATE: ${{ inputs.build_date || '' }}
+        run: |
+          python3 tools/release_bundle.py --windows-artifacts build/windows-artifacts \
+            --linux-artifacts build/linux-artifacts --output-directory build/release-bundle \
+            --channel "$RELEASE_CHANNEL" --build-date "$BUILD_DATE"
+      - id: identity
+        run: echo "name=release-bundle-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.identity.outputs.name }}
+          path: build/release-bundle/*
+          retention-days: 14

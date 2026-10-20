@@ -160,3 +160,9 @@ af115d3b0e54a05eca0198ed569db90ca225728afda03b5ac4ded251520a7ce3
 游戏验证使用独立 runtime 和显式 `-userdir=/absolute/test/path`，保留可执行文件与插件哈希、描述符、启用列表、原版与补丁日志。Linux 的 `userdir.txt` 不能代替已验证的命令行参数。测试素材使用本地汉化副本，无需订阅或下载创意工坊内容。
 
 测试必须检查原生登记、实际中文本地化、字体挂载及游戏画面；单独测试选择算法或启动器状态不够。虚拟机的软件渲染用于功能验证，真实 GPU 性能、完整战役、存档往返和其他字库格式仍需要各自的验证证据。目录和 ZIP 模组分别有双扫描顺序的真实挂载测试。最终 CI 与逐组结果见 [Arch 验证记录](linux-validation.md)。游戏运行时诊断只读，保留失败记录，不能以进入前端对象的时间代替主菜单完成渲染或持续运行。
+
+## 独立诊断工具
+
+需要排查时单独下载同版的 `EU4UnicodePatch-diagnostics-linux-x86_64-*.tar.gz`，解压到游戏目录以外，运行 `bash diagnose-linux.sh "/path/to/Europa Universalis IV"`。工具需要 Python 3，在当前目录生成 JSON 和文本报告；不安装补丁、不修复启动器、不修改模组。可用 `--output-directory` 指定报告目录，`--patch-directory` 检查独立解压的补丁。
+
+报告区分诊断进程解析的库、正在运行的游戏实际加载的库、已有日志；宿主机自检不能替代 Flatpak 或 Steam Runtime 内部验证。详情见 [诊断说明](diagnostics.md)。
