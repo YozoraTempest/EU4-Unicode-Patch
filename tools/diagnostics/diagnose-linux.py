@@ -15,12 +15,12 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parent
 
 
-def command(argv, timeout=20):
+def command(argv, timeout=20, cwd=None):
     env = dict(os.environ)
     env.pop("LD_PRELOAD", None)
     try:
         result = subprocess.run([str(value) for value in argv], capture_output=True, text=True,
-                                errors="replace", timeout=timeout, env=env)
+                                errors="replace", timeout=timeout, env=env, cwd=cwd)
         return result.returncode, result.stdout, result.stderr
     except (OSError, subprocess.TimeoutExpired) as error:
         return -1, "", str(error)
@@ -132,7 +132,7 @@ paths=sorted({line.split(None,5)[-1].strip() for line in open("/proc/self/maps")
 print(json.dumps({"requested":name,"version":[v.major,v.minor,v.patch],"loaded_paths":paths}))
 '''
     import sys
-    code, output, error = command([sys.executable, "-c", sdl_probe])
+    code, output, error = command([sys.executable, "-c", sdl_probe], cwd=game if game is not None and game.is_dir() else None)
     try:
         sdl = json.loads(output) if code == 0 else None
         good = sdl is not None and sdl.get("version", [0])[0] == 2

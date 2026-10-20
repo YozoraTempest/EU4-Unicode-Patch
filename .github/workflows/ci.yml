@@ -47,7 +47,9 @@ jobs:
           submodules: recursive
           persist-credentials: false
       - name: Build and test native Linux plugin and shared core
-        run: bash tools/ci-arch-core.sh
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          bash tools/ci-arch-core.sh
       - name: Check native ELF evidence collection
         run: bash tools/inspect-linux-game.sh build/unicode_text_tests build/elf-evidence
       - name: Save Arch environment and test results
@@ -158,7 +160,9 @@ jobs:
             google-noto-sans-arabic-fonts google-noto-sans-hebrew-fonts \
             google-noto-sans-devanagari-fonts google-noto-sans-thai-fonts
       - name: Build and run the complete Linux suite on Fedora
-        run: bash tools/ci-linux-core.sh
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          bash tools/ci-linux-core.sh
       - name: Save Fedora tests and generic runtime evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

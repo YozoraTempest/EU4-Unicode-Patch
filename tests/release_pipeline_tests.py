@@ -92,7 +92,7 @@ class FakeGitHub:
         self.calls.append(tuple(map(str, arguments)))
         action = arguments[1]
         if action == "create":
-            self.release = dict(draft=True, prerelease=self.info["Channel"] == "nightly", tag_name=self.info["Tag"], assets=[])
+            self.release = dict(draft=True, prerelease=self.info["Channel"] == "nightly", tag_name=self.info["Tag"], target_commitish=self.info["SourceCommit"], assets=[])
         elif action == "upload":
             self.release["assets"] = [dict(name=path.name, size=path.stat().st_size, state="uploaded", digest="sha256:" + digest(path.read_bytes())) for path in self.directory.iterdir()]
             if self.corrupt_upload:
@@ -158,6 +158,18 @@ class PipelineTests(unittest.TestCase):
         client.calls.clear()
         self.assertTrue(publisher.publish(self.info, self.output, client, True))
         self.assertTrue(all(call[1] == "download" for call in client.calls))
+    def test_existing_draft_must_target_the_selected_commit(self):
+        self.build();client = FakeGitHub(self.info, self.output)
+        client.release = dict(draft=True, target_commitish="main", assets=[])
+        with self.assertRaisesRegex(ValueError, "targets"):
+            publisher.publish(self.info, self.output, client, True)
+        self.assertEqual(client.calls, [])
+    def test_extra_diagnostic_in_main_patch_is_rejected(self):
+        path = self.windows / "dist" / self.info["PlayerPackage"]
+        with zipfile.ZipFile(path, "a") as output:
+            output.writestr("diagnose-windows.ps1", "unexpected")
+        with self.assertRaisesRegex(ValueError, "payload"):
+            self.build()
     def test_preflight_does_not_create_a_release(self):
         client = FakeGitHub(self.info, self.output)
         self.assertFalse(publisher.publish(self.info, self.output, client, True))

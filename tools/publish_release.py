@@ -112,6 +112,8 @@ def publish(info, directory, client, check_only=False):
         if latest and re.fullmatch(r"v\d+\.\d+\.\d+", latest["tag_name"]):
             if tuple(map(int, info["Version"].split("."))) <= tuple(map(int, latest["tag_name"][1:].split("."))):
                 raise ValueError("Formal release version must increase")
+    if release and release.get("target_commitish") != info["SourceCommit"]:
+        raise ValueError("Draft release targets a different source commit")
     if check_only:
         return False
     if subprocess.check_output(["git", "-C", str(ROOT), "status", "--porcelain"], text=True).strip():

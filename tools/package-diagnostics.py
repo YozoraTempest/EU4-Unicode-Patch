@@ -32,7 +32,7 @@ def package(platform, build, channel, build_date):
         shutil.copy2(ROOT / "tools/diagnostics" / name, stage / name)
     for name in binaries:
         shutil.copy2(build / name, stage / name)
-    (stage / "README.txt").write_text((ROOT / "docs/diagnostics.txt").read_text().replace("@PATCH_RELEASE@", info["Tag"]), encoding="utf-8")
+    (stage / "README.txt").write_text((ROOT / "docs/diagnostics.txt").read_text(encoding="utf-8").replace("@PATCH_RELEASE@", info["Tag"]), encoding="utf-8")
     license_text = (ROOT / "LICENSE").read_text(encoding="utf-8") + "\nUTFCPP\n" + (ROOT / "vendor/utfcpp/LICENSE").read_text(encoding="utf-8")
     if platform == "windows":
         license_text += "\nPicoSHA2\n" + (ROOT / "vendor/picosha2/LICENSE").read_text(encoding="utf-8")
