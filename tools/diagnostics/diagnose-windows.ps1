@@ -101,7 +101,11 @@ try {
             } catch { Add-Check "patch.$($file.name)" 'fail' $_.Exception.Message 'Extract the complete Windows main patch package into the directory containing eu4.exe.' }
         }
         $readme=Join-Path $GameDirectory 'EU4UnicodePatch.README.txt'
-        $version=if (Test-Path -LiteralPath $readme) {(Get-Content -LiteralPath $readme -Encoding UTF8 -TotalCount 1)} else {'Installed package has no version README.'}
+        $version='Installed package has no version README.'
+        if (Test-Path -LiteralPath $readme) {
+            $reader=New-Object IO.StreamReader($readme,[Text.Encoding]::UTF8)
+            try { $version=$reader.ReadLine() } finally { $reader.Dispose() }
+        }
         Add-Check 'patch.version' 'info' $version
         $settings=Join-Path $GameDirectory 'launcher-settings.json'
         try {
@@ -123,8 +127,18 @@ try {
             $(if ($live.Count) {$live} else {'No readable matching game process; game loaded modules are unverified.'})
         $log=Join-Path $GameDirectory 'plugins/eu4_unicode_patch.log'
         if (Test-Path -LiteralPath $log) {
-            $selected=@(Get-Content -LiteralPath $log -Encoding UTF8 -Tail 100 | Where-Object {$_ -match 'Refused|enabled|SHA|missing|atlas'} | Select-Object -Last 12)
-            Add-Check 'patch.last_log' 'info' (@{modified=(Get-Item -LiteralPath $log).LastWriteTimeUtc.ToString('o');lines=$selected}) 'This is an existing log, not a fresh launch result. Review its timestamp.'
+            # Plain .NET strings avoid Get-Content's provider metadata being
+            # recursively serialized by Windows PowerShell 5.1 ConvertTo-Json.
+            $stream=[IO.File]::Open($log,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite)
+            try {
+                $length=[int][Math]::Min(65536,$stream.Length)
+                $stream.Position=$stream.Length-$length
+                $bytes=New-Object byte[] $length
+                $count=$stream.Read($bytes,0,$length)
+                $tail=[Text.Encoding]::UTF8.GetString($bytes,0,$count)
+            } finally { $stream.Dispose() }
+            $selected=@($tail -split '\r?\n' | Where-Object {$_ -match 'Refused|enabled|SHA|missing|atlas'} | Select-Object -Last 12)
+            Add-Check 'patch.last_log' 'info' (@{modified=[IO.File]::GetLastWriteTimeUtc($log).ToString('o');lines=$selected}) 'This is an existing log, not a fresh launch result. Review its timestamp.'
         }
     }
     try {

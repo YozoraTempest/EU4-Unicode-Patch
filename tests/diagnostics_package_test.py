@@ -89,10 +89,18 @@ with tempfile.TemporaryDirectory(prefix="eu4-diagnostic-tests-") as directory:
         shutil.copy2(stage.parent / "eu4_unicode_patch.dll", game / "plugins/eu4_unicode_patch.dll")
         shutil.copy2(stage.parent / "VERSION.dll", game / "VERSION.dll")
         (game / "launcher-settings.json").write_text(json.dumps(dict(gameId="eu4", exePath="./eu4.exe")))
+        # PS 5.1 Get-Content strings carry ETS provider metadata. Real README
+        # and log inputs must remain bounded plain text in the JSON report.
+        (game / "EU4UnicodePatch.README.txt").write_text("EU4 Unicode Patch fixture\n", encoding="utf-8")
+        (game / "plugins/eu4_unicode_patch.log").write_text("Refused: fixture profile\n", encoding="utf-8")
         result, checks = run(stage, args.platform, game, root / "installed")
         assert result.returncode == 1 and checks["game.pe"]["status"] == "pass", (result.returncode, checks, result.stderr.decode(errors="replace"))
         assert checks["game.instructions"]["status"] == "fail"
         assert checks["patch.patch"]["status"] == checks["patch.loader"]["status"] == "pass"
+        assert checks["patch.version"]["detail"] == "EU4 Unicode Patch fixture"
+        assert checks["patch.last_log"]["detail"]["lines"] == ["Refused: fixture profile"]
+        assert len(next((root / "installed").glob("*.json")).read_bytes()) < 65536
+
     damaged = root / "Damaged Diagnostic Download"
     shutil.copytree(stage, damaged)
     (damaged / ("diagnostic_probe.exe" if args.platform == "windows" else "diagnostic_probe")).unlink()
