@@ -60,6 +60,9 @@ with tempfile.TemporaryDirectory(prefix="eu4-diagnostic-tests-") as directory:
         patch.mkdir()
         shutil.copy2(payload / "libeu4_unicode.so", patch / "libeu4_unicode.so")
         shutil.copy2(payload / ("build-info.json" if args.payload_directory else "linux-build-info.json"), patch / "build-info.json")
+        for name in ("eu4-unicode-game.sh", "launch-linux.sh"):
+            (patch / name).write_text("#!/bin/sh\nexit 0\n")
+            (patch / name).chmod(0o755)
         (patch / "launcher-settings.json.original").write_text(json.dumps(dict(gameId="eu4", exePath="./eu4")))
         (game / "launcher-settings.json").write_text(json.dumps(dict(gameId="eu4", exePath="./.eu4-unicode/eu4-unicode-game.sh")))
         header = bytearray(64)
@@ -70,6 +73,10 @@ with tempfile.TemporaryDirectory(prefix="eu4-diagnostic-tests-") as directory:
         result, checks = run(stage, args.platform, game, root / "installed")
         assert result.returncode == 0, (result.stdout, result.stderr)
         assert checks["patch.binary"]["status"] == checks["patch.dependencies"]["status"] == "pass"
+        (patch / "eu4-unicode-game.sh").chmod(0o644)
+        result, checks = run(stage, args.platform, game, root / "non-executable-wrapper")
+        assert result.returncode == 1 and checks["launcher.integration"]["status"] == "fail"
+        (patch / "eu4-unicode-game.sh").chmod(0o755)
         # Steam restoring the original entry must be diagnosed, not repaired.
         (game / "launcher-settings.json").write_text(json.dumps(dict(gameId="eu4", exePath="./eu4")))
         result, checks = run(stage, args.platform, game, root / "steam-restored")

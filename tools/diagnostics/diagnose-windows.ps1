@@ -6,7 +6,10 @@ function Add-Check([string]$Id,[string]$Status,$Detail,[string]$Remedy='') {
     $checks.Add([ordered]@{id=$Id;status=$Status;detail=$Detail;remedy=$Remedy})
 }
 function Get-Hash([string]$Path) {
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $stream=[IO.File]::OpenRead($Path)
+    $algorithm=[Security.Cryptography.SHA256]::Create()
+    try { return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-','').ToLowerInvariant() }
+    finally { $algorithm.Dispose();$stream.Dispose() }
 }
 function Get-PeMachine([string]$Path) {
     $stream=[IO.File]::OpenRead($Path)
@@ -92,8 +95,9 @@ try {
             $path=Join-Path $GameDirectory $file.path
             try {
                 $hash=Get-Hash $path
-                Add-Check "patch.$($file.name)" $(if ($hash -eq $file.hash) {'pass'} else {'warn'}) `
-                    ([ordered]@{path=$path;sha256=$hash;expected=$file.hash;machine=(Get-PeMachine $path)}) 'Use diagnostics from the same release. A hash mismatch alone does not prove incompatibility.'
+                $machine=Get-PeMachine $path
+                Add-Check "patch.$($file.name)" $(if ($machine -ne 0x8664) {'fail'} elseif ($hash -eq $file.hash) {'pass'} else {'warn'}) `
+                    ([ordered]@{path=$path;sha256=$hash;expected=$file.hash;machine=$machine}) 'Use an x64 Windows patch and diagnostics from the same release. A hash mismatch alone does not prove incompatibility.'
             } catch { Add-Check "patch.$($file.name)" 'fail' $_.Exception.Message 'Extract the complete Windows main patch package into the directory containing eu4.exe.' }
         }
         $readme=Join-Path $GameDirectory 'EU4UnicodePatch.README.txt'

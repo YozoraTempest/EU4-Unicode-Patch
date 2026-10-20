@@ -82,8 +82,10 @@ def diagnose(game, patch, info):
         settings = game / "launcher-settings.json"
         try:
             data = json.loads(settings.read_text(encoding="utf-8-sig"))
-            integrated = data.get("gameId") == "eu4" and data.get("exePath") == "./.eu4-unicode/eu4-unicode-game.sh"
-            add("launcher.integration", "pass" if integrated else "fail", dict(exePath=data.get("exePath")),
+            wrappers = {name: (game / ".eu4-unicode" / name).is_file() and os.access(game / ".eu4-unicode" / name, os.X_OK)
+                        for name in ("eu4-unicode-game.sh", "launch-linux.sh")}
+            integrated = data.get("gameId") == "eu4" and data.get("exePath") == "./.eu4-unicode/eu4-unicode-game.sh" and all(wrappers.values())
+            add("launcher.integration", "pass" if integrated else "fail", dict(exePath=data.get("exePath"), executable_wrappers=wrappers),
                 "Run install-paradox-launcher.sh from the patch download, or use start-paradox-launcher.sh for Steam repair.")
             backup = game / ".eu4-unicode/launcher-settings.json.original"
             saved = json.loads(backup.read_text(encoding="utf-8-sig")) if backup.is_file() else {}
