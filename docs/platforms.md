@@ -41,11 +41,11 @@ Windows 的 `native_editor_text.cpp` 和 `native_search.cpp` 通过 `target_sour
 
 ## 当前支持状态
 
-Windows 构建生成 DLL，Linux 构建生成 `libeu4_unicode.so`。Linux CI 在 Arch、Ubuntu 22.04 和 Ubuntu 24.04 验证九个共享库、拼音模糊搜索、Pango 排版、段落传输与真实预加载入口的转发及未知 ELF 拒绝行为；原生游戏实测另外进行。
+Windows 构建生成 DLL，Linux 构建生成 `libeu4_unicode.so`。Linux CI 在 Arch、Ubuntu 22.04/24.04 和 Fedora 43/44 验证九个共享库、拼音模糊搜索、Pango 排版、段落传输与真实预加载入口的转发及未知 ELF 拒绝行为；原生游戏实测另外进行。
 
-Linux 接口依据来自已安装的 Steam EU4 1.37.5 原生程序，详见 [Linux 接口表](linux-native-profile.md)。插件不再在 ELF 依赖中固定 ICU 主版本；Ubuntu LTS 和 Arch 共享同一套 ICU C API 运行时解析，Steam Linux Runtime 和其他发行版仍需实际验证。
+Linux 接口依据来自已安装的 Steam EU4 1.37.5 原生程序，详见 [Linux 接口表](linux-native-profile.md)。插件不再在 ELF 依赖中固定 ICU 主版本；Ubuntu LTS、Arch 和 Fedora 共享同一套 ICU C API 运行时解析，Steam Linux Runtime 和其他发行版仍需实际验证。
 
-同一次 CI 运行同时验证 Windows、Arch 和 Ubuntu 22.04/24.04，并保存各平台产物。Linux 包仍只针对 x86_64 原生 EU4 1.37.5；运行库差异由启动时的 ICU 解析和 SDL 路径发现处理。
+同一次 CI 运行同时验证 Windows、Arch、Ubuntu 22.04/24.04 和 Fedora 43/44，并保存各平台产物。Fedora 在安装编译器之前额外验证 Ubuntu 22.04 构建的同一个通用包，包括归档校验、ICU 初始化、预加载和 P 社启动器集成；Fedora 本机构建只用于完整测试，不要求玩家下载 Fedora 专用包。Linux 包仍只针对 x86_64 原生 EU4 1.37.5；运行库差异由启动时的 ICU 解析和 SDL 路径发现处理。
 
 ## 玩家功能对齐要求
 

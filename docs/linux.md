@@ -35,7 +35,30 @@ git submodule update --init --recursive
 CC=gcc-12 CXX=g++-12 bash tools/ci-linux-core.sh
 ```
 
-CI 在同一次运行中构建 Windows、Arch 和 Ubuntu，保存核心测试、Linux 预加载入口测试和产物依赖信息。`build/linux-package` 包含 `.so`、启动脚本、许可证、SHA256 和动态依赖清单。SafetyHook、Zydis 和 PicoSHA2 使用固定版本；挂钩只在游戏 `main` 之前、单线程状态下安装，失败时撤销本次安装并拒绝启动游戏。
+Fedora 43/44（使用 DNF 的 x86_64 系统）：
+
+运行通用包需要以下运行库和字体，无需安装编译器：
+
+```sh
+sudo dnf install python3 libstdc++ libicu pango cairo fontconfig sdl2-compat \
+    google-noto-sans-fonts google-noto-sans-cjk-fonts dejavu-sans-fonts
+```
+
+从源码构建时，再安装开发依赖并运行同一个构建脚本：
+
+```sh
+sudo dnf install gcc gcc-c++ cmake ninja-build git file binutils pkgconf-pkg-config \
+    tar gzip findutils libicu-devel pango-devel cairo-devel fontconfig-devel \
+    harfbuzz-devel freetype-devel
+git submodule update --init --recursive
+bash tools/ci-linux-core.sh
+```
+
+Fedora 使用同一个 Linux `tar.gz` 包，保留下文的 P 社启动器安装流程。CI 在 Fedora 43/44 容器中先安装运行依赖，下载 Ubuntu 22.04 任务生成的原始压缩包及加载器测试程序，检查归档与内部 SHA256，再验证预加载、ICU 初始化和启动器安装／修复／卸载；之后才安装编译器，构建并运行完整 Linux 测试。这样能够发现只在构建环境中存在的依赖，避免把 Fedora 本机重新编译成功当成通用二进制兼容的证据。
+
+容器测试不包含真实 P 社启动器窗口、GPU 游戏画面、输入法桌面会话或完整战役；Fedora 的这些项目仍需实际桌面验证。Steam Flatpak、Steam Linux Runtime 和不可变桌面系统的运行环境也需分别验证。
+
+CI 在同一次运行中构建 Windows、Arch、Ubuntu 和 Fedora，保存核心测试、Linux 预加载入口测试和产物依赖信息。`build/linux-package` 包含 `.so`、启动脚本、许可证、SHA256 和动态依赖清单。SafetyHook、Zydis 和 PicoSHA2 使用固定版本；挂钩只在游戏 `main` 之前、单线程状态下安装，失败时撤销本次安装并拒绝启动游戏。
 
 插件依赖系统 glibc、libstdc++、Pango、Cairo、Fontconfig 和 ICU 运行库。ICU 的 C API 不再作为 ELF 的直接 `NEEDED` 依赖；启动时会在宿主机中寻找匹配的 `libicuuc` 与 `libicui18n` 主版本，并解析项目使用的 API。这样 Ubuntu 的 ICU 74、Arch 的 ICU 78 等版本可以使用同一插件，缺少 ICU 时会在 `eu4_unicode_linux.log` 中明确拒绝。SHA-256 使用固定版本的 PicoSHA2；游戏导出旧 OpenSSL 符号，因此插件不混用系统 OpenSSL 上下文。ELF 只导出加载入口，内部实现及静态依赖符号保持局部绑定。
 

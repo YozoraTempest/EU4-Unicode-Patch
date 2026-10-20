@@ -96,9 +96,56 @@ jobs:
             build/linux-*.txt
             build/ctest-linux-results.xml
             build/Testing/Temporary/LastTest.log
+            build/loader-fixture/eu4
             build/linux-package/**
             build/EU4UnicodePatch-linux-*.tar.gz
             build/linux-package-sha256.txt
+  fedora-core:
+    needs: ubuntu-generic
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ['43', '44']
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:${{ matrix.release }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install Fedora runtime dependencies
+        run: |
+          dnf install -y python3 git binutils tar gzip libstdc++ libicu pango cairo fontconfig sdl2-compat
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Download the Ubuntu 22.04 generic package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: linux-generic-ubuntu-22.04-${{ github.sha }}
+          path: build/ubuntu-generic
+      - name: Test the unchanged generic package on Fedora
+        run: bash tools/test-linux-runtime.sh build/ubuntu-generic build/ubuntu-generic/loader-fixture/eu4 build/generic-runtime
+      - name: Install Fedora build dependencies
+        run: |
+          dnf install -y gcc gcc-c++ cmake ninja-build file pkgconf-pkg-config findutils \
+            libicu-devel pango-devel cairo-devel fontconfig-devel harfbuzz-devel freetype-devel \
+            google-noto-sans-fonts google-noto-sans-cjk-fonts dejavu-sans-fonts
+      - name: Build and run the complete Linux suite on Fedora
+        run: bash tools/ci-linux-core.sh
+      - name: Save Fedora tests and generic runtime evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fedora-${{ matrix.release }}-${{ github.sha }}
+          retention-days: 14
+          path: |
+            build/linux-*.txt
+            build/ctest-linux-results.xml
+            build/Testing/Temporary/LastTest.log
+            build/generic-runtime/*.txt
+            build/generic-runtime/*.log
   build:
     runs-on: windows-2022
     timeout-minutes: 30

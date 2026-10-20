@@ -31,6 +31,9 @@ Steam 可能还原 launcher-settings.json。方案一需要重跑安装命令；
 补丁安装在游戏目录的 .eu4-unicode/，原设置备份为 .eu4-unicode/launcher-settings.json.original。
 游戏启动后检查游戏目录中的 eu4_unicode_linux.log，正常包含 Linux native hooks enabled。
 运行时仍需要与该构建兼容的 glibc、libstdc++、ICU、Pango、Cairo、Fontconfig 和 SDL2。
+Fedora 43/44 的 DNF 系统安装依赖：
+   sudo dnf install python3 libstdc++ libicu pango cairo fontconfig sdl2-compat google-noto-sans-fonts google-noto-sans-cjk-fonts dejavu-sans-fonts
+Fedora 使用同一个通用包与上述 P 社启动器流程。容器 CI 验证运行库和启动器集成；真实桌面输入法、GPU 与战役仍需实机验证。
 Steam Linux Runtime 容器的运行库版本需要另行验证；不能用发行版核心测试替代真实启动器和游戏验证。
 
 launch-linux.sh --steam 是可选的直接启动模式，会跳过 P 社启动器。
