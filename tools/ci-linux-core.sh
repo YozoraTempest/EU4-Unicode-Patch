@@ -26,6 +26,8 @@ if command -v pacman >/dev/null 2>&1; then
     fi
 elif command -v dpkg-query >/dev/null 2>&1; then
     dpkg-query -W -f='${binary:Package}\t${Version}\n' > "$build_dir/linux-packages.txt"
+elif command -v rpm >/dev/null 2>&1; then
+    rpm -qa --qf '%{NAME}.%{ARCH}\t%{VERSION}-%{RELEASE}\n' | sort > "$build_dir/linux-packages.txt"
 else
     printf '%s\n' 'Cannot record the host package set.' >&2
     exit 1
