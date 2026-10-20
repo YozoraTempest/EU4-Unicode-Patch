@@ -839,11 +839,12 @@ void log_legacy_import_counts() {
         static_cast<unsigned long long>(eu4unicode::native_yaml_signatures()));
     log(message);
     const auto counts=eu4unicode::legacy_import_counts();
-    if(!counts.localization&&!counts.script&&!counts.rejected) return;
+    if(!counts.localization&&!counts.script&&!counts.binary&&!counts.rejected) return;
     std::snprintf(message,sizeof(message),
-        "Legacy import summary: %llu localization values, %llu script tokens, %llu escapes, %llu remapped units, %llu rejected values.",
+        "Legacy import summary: %llu localization values, %llu script tokens, %llu binary tokens, %llu escapes, %llu remapped units, %llu rejected values.",
         static_cast<unsigned long long>(counts.localization),static_cast<unsigned long long>(counts.script),
-        static_cast<unsigned long long>(counts.sequences),static_cast<unsigned long long>(counts.relocated),
+        static_cast<unsigned long long>(counts.binary),static_cast<unsigned long long>(counts.sequences),
+        static_cast<unsigned long long>(counts.relocated),
         static_cast<unsigned long long>(counts.rejected));
     log(message);
 }
@@ -1517,7 +1518,9 @@ bool initialize(HMODULE module) {
        MH_CreateHook(image+0x170d1d0,reinterpret_cast<void*>(eu4unicode::construct_script_stream),
         reinterpret_cast<void**>(&eu4unicode::original_script_stream))!=MH_OK||
        MH_CreateHook(image+0x170e700,reinterpret_cast<void*>(eu4unicode::read_legacy_script_token),
-        reinterpret_cast<void**>(&eu4unicode::original_script_token))!=MH_OK) {
+        reinterpret_cast<void**>(&eu4unicode::original_script_token))!=MH_OK||
+       MH_CreateHook(image+0x170ebf0,reinterpret_cast<void*>(eu4unicode::read_legacy_binary_token),
+        reinterpret_cast<void**>(&eu4unicode::original_binary_token))!=MH_OK) {
         log("Script lexer hook creation failed; no hooks enabled."); return false;
     }
     eu4unicode::native_mod_register=reinterpret_cast<eu4unicode::NativeModRegister>(image+0x150e720);

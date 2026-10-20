@@ -62,6 +62,7 @@ def run(name, executable, accepted, custom_search=False):
         assert "Localization imported=4 rejected=0" in log
         assert "Native YAML UTF-8 signatures supplied=2" in log
         assert "Native legacy script tokens=4 sequences=8 rejected=0" in log
+        assert "Native legacy binary tokens=2 sequences=4 rejected=0" in log
         if custom_search:
             assert "custom-dictionary=1 typo-tolerance=0 fuzzy-pinyin=1" in log
     else:

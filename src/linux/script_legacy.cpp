@@ -5,10 +5,16 @@
 namespace eu4unicode::linux_native {
 namespace {
 SafetyHookInline* token_hook=nullptr;
+SafetyHookInline* binary_hook=nullptr;
 std::atomic<unsigned long long> imported{0},sequences{0},rejected{0};
+std::atomic<unsigned long long> binary_imported{0},binary_sequences{0},binary_rejected{0};
 int token(ScriptLexer* lexer) {
     const auto result=token_hook->call<int>(lexer);
     return result&&import_script_token(*lexer)?result:0;
+}
+int binary_token(ScriptLexer* lexer) {
+    const auto result=binary_hook->call<int>(lexer);
+    return result&&import_binary_token(*lexer)?result:0;
 }
 }
 bool import_script_token(ScriptLexer& lexer) noexcept {
@@ -25,10 +31,24 @@ bool import_script_token(ScriptLexer& lexer) noexcept {
         return true;
     } catch(...) {lexer.text[0]=0;++rejected;return false;}
 }
+bool import_binary_token(ScriptLexer& lexer) noexcept {
+    try {
+        const auto result=import_legacy_binary_buffer(lexer.text,sizeof(lexer.text),lexer.token_type);
+        if(result.error!=LegacyError::none) {
+            if(binary_rejected.fetch_add(1)<10) log("Binary legacy rejected offset=%zu error=%s",
+                result.error_offset,legacy_error_name(result.error));
+            return false;
+        }
+        if(result.sequences) {++binary_imported;binary_sequences.fetch_add(result.sequences);}
+        return true;
+    } catch(...) {lexer.text[0]=0;++binary_rejected;return false;}
+}
 void prepare_script_legacy(Hooks& hooks) {
     token_hook=&hooks.add_inline(0x255e44e,reinterpret_cast<void*>(token));
+    binary_hook=&hooks.add_inline(0x255ecca,reinterpret_cast<void*>(binary_token));
 }
 void report_script_legacy_counts() noexcept {
     log("Native legacy script tokens=%llu sequences=%llu rejected=%llu",imported.load(),sequences.load(),rejected.load());
+    log("Native legacy binary tokens=%llu sequences=%llu rejected=%llu",binary_imported.load(),binary_sequences.load(),binary_rejected.load());
 }
 }

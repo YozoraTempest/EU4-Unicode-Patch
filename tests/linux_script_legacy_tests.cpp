@@ -26,6 +26,19 @@ int main() {
         std::memcpy(lexer.text,expanded.c_str(),512);
         check(!import_script_token(lexer)&&!lexer.text[0],"UTF-8 expansion cannot overflow the native token");
     }
+    for(const unsigned type:{12u,15u}) {
+        ScriptLexer lexer{};lexer.token_type=type;lexer.previous_token=1;lexer.flags[4]=1;
+        std::strcpy(lexer.text,"\x10-N\x11\x0eN");
+        check(import_binary_token(lexer)&&std::string(lexer.text)=="中一","binary quoted/unquoted import");
+        check(lexer.token_type==type&&lexer.previous_token==1&&lexer.flags[4]==1,"binary token metadata preserved");
+        check(import_binary_token(lexer)&&std::string(lexer.text)=="中一","binary lookahead replay is idempotent");
+        std::strcpy(lexer.text,"-42");check(import_binary_token(lexer)&&std::string(lexer.text)=="-42","binary numeric text unchanged");
+        std::strcpy(lexer.text,"中文𠀀");check(import_binary_token(lexer)&&std::string(lexer.text)=="中文𠀀","binary UTF-8 unchanged");
+        std::strcpy(lexer.text,"\x10");check(!import_binary_token(lexer)&&!lexer.text[0],"truncated binary token rejected");
+        const auto expanded=std::string(508,'\xf6')+"\x10-N";
+        std::memcpy(lexer.text,expanded.c_str(),512);
+        check(!import_binary_token(lexer)&&!lexer.text[0],"UTF-8 binary expansion cannot overflow");
+    }
     ScriptLexer untouched{};untouched.token_type=9;std::strcpy(untouched.text,"\x10-N");
     check(import_script_token(untouched)&&std::string(untouched.text)=="\x10-N","non-text token untouched");
     std::cout<<"Linux native legacy token import passed\n";

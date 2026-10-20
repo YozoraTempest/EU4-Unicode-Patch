@@ -6,6 +6,8 @@ Windows 与 Linux 的核心源码和构建定义共用，平台依赖及原生�
 
 Windows 与 Linux 的本地化 YAML 和文本脚本均接受无 BOM 或带 BOM 的 UTF-8。本地化由共享 `yaml_parse_buffer` 判断编码，在各平台原生解析入口借用临时带签名缓冲区；不改写模组文件。脚本在初始化时跳过输入开头的 BOM，保留正文中的 `U+FEFF`。旧 52 本地化及脚本文本继续分别按 CP1252 包装转义和原始双字节转义导入。
 
+旧转码存档在原生文本或二进制解析器完成 token 后统一转换为 UTF-8，保留原生类型、预读和数值行为；入口、样本及验证边界见[旧转码存档读取](legacy-save-import.md)。
+
 ## 模块
 
 | 模块 | 职责 |
@@ -15,7 +17,7 @@ Windows 与 Linux 的本地化 YAML 和文本脚本均接受无 BOM 或带 BOM �
 | `unicode_search` / `unicode_pinyin` / `native_search` | 中文与拼音匹配、词组读音及国家／省份搜索适配 |
 | `yaml_input` / `native_yaml` | 共享 YAML 签名规则及 Windows 原生解析器缓冲区适配 |
 | `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
-| `legacy_text` / `native_legacy_import` | EU4dll 旧转义解码、本地化注册与脚本文本导入 |
+| `legacy_text` / `native_legacy_import` | EU4dll 旧转义解码、本地化注册、脚本文本与二进制存档导入 |
 | `native_name_order` | 分开的姓／名按人物文化拼接，保留旧姓氏标记与模组规则 |
 | `native_mod_registry` | 同名描述符的启用状态检查与原生模组登记修正 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
