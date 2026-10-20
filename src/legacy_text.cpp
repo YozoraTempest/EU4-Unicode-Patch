@@ -78,9 +78,9 @@ LegacyText decode_legacy_text(std::string_view text,LegacyPayload payload) {
     if(high_surrogate) fail(LegacyError::unpaired_surrogate,surrogate_offset);
     return result;
 }
-LegacyText import_legacy_script_buffer(char* buffer,std::size_t capacity,unsigned token_type) {
+namespace {
+LegacyText import_token_buffer(char* buffer,std::size_t capacity) {
     LegacyText result;
-    if(token_type!=2&&token_type!=15) return result;
     const auto end=static_cast<const char*>(std::memchr(buffer,0,capacity));
     if(!end) result.error=LegacyError::unterminated_token;
     else {
@@ -93,6 +93,17 @@ LegacyText import_legacy_script_buffer(char* buffer,std::size_t capacity,unsigne
     if(result.error!=LegacyError::none) {if(capacity) buffer[0]=0;}
     else std::memcpy(buffer,result.text.c_str(),result.text.size()+1);
     return result;
+}
+}
+LegacyText import_legacy_script_buffer(char* buffer,std::size_t capacity,unsigned token_type) {
+    if(token_type!=2&&token_type!=15) return {};
+    return import_token_buffer(buffer,capacity);
+}
+LegacyText import_legacy_binary_buffer(char* buffer,std::size_t capacity,unsigned token_type) {
+    // CBinLexer emits quoted strings as 15 and unknown unquoted strings as 12.
+    // Numeric tokens also use 12, but contain no legacy escape markers.
+    if(token_type!=12&&token_type!=15) return {};
+    return import_token_buffer(buffer,capacity);
 }
 const char* legacy_error_name(LegacyError error) noexcept {
     switch(error) {

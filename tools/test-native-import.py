@@ -125,6 +125,7 @@ for rva, callback in [(0x1a5b23c,space),(0x6e4880,lookup),(0x1a35750,copy),
                       (0x1a33310,malloc),(0x1a332d4,malloc),(0x17394f0,free)]:
     hook(rva,callback)
 hook(0x170e700,symbol('read_legacy_script_token'),'original_script_token')
+hook(0x170ebf0,symbol('read_legacy_binary_token'),'original_binary_token')
 methods = (C.c_void_p*17)()
 for offset, callback in [(8,read_byte),(0x20,read),(0x58,available),(0x60,seek),(0x80,position)]:
     methods[offset//8] = C.cast(callback,C.c_void_p).value
@@ -181,6 +182,34 @@ if args.script_values:
     count += len(records)
 print(f'PASS: {count} script values parsed by native EU4 lexer and normalized by the CI import hook.')
 
+# CBinLexer is a separate virtual implementation used by binary saves.
+parse_binary = C.CFUNCTYPE(C.c_int,C.POINTER(Lexer))(base+0x170ebf0)
+binary_count = 0
+binary_values = [b'\x10-N\x11\x0eN', '中文𠀀'.encode(),
+                 b'Ariq-B\xf6kid \x10-N', b'\x10\x01\xe1', b'\x10=\xd8\x11\x0e\xde']
+if args.script_values:
+    binary_values.extend(bytes.fromhex(record['hex']) for record in records)
+for token in [15,23]:
+    for raw in binary_values:
+        text = token.to_bytes(2,'little') + len(raw).to_bytes(2,'little') + raw
+        text += b'\x0c\0\x2a\0\0\0'
+        stream = Input(C.addressof(methods),1,0,0)
+        address = C.addressof(stream)
+        streams[address] = (text,0)
+        lexer = Lexer(C.addressof(lexer_methods),address)
+        result = parse_binary(C.byref(lexer))
+        assert result and bytes(lexer.text) == reference(raw), (token,raw,bytes(lexer.text))
+        expected_type = 15 if token == 15 else 12
+        assert lexer.token_type == expected_type, (token,lexer.token_type)
+        lexer.previous = result
+        lexer.flags[4] = 1
+        assert parse_binary(C.byref(lexer)) == result and bytes(lexer.text) == reference(raw)
+        assert parse_binary(C.byref(lexer)) and lexer.token_type == 12 and bytes(lexer.text) == b'42'
+        assert parse_binary(C.byref(lexer)) == 0
+        del streams[address]
+        binary_count += 1
+print(f'PASS: {binary_count} binary values parsed by native EU4 CBinLexer and normalized by the CI import hook.')
+
 # The Windows optimizer specializes YmlParse for its two native callbacks.
 # Hook those verified callback entries as well as the production YAML adapter.
 class YamlBytes(C.Structure):
@@ -236,6 +265,6 @@ if args.report:
     args.report.write_text(json.dumps({
         'executable_sha256':hashlib.sha256(args.executable.read_bytes()).hexdigest(),
         'patch_dll_sha256':info['patch_dll_sha256'],'source_commit':info['source_commit'],
-        'script_values_passed':count,'yaml_values':records,'yaml_signatures_supplied':signatures,
+        'script_values_passed':count,'binary_values_passed':binary_count,'yaml_values':records,'yaml_signatures_supplied':signatures,
         'game_entrypoint_started':False,
     },ensure_ascii=False,indent=2)+'\n',encoding='utf-8')

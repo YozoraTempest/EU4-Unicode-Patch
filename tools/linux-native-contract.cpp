@@ -81,6 +81,32 @@ void lexer_tests() {
     }
     std::puts("PASS native CTextLexer: UTF-8/BOM, quoted/unquoted legacy tokens");
 }
+void binary_lexer_tests() {
+    for(const unsigned token:{15u,23u}) {
+        for(const bool legacy:{false,true}) {
+            const auto value=legacy?std::string("\x10-N\x11\x0eN"):std::string("中一𠀀");
+            std::string source;
+            const auto word=[&](unsigned value) {source.push_back(static_cast<char>(value));source.push_back(static_cast<char>(value>>8));};
+            word(token);word(static_cast<unsigned>(value.size()));source+=value;
+            word(12);source.append("\x2a\0\0\0",4);
+            alignas(16) std::array<unsigned char,512> file{};
+            ScriptLexer lexer{};
+            reinterpret_cast<void(*)(void*,unsigned char*,int,int,int,bool)>(0x2563d46)(
+                file.data(),reinterpret_cast<unsigned char*>(source.data()),static_cast<int>(source.size()),0,0,false);
+            reinterpret_cast<void(*)(ScriptLexer*,void*,bool)>(0x255ec70)(&lexer,file.data(),false);
+            const auto next=reinterpret_cast<int(*)(ScriptLexer*)>(0x255ecca);
+            const auto result=next(&lexer);
+            check(result&&std::string(lexer.text)==(legacy?"中一":"中一𠀀"),"native binary UTF-8/legacy string");
+            check(lexer.token_type==(token==15?15u:12u),"native binary string classification");
+            lexer.previous_token=result;lexer.flags[4]=1;
+            check(next(&lexer)==result&&std::string(lexer.text)==(legacy?"中一":"中一𠀀"),"native binary lookahead replay");
+            check(next(&lexer)&&lexer.token_type==12&&std::string(lexer.text)=="42","native binary next numeric token");
+            check(!next(&lexer),"native binary EOF");
+            reinterpret_cast<void(*)(void*)>(0x2563e4c)(file.data());
+        }
+    }
+    std::puts("PASS native CBinLexer: quoted/unquoted legacy and UTF-8, lookahead, numeric values and EOF");
+}
 void date_tests() {
     auto month_hook=SafetyHookInline::create(reinterpret_cast<void*>(0x1fe8c9c),reinterpret_cast<void*>(month));
     auto localize_hook=SafetyHookInline::create(reinterpret_cast<void*>(0x1feeaaf),reinterpret_cast<void*>(localize));
@@ -144,7 +170,7 @@ void select_tests() {
 int contract_main(int,char**,char**) {
     std::setvbuf(stdout,nullptr,_IONBF,0);
     try {
-        yaml_tests();lexer_tests();date_tests();select_tests();
+        yaml_tests();lexer_tests();binary_lexer_tests();date_tests();select_tests();
         reinterpret_cast<void(*)()>(0x2365c77)();
         std::puts("PASS all native contract checks; game main was not entered");return 0;
     } catch(const std::exception& error) {std::fprintf(stderr,"Native contract failure: %s\n",error.what());return 1;}
