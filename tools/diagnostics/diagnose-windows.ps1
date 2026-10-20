@@ -21,6 +21,29 @@ function Get-PeMachine([string]$Path) {
         return $reader.ReadUInt16()
     } finally { $reader.Dispose() }
 }
+function Invoke-ReadOnlyTool([string]$Path,[string]$Arguments='') {
+    $start=New-Object Diagnostics.ProcessStartInfo
+    $start.FileName=$Path
+    $start.Arguments=$Arguments
+    $start.UseShellExecute=$false
+    $start.CreateNoWindow=$true
+    $start.RedirectStandardOutput=$true
+    $start.RedirectStandardError=$true
+    $start.StandardOutputEncoding=New-Object Text.UTF8Encoding($false)
+    $start.StandardErrorEncoding=New-Object Text.UTF8Encoding($false)
+    $process=New-Object Diagnostics.Process
+    $process.StartInfo=$start
+    try {
+        [void]$process.Start()
+        $stdout=$process.StandardOutput.ReadToEndAsync()
+        $stderr=$process.StandardError.ReadToEndAsync()
+        if (!$process.WaitForExit(20000)) {
+            $process.Kill()
+            throw 'Diagnostic helper timed out.'
+        }
+        return @{code=$process.ExitCode;stdout=$stdout.Result;stderr=$stderr.Result}
+    } finally { $process.Dispose() }
+}
 $tool=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'diagnostic-info.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $candidates=@()
 if (!$GameDirectory) {
@@ -58,11 +81,11 @@ try {
             Add-Check 'game.pe' $(if ($machine -eq 0x8664) {'pass'} else {'fail'}) `
                 ([ordered]@{path=$exe;machine=$machine;sha256=(Get-Hash $exe)}) 'Select Windows x64 EU4 1.37.5.'
             if ($machine -eq 0x8664) {
-                $checker=Join-Path $PSScriptRoot 'executable_check.exe'
-                $native=$ErrorActionPreference;$ErrorActionPreference='Continue'
-                try { $result=(& $checker $exe 2>&1 | Out-String);$code=$LASTEXITCODE }
-                finally { $ErrorActionPreference=$native }
-                Add-Check 'game.instructions' $(if ($code -eq 0) {'pass'} else {'fail'}) $result.Trim() 'Review the incompatible instruction in the report; verify the game version and conflicting modifications. The game was not launched.'
+                try {
+                    $checker=Join-Path $PSScriptRoot 'executable_check.exe'
+                    $result=Invoke-ReadOnlyTool $checker ('"'+$exe+'"')
+                    Add-Check 'game.instructions' $(if ($result.code -eq 0) {'pass'} else {'fail'}) ($result.stdout+$result.stderr).Trim() 'Review the incompatible instruction in the report; verify the game version and conflicting modifications. The game was not launched.'
+                } catch { Add-Check 'game.instructions' 'fail' $_.Exception.Message 'Extract the complete diagnostic archive and retry the read-only instruction checker.' }
             }
         } catch { Add-Check 'game.pe' 'fail' $_.Exception.Message 'Verify the game directory and eu4.exe.' }
         foreach ($file in @(@{name='patch';path='plugins/eu4_unicode_patch.dll';hash=$tool.patch_sha256},@{name='loader';path='VERSION.dll';hash=$tool.loader_sha256})) {
@@ -102,11 +125,9 @@ try {
     }
     try {
         $probe=Join-Path $PSScriptRoot 'diagnostic_probe.exe'
-        $native=$ErrorActionPreference;$ErrorActionPreference='Continue'
-        try { $text=(& $probe 2>&1 | Out-String);$code=$LASTEXITCODE }
-        finally { $ErrorActionPreference=$native }
-        if ($code -ne 0) { throw $text }
-        $report=$text | ConvertFrom-Json
+        $result=Invoke-ReadOnlyTool $probe
+        if ($result.code -ne 0) { throw ($result.stdout+$result.stderr) }
+        $report=$result.stdout | ConvertFrom-Json
         if (!$report.unicode_services) { throw 'Unicode services probe failed.' }
         Add-Check 'runtime.host_unicode' 'pass' (@{scope='Diagnostic process, not the game';libraries=$report.libraries})
         $missing=@($report.fonts | Where-Object {!$_.covered})

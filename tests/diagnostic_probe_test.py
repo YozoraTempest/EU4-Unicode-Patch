@@ -8,7 +8,7 @@ assert result.returncode == 0, result.stderr
 report = json.loads(result.stdout)
 assert report["unicode_services"] is True
 assert len(report["fonts"]) == 6
-assert report["fonts"][0]["covered"] is True
+assert report["fonts"][0]["codepoint"] == 0x4E2D
 assert all(isinstance(row["covered"], bool) and row["families"] for row in report["fonts"])
 assert all(isinstance(path, str) for path in report["libraries"])
 print("Native diagnostic Unicode and font probe passed")

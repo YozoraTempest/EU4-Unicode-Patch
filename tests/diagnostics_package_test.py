@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory(prefix="eu4-diagnostic-tests-") as directory:
         shutil.copy2(stage.parent / "VERSION.dll", game / "VERSION.dll")
         (game / "launcher-settings.json").write_text(json.dumps(dict(gameId="eu4", exePath="./eu4.exe")))
         result, checks = run(stage, args.platform, game, root / "installed")
-        assert result.returncode == 1 and checks["game.pe"]["status"] == "pass"
+        assert result.returncode == 1 and checks["game.pe"]["status"] == "pass", (result.returncode, checks, result.stderr.decode(errors="replace"))
         assert checks["game.instructions"]["status"] == "fail"
         assert checks["patch.patch"]["status"] == checks["patch.loader"]["status"] == "pass"
     damaged = root / "Damaged Diagnostic Download"
