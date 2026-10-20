@@ -108,7 +108,7 @@ try {
         if ($code -ne 0) { throw $text }
         $report=$text | ConvertFrom-Json
         if (!$report.unicode_services) { throw 'Unicode services probe failed.' }
-        Add-Check 'runtime.host_unicode' 'pass' 'Diagnostic helper: Windows system ICU and DirectWrite initialized. This does not verify game loaded modules.'
+        Add-Check 'runtime.host_unicode' 'pass' (@{scope='Diagnostic process, not the game';libraries=$report.libraries})
         $missing=@($report.fonts | Where-Object {!$_.covered})
         Add-Check 'fonts.system_coverage' $(if ($missing.Count) {'warn'} else {'pass'}) $report.fonts 'Install the optional font package from the same release, then restart EU4. This probe checks system fonts; mod/private fonts can change game coverage.'
     } catch { Add-Check 'runtime.host_unicode' 'fail' $_.Exception.Message 'Extract the whole Windows diagnostic ZIP and use Windows 10 1903 or newer.' }

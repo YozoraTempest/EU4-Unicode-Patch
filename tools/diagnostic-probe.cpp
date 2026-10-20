@@ -52,8 +52,21 @@ int main() {
             std::cout<<"]}";
         }
         std::cout<<"],\"libraries\":[";
-#ifndef _WIN32
         std::set<std::string> paths;
+#ifdef _WIN32
+        for(const auto* name:{L"icu.dll",L"dwrite.dll",L"d2d1.dll",L"windowscodecs.dll"}) {
+            const auto module=GetModuleHandleW(name);
+            if(!module) continue;
+            std::wstring path(32768,L'\0');
+            const auto length=GetModuleFileNameW(module,path.data(),static_cast<DWORD>(path.size()));
+            if(!length||length>=path.size()) continue;
+            path.resize(length);
+            const auto bytes=WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),nullptr,0,nullptr,nullptr);
+            std::string utf8(static_cast<std::size_t>(bytes),'\0');
+            WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),utf8.data(),bytes,nullptr,nullptr);
+            paths.insert(std::move(utf8));
+        }
+#else
         std::ifstream maps("/proc/self/maps");std::string line;
         while(std::getline(maps,line)) {
             const auto begin=line.find('/');
@@ -62,9 +75,9 @@ int main() {
             if(path.find("libicu")!=std::string::npos||path.find("libpango")!=std::string::npos||
                path.find("libcairo")!=std::string::npos||path.find("libfontconfig")!=std::string::npos) paths.insert(path);
         }
+#endif
         bool separator=false;
         for(const auto& path:paths) {if(separator) std::cout<<',';separator=true;std::cout<<json(path);}
-#endif
         std::cout<<"]}\n";
         return boundaries.size()==4?0:1;
     } catch(const std::exception& error) {
