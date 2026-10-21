@@ -7,9 +7,10 @@
 namespace eu4unicode {
 NativeTextRegistration register_imported_text=nullptr;
 NativeScriptTokenRead original_script_token=nullptr;
+NativeScriptTokenRead original_binary_token=nullptr;
 LegacyImportDiagnostic legacy_import_diagnostic=nullptr;
 namespace {
-std::atomic<std::uint64_t> localization{0},script{0},sequences{0},relocated{0},rejected{0};
+std::atomic<std::uint64_t> localization{0},script{0},binary{0},sequences{0},relocated{0},rejected{0};
 void diagnose(std::string_view source,int line,std::string_view key,std::size_t offset,const char* error) {
     rejected.fetch_add(1,std::memory_order_relaxed);
     if(legacy_import_diagnostic) legacy_import_diagnostic(source,line,key,offset,error);
@@ -27,15 +28,16 @@ struct ScriptInputContext {
     EngineString filename;
 };
 static_assert(offsetof(ScriptInputContext,filename)==0x18);
-void script_error(NativeScriptLexer* lexer,std::size_t offset,const char* error) {
+void script_error(NativeScriptLexer* lexer,std::size_t offset,const char* error,const char* kind="script token") {
     const auto input=static_cast<const ScriptInputContext*>(lexer->input);
     const auto filename=input?std::string_view(input->filename.data(),static_cast<std::size_t>(input->filename.size)):
         std::string_view("script");
-    diagnose(filename,input?input->line:0,"script token",offset,error);
+    diagnose(filename,input?input->line:0,kind,offset,error);
 }
 }
 LegacyImportCounts legacy_import_counts() noexcept {
     return {localization.load(std::memory_order_relaxed),script.load(std::memory_order_relaxed),
+            binary.load(std::memory_order_relaxed),
             sequences.load(std::memory_order_relaxed),relocated.load(std::memory_order_relaxed),
             rejected.load(std::memory_order_relaxed)};
 }
@@ -61,23 +63,31 @@ void import_legacy_localization(const EngineString* key,const EngineString* valu
     } catch(...) {diagnose("localization",context->line,key_text,0,"text import failed");}
 }
 bool convert_legacy_script_token(NativeScriptLexer* lexer) noexcept {
-    if(lexer->token_type!=2&&lexer->token_type!=15) return true;
-    const auto end=static_cast<const char*>(std::memchr(lexer->text,0,sizeof(lexer->text)));
-    if(!end) {script_error(lexer,0,"unterminated script token");lexer->text[0]=0;return false;}
-    const auto text=std::string_view(lexer->text,static_cast<std::size_t>(end-lexer->text));
-    if(!contains_legacy_escape(text)) return true;
     try {
-        const auto decoded=decode_legacy_text(text,LegacyPayload::raw_bytes);
+        const auto decoded=import_legacy_script_buffer(lexer->text,sizeof(lexer->text),lexer->token_type);
         if(decoded.error!=LegacyError::none) {
             script_error(lexer,decoded.error_offset,legacy_error_name(decoded.error));lexer->text[0]=0;return false;
         }
-        if(decoded.text.size()>=sizeof(lexer->text)) {
-            script_error(lexer,0,"converted script token exceeds native buffer");lexer->text[0]=0;return false;
-        }
-        std::memcpy(lexer->text,decoded.text.c_str(),decoded.text.size()+1);
-        record(decoded,script);
+        if(decoded.sequences) record(decoded,script);
         return true;
     } catch(...) {script_error(lexer,0,"text import failed");lexer->text[0]=0;return false;}
+}
+bool convert_legacy_binary_token(NativeScriptLexer* lexer) noexcept {
+    try {
+        const auto decoded=import_legacy_binary_buffer(lexer->text,sizeof(lexer->text),lexer->token_type);
+        if(decoded.error!=LegacyError::none) {
+            script_error(lexer,decoded.error_offset,legacy_error_name(decoded.error),"binary token");return false;
+        }
+        if(decoded.sequences) record(decoded,binary);
+        return true;
+    } catch(...) {
+        script_error(lexer,0,"text import failed","binary token");lexer->text[0]=0;return false;
+    }
+}
+int read_legacy_binary_token(NativeScriptLexer* lexer) {
+    const auto result=original_binary_token(lexer);
+    if(!result||!convert_legacy_binary_token(lexer)) return 0;
+    return result;
 }
 int read_legacy_script_token(NativeScriptLexer* lexer) {
     const auto result=original_script_token(lexer);

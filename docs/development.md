@@ -2,7 +2,11 @@
 
 补丁针对已校验的 EU4 1.37.5.0 x64。文本存储为标准 UTF-8，引擎字符串与光标位置使用字节偏移。
 
-脚本支持 UTF-8 with BOM：解析器初始化时跳过输入开头的 BOM，保留文件原始字节和正文中的 `U+FEFF`。ParaTranz 导出的脚本无需移除 BOM。
+Windows 与 Linux 的核心源码和构建定义共用，平台依赖及原生入口分别配置，见[共用结构与支持状态](platforms.md)。本文的 RVA、DirectWrite、D3D9 与 IMM 接入描述属于现有 Windows 实现。
+
+Windows 与 Linux 的本地化 YAML 和文本脚本均接受无 BOM 或带 BOM 的 UTF-8。本地化由共享 `yaml_parse_buffer` 判断编码，在各平台原生解析入口借用临时带签名缓冲区；不改写模组文件。脚本在初始化时跳过输入开头的 BOM，保留正文中的 `U+FEFF`。旧 52 本地化及脚本文本继续分别按 CP1252 包装转义和原始双字节转义导入。
+
+旧转码存档在原生文本或二进制解析器完成 token 后统一转换为 UTF-8，保留原生类型、预读和数值行为；入口、样本及验证边界见[旧转码存档读取](legacy-save-import.md)。
 
 ## 模块
 
@@ -11,9 +15,11 @@
 | `unicode_text` / `unicode_services` | UTFCPP 编解码，ICU 字素、行边界与搜索键 |
 | `unicode_editor` / `editor_document` / `native_editor_text` | 字素编辑、多行位置映射、撤销历史与字节预算 |
 | `unicode_search` / `unicode_pinyin` / `native_search` | 中文与拼音匹配、词组读音及国家／省份搜索适配 |
+| `yaml_input` / `native_yaml` | 共享 YAML 签名规则及 Windows 原生解析器缓冲区适配 |
 | `native_script_bom` | 脚本输入的 UTF-8 BOM 识别与解析器初始化 |
-| `legacy_text` / `native_legacy_import` | EU4dll 旧转义解码、本地化注册与脚本文本导入 |
+| `legacy_text` / `native_legacy_import` | EU4dll 旧转义解码、本地化注册、脚本文本与二进制存档导入 |
 | `native_name_order` | 分开的姓／名按人物文化拼接，保留旧姓氏标记与模组规则 |
+| `native_mod_registry` | 同名描述符的启用状态检查与原生模组登记修正 |
 | `unicode_layout` | DirectWrite 字体集合、布局与栅格化 |
 | `shaped_paragraph` / `formatted_paragraph` / `native_paragraph` | 整段塑形、颜色及图标映射、原生绘制调用适配 |
 | `native_editor_selection` | 复杂文字选区的原生矩形及控件生命周期 |
@@ -40,6 +46,30 @@ EXE SHA-256 只记录到日志。加载前检查实际映像的 x64 PE 布局、
 
 ASCII 保留 256 槽表，其他标量进入稳定的稀疏记录。字体路径通过游戏的字符串赋值函数替换，使用原生分配器；原版同名路径先查询引擎资源解析器（RVA `19fad70`）；`.fnt`、`.tga` 或 `.dds` 来自模组或压缩包时保留原路径。自定义路径保持原生加载，普通与放大 UI 路径分别处理。
 
+## 模组登记
+
+EU4 1.37.5 的模组表以原始 `name` 为键。原生初始化先扫描 `.mod` 并丢弃同名条目，再读取 `dlc_load.json` 和填充启用列表。`native_mod_registry` 先执行原生插入，仅在不同描述符发生同名碰撞后记录候选；第一次登记的路径从返回节点读取，后续候选从未被消耗的临时对象读取。无重名的模组不分配逐项元数据。初始化结束后才检查启用状态。独立重扫描在自身结束时检查当前启用列表，不保存跨调用的 manager、树节点或描述符指针。本版本已确认初始化只调用一次非递归扫描；独立扫描入口的生命周期另有自动测试。
+
+同名候选恰好一份启用时，若原生登记丢弃了它，使用原生解析函数重新读取该描述符，并通过原生深赋值函数更新现有节点的对象。重解析只允许修改已捕获的节点；名称、对象名称或完整路径改变时拒绝候选，不调用树插入。返回已有节点和 `inserted=false`，与原生重复插入的结果一致，临时对象仍走解析器的正常析构。字符串、依赖容器和其他成员仍由引擎分配、赋值和析构；树键与对象名称保持原值。路径检查使用原生收集启用模组所用的完整长度／字节匹配函数。全部未启用或多份同时启用时保留原结果；多份同时启用不提供并行加载支持。
+
+冲突日志记录候选、启用状态、期望选择、实际选择与处理状态。日志构造或输出失败不终止其他组的处理。原生解析／赋值异常则停止后续修复；深赋值没有经过验证的回滚保证，日志将该节点状态记为未知，不声称旧对象完整保留。
+
+拦截树插入时必须同时处于该 manager 的模组扫描或选定描述符的重解析上下文，且容器地址必须等于 `manager+0xd0`。DLC 表和其他调用直接转发。无同名冲突不重解析、不赋值、不输出逐项日志。六个相关原生函数的完整字节加入映像预检，挂钩沿用统一创建、启用和失败回滚流程。
+
+原生挂钩生命周期的自动检查位于 `native_mod_registry_tests`；真实游戏的顺序与资源加载验证由隔离启动测试完成，不能由模拟对象测试替代。
+
+`tools/verify-mod-registry.py` 创建新的隔离 runtime、私有可写字体目录和每组独立 userdir，使用指定的 CI 玩家包逐次启动游戏。`prepare` 要求空的证据目录及当前有效的工坊／本地上传内容路径；原始内容只读，测试描述符独立生成。`run` 只用 Windows 只读进程 API 检查自己启动的游戏，并保留原生登记表、名称依赖、原版中文文本、地图字体日志、描述符、启用列表及文件哈希。脚本不注入、不调用远程函数、不修改当前播放集，只终止自身的测试进程。
+
+```powershell
+python tools/verify-mod-registry.py prepare --root D:/evidence/new-mod-registry-test --game "D:/SteamLibrary/steamapps/common/Europa Universalis IV" --workshop D:/SteamLibrary/steamapps/workshop/content/236850 --upload D:/path/to/current/local-upload --settings D:/path/to/test/settings.txt
+python tools/verify-mod-registry.py run --root D:/evidence/new-mod-registry-test --case old-disabled-first --label after --package D:/ci/EU4UnicodePatch-1.37.5-v0.1.14.zip
+python tools/verify-mod-registry.py compare --root D:/evidence/new-mod-registry-test --before before --after after
+```
+
+样例包含无冲突、旧工坊／本地上传及压缩包的双向扫描顺序、三候选唯一启用、全部未启用和多份同时启用。隔离描述符统一引用测试中的实际名称，比较时检查依赖目标存在。依赖探针按主汉化旧名称声明依赖，并覆盖相同路径的本地化文件：正反启用列表均应输出 `宿敌（依赖覆盖验证）`，去掉依赖的对照应输出 `宿敌`。这通过原生资源覆盖结果检验加载顺序。
+
+对修复前后的 CI 包运行相同样例，检查结果与原生日志；若对照包已包含碰撞修复，给 `compare` 加 `--before-fixed`。历史描述符路径不能直接复用。快照使用 schema 2，并记录采集脚本哈希；原生对象 `+0xb0` 为目录、`+0xd0` 为压缩包。2026-10-12 的旧 baseline 快照曾将这两个输出字段对调，原始日志与描述符保持不变，应按更正说明解释历史字段。此游戏验证需要拥有对应本机内容，不在公共 CI 上运行。
+
 ## 字体
 
 玩家版按需字形先用系统 DirectWrite 字体；缺字后才加载游戏目录中的可选字体文件。开发探针保留文件字体优先的验证方式。安装或移除字体包后需重启游戏。
@@ -62,7 +92,7 @@ UI 绘制、测宽和换行共用 DirectWrite 布局；颜色标记不切断塑�
 
 ## 输入与保存
 
-编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。
+两平台均支持 `Ctrl+A` 全选当前编辑控件的已提交文本；输入法预编辑时该键由输入法状态处理。编辑通过 ICU 字素边界处理光标与选区。SDL 2.0.4 文本事件载荷最多 31 字节；每个提交保留完整 UTF-8，在原生队列中完成一次插入和通知。
 
 搜索接入外交国家列表与省份查找，支持中文、全拼、首字母、部分拼音、混合输入及简繁匹配。名称按当前显示内容建立索引，词组读音来自固定版本的 `phrase-pinyin-data`，其余汉字由系统 ICU 转写。
 
@@ -74,7 +104,7 @@ typo_tolerance=1
 fuzzy_pinyin=1
 ```
 
-`typo_tolerance` 默认 `1`，`fuzzy_pinyin` 默认 `0`。模糊音支持 `zh/z`、`ch/c`、`sh/s`、`n/l`、`en/eng` 和 `in/ing`；设为 `0` 可分别关闭。
+两平台使用同一个 `search_resources` 解析器，配置支持 UTF-8 和 UTF-8 BOM；为保留 Windows 已有配置，带 BOM 的 UTF-16LE INI 也继续接受。`typo_tolerance` 默认 `1`，`fuzzy_pinyin` 默认 `0`。模糊音支持 `zh/z`、`ch/c`、`sh/s`、`n/l`、`en/eng` 和 `in/ing`；设为 `0` 可分别关闭。
 
 特殊读音可写入游戏目录的 `plugins/eu4_unicode_patch/pinyin.txt`，支持 UTF-8 和 UTF-8 BOM，重启游戏后生效。每个汉字对应一个拼音音节，重复词组可添加不同读音，`#` 开头为注释：
 

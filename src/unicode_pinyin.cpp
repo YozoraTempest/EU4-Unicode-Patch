@@ -1,7 +1,12 @@
 #include "unicode_pinyin.hpp"
 #include "unicode_services.hpp"
 #include "unicode_text.hpp"
+#ifdef _WIN32
 #include <icu.h>
+#else
+#include <unicode/uchar.h>
+#include <unicode/uscript.h>
+#endif
 #include <algorithm>
 #include <atomic>
 #include <map>

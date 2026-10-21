@@ -19,9 +19,10 @@ using LegacyImportDiagnostic=void(*)(std::string_view source,int line,
                                     std::string_view key,std::size_t offset,const char* error);
 extern NativeTextRegistration register_imported_text;
 extern NativeScriptTokenRead original_script_token;
+extern NativeScriptTokenRead original_binary_token;
 extern LegacyImportDiagnostic legacy_import_diagnostic;
 struct LegacyImportCounts {
-    std::uint64_t localization,script,sequences,relocated,rejected;
+    std::uint64_t localization,script,binary,sequences,relocated,rejected;
 };
 LegacyImportCounts legacy_import_counts() noexcept;
 void import_legacy_localization(const EngineString* key,const EngineString* value,
@@ -30,4 +31,6 @@ void import_legacy_localization(const EngineString* key,const EngineString* valu
 // its input, token classification, fixed buffer and lookahead state.
 bool convert_legacy_script_token(NativeScriptLexer* lexer) noexcept;
 int read_legacy_script_token(NativeScriptLexer* lexer);
+bool convert_legacy_binary_token(NativeScriptLexer* lexer) noexcept;
+int read_legacy_binary_token(NativeScriptLexer* lexer);
 }

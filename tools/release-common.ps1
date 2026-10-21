@@ -38,6 +38,7 @@ function Get-ReleaseInfo([string]$Channel,[string]$BuildDate='') {
         SourceCommit=$commit; BuildDate=$BuildDate
         PlayerPackage="EU4UnicodePatch-1.37.5-$suffix.zip"
         FontPackage="EU4UnicodePatch-fonts-$suffix.zip"
+        LinuxPackage="EU4UnicodePatch-Linux-Augustus-$suffix.zip"
     }
 }
 
@@ -46,7 +47,7 @@ function Get-Sha256([string]$Path) {
 }
 
 function Get-AutomatedTestNames {
-    return @('native_name_order','localized_format','executable_compatibility','executable_profile','unicode_text','unicode_services','formatted_text','unicode_layout','shaped_paragraph','formatted_paragraph','native_paragraph','glyph_registry','unicode_editor',
+    return @('native_yaml','yaml_input','search_resources','native_editor_select_all','native_mod_registry','native_name_order','localized_format','paragraph_transport','executable_compatibility','executable_profile','unicode_text','unicode_services','formatted_text','unicode_layout','shaped_paragraph','formatted_paragraph','native_paragraph','glyph_registry','unicode_editor',
         'unicode_search','native_search','pinyin_fuzzy','native_steam_presence','native_script_bom','legacy_text','legacy_migration','native_ime',
         'font_assets','font_draw_batches','font_cache','version_proxy')
 }

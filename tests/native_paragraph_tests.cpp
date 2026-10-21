@@ -248,10 +248,21 @@ int main() {
     std::string nested;
     for(int depth=0;depth<41;++depth) nested+=u8"§Y";
     nested+=u8"العربية";
-    bool capacity_rejected=false;
-    try { font_paragraph_geometry(font.data(),nested,400,false); }
-    catch(const std::length_error&) { capacity_rejected=true; }
-    check(capacity_rejected,"final color resets count toward the native line buffer limit");
+    const auto nested_geometry=font_paragraph_geometry(font.data(),nested,400,false);
+    std::size_t nested_chunk=0,nested_barriers=0,resets=0;
+    for(std::size_t offset=0;offset<nested_geometry->draw_text.size();) {
+        const auto unit=native_text_unit(nested_geometry->draw_text,offset,true);
+        nested_chunk+=unit.end-offset;
+        check(nested_chunk<256,"final color resets stay within each native word chunk");
+        if(unit.kind==TextUnitKind::color&&nested_geometry->draw_text[unit.end-1]=='!') ++resets;
+        if(unit.kind==TextUnitKind::glyph&&unit.scalar>=nested_geometry->first_token&&
+           unit.scalar-nested_geometry->first_token<nested_geometry->glyphs.size()) {
+            const auto glyph=nested_geometry->glyphs[unit.scalar-nested_geometry->first_token];
+            if(!glyph->height&&!glyph->advance) {++nested_barriers;nested_chunk=0;}
+        }
+        offset=unit.end;
+    }
+    check(nested_barriers&&resets==41,"long color stacks use native flush barriers and retain every reset");
     const std::string mixed=u8"§Yالعربية §R123 £adm£§! हिन्दी§! £adm£";
     auto rich_source=borrow(mixed);
     for(const auto scale:{1.f,1.1f,1.5f}) {

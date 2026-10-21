@@ -55,10 +55,14 @@ int main(int argc,char** argv) {
     check(rtl,"Arabic and Hebrew produce RTL runs");
     check(fonts.size()>1,"system font fallback selects multiple font families");
     // The temporary layout is gone before the copied runs are rasterized.
-    const std::string detached_text=u8"ffi a\u0323\u0301 العربية क्षि 𠀀";
+    // U+20BB7 is covered by the CJK test fonts. Require actual glyph coverage:
+    // an unsupported character's .notdef glyph may have an empty outline.
+    const std::string detached_text=u8"ffi a\u0323\u0301 العربية क्षि 𠮷";
     const auto detached=TextLayout(detached_text,28,600,100).glyph_runs();
     bool joined_cluster=false,rtl_ink=false,gray_alpha=false,blank_advance=false;
     for(const auto& run:detached) {
+        check(std::none_of(run.glyphs.begin(),run.glyphs.end(),[](auto glyph){return glyph==0;}),
+            "raster fixture requires installed Latin, Arabic, Devanagari and CJK glyph coverage");
         const auto raster=rasterize_glyph_run(run);
         check(raster.alpha.size()==static_cast<std::size_t>(raster.width)*raster.height,
             "retained shaped runs rasterize after the source layout is destroyed");
@@ -91,9 +95,17 @@ int main(int argc,char** argv) {
     check(integer_moved.left==original.left&&integer_moved.top==original.top&&
         integer_moved.width==original.width&&integer_moved.height==original.height&&integer_moved.alpha==original.alpha,
         "integer baseline translation preserves local atlas pixels");
-    translated.baseline_x+=.25f;
-    const auto phased=rasterize_glyph_run(translated);
-    check(phased.alpha!=original.alpha,"fractional baseline phase affects raster coverage");
+    // Some Cairo backends quantize glyphs to integer positions: a quarter
+    // pixel can leave alpha unchanged while a later phase moves the ink.
+    // Compare placement as well as the cropped mask across the phase cycle.
+    bool phase_affects_ink=false;
+    for(const float phase:{.25f,.5f,.75f}) {
+        auto phased_run=translated;phased_run.baseline_x+=phase;
+        const auto phased=rasterize_glyph_run(phased_run);
+        phase_affects_ink=phase_affects_ink||phased.left!=original.left||phased.top!=original.top||
+            phased.width!=original.width||phased.height!=original.height||phased.alpha!=original.alpha;
+    }
+    check(phase_affects_ink,"fractional baseline phases affect raster coverage or ink placement");
     bool incomplete=false,nonfinite=false;
     try { auto invalid=detached.front();invalid.offsets.pop_back();rasterize_glyph_run(invalid); }
     catch(const std::invalid_argument&) { incomplete=true; }
@@ -108,7 +120,7 @@ int main(int argc,char** argv) {
     try { auto invalid=detached.front();invalid.face.reset();rasterize_glyph_run(invalid); }
     catch(const std::invalid_argument&) { missing_face=true; }
     check(budget&&invalid_baseline&&missing_face,"rasterizer rejects excessive size, invalid baseline and missing font ownership");
-    const auto bitmap=TextLayout(u8"𠀀",28,100,100).rasterize();
+    const auto bitmap=TextLayout(u8"𠮷",28,100,100).rasterize();
     check(bitmap.pixels.size()==static_cast<std::size_t>(bitmap.width)*bitmap.height*4&&bitmap.baseline>0,
         "raster dimensions and baseline are available to the native atlas bridge");
     bool ink=false,transparent=false;

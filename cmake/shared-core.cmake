@@ -1,0 +1,64 @@
+# Shared source definitions for both native platform builds. The caller selects
+# ICU and configures its compiler/runtime before including this file.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(Threads REQUIRED)
+
+set(EU4_UNICODE_CORE_TARGETS
+    unicode_text unicode_services formatted_text unicode_editor unicode_search
+    glyph_registry font_draw_batches font_assets name_policy)
+
+add_library(unicode_text STATIC src/unicode_text.cpp src/native_text_event.cpp src/yaml_input.cpp)
+target_include_directories(unicode_text PUBLIC include PRIVATE vendor/utfcpp/source)
+add_library(unicode_services STATIC src/unicode_services.cpp)
+target_link_libraries(unicode_services PUBLIC unicode_text ${EU4_UNICODE_ICU_LIBRARIES})
+add_library(formatted_text STATIC src/formatted_text.cpp src/formatted_text_cache.cpp)
+target_link_libraries(formatted_text PUBLIC unicode_services)
+add_library(unicode_editor STATIC src/unicode_editor.cpp src/editor_document.cpp)
+target_link_libraries(unicode_editor PUBLIC unicode_services)
+
+set(PINYIN_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/vendor/phrase-pinyin-data")
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/pinyin_data.inc"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate-pinyin-data.py"
+        "${PINYIN_SOURCE}" "${CMAKE_CURRENT_BINARY_DIR}/generated/pinyin_data.inc"
+    DEPENDS tools/generate-pinyin-data.py "${PINYIN_SOURCE}/pinyin.txt"
+        "${PINYIN_SOURCE}/LICENSE" "${PINYIN_SOURCE}/source.json"
+    VERBATIM)
+add_library(unicode_search STATIC
+    src/unicode_search.cpp src/unicode_search_fuzzy.cpp src/unicode_pinyin.cpp src/search_resources.cpp
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/pinyin_data.inc")
+target_include_directories(unicode_search PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated" vendor/utfcpp/source)
+target_link_libraries(unicode_search PUBLIC unicode_services)
+
+add_library(glyph_registry STATIC src/glyph_registry.cpp)
+target_include_directories(glyph_registry PUBLIC include)
+target_link_libraries(glyph_registry PUBLIC Threads::Threads)
+add_library(font_draw_batches STATIC src/font_draw_batches.cpp)
+target_include_directories(font_draw_batches PUBLIC include)
+add_library(font_assets STATIC src/font_assets.cpp)
+target_include_directories(font_assets PUBLIC include)
+
+add_library(name_policy STATIC src/name_policy.cpp)
+target_link_libraries(name_policy PUBLIC unicode_services)
+
+add_executable(search_resources_tests tests/search_resources_tests.cpp)
+target_link_libraries(search_resources_tests PRIVATE unicode_search)
+add_test(NAME search_resources COMMAND search_resources_tests)
+add_executable(native_editor_select_all_tests tests/native_editor_select_all_tests.cpp)
+if(NOT WIN32)
+    target_sources(native_editor_select_all_tests PRIVATE src/native_editor_text.cpp)
+endif()
+target_link_libraries(native_editor_select_all_tests PRIVATE unicode_editor)
+add_test(NAME native_editor_select_all COMMAND native_editor_select_all_tests)
+
+add_executable(yaml_input_tests tests/yaml_input_tests.cpp)
+target_link_libraries(yaml_input_tests PRIVATE unicode_text)
+add_test(NAME yaml_input COMMAND yaml_input_tests)
+
+add_executable(native_yaml_tests tests/native_yaml_tests.cpp)
+if(WIN32)
+    target_link_libraries(native_yaml_tests PRIVATE native_yaml)
+else()
+    target_sources(native_yaml_tests PRIVATE src/native_yaml.cpp)
+    target_link_libraries(native_yaml_tests PRIVATE unicode_text)
+endif()
+add_test(NAME native_yaml COMMAND native_yaml_tests)

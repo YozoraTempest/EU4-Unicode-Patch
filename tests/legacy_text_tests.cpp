@@ -110,7 +110,29 @@ int main() {
     check(read_legacy_script_token(&lexer)==1&&std::string(lexer.text)==u8"中","native reader wrapper");
     original_script_token=no_token;
     check(read_legacy_script_token(&lexer)==0,"native EOF contract");
+    for(const unsigned type:{12u,15u}) {
+        lexer.token_type=type;lexer.previous_token=1;lexer.flags[4]=1;
+        std::strcpy(lexer.text,"\x10-N\x11\x0eN");
+        check(convert_legacy_binary_token(&lexer)&&std::string(lexer.text)==u8"中一","binary quoted/unquoted import");
+        check(lexer.token_type==type&&lexer.previous_token==1&&lexer.flags[4]==1,"binary token metadata preserved");
+        check(convert_legacy_binary_token(&lexer)&&std::string(lexer.text)==u8"中一","binary lookahead replay is idempotent");
+        std::strcpy(lexer.text,"-123.5");
+        check(convert_legacy_binary_token(&lexer)&&std::string(lexer.text)=="-123.5","binary numeric token stays native");
+        std::strcpy(lexer.text,u8"中文𠀀");
+        check(convert_legacy_binary_token(&lexer)&&std::string(lexer.text)==u8"中文𠀀","binary UTF-8 stays unchanged");
+        std::strcpy(lexer.text,"\x10");
+        check(!convert_legacy_binary_token(&lexer)&&!lexer.text[0],"malformed binary escape rejected atomically");
+        std::memcpy(lexer.text,large.c_str(),512);
+        check(!convert_legacy_binary_token(&lexer)&&!lexer.text[0],"expanded binary token cannot overflow");
+    }
+    lexer.token_type=14;std::strcpy(lexer.text,"\x10-N");
+    check(convert_legacy_binary_token(&lexer)&&std::string(lexer.text)=="\x10-N","binary non-string token stays native");
+    // Quoted binary strings use 15, while the text fixture uses 2.
+    original_binary_token=+[](NativeScriptLexer* value) {next_token(value);value->token_type=15;return 1;};
+    check(read_legacy_binary_token(&lexer)==1&&std::string(lexer.text)==u8"中","binary reader wrapper");
+    original_binary_token=no_token;
+    check(read_legacy_binary_token(&lexer)==0,"binary native EOF contract");
     const auto counts=legacy_import_counts();
-    check(counts.localization==1&&counts.script==3&&counts.rejected==3,"import summary counts");
+    check(counts.localization==1&&counts.script==3&&counts.binary==3&&counts.rejected==7,"import summary counts");
     std::cout<<"PASS: legacy decoding and import boundaries\n";
 }

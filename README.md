@@ -6,6 +6,10 @@
 
 适用于 **EU4 1.37.5.0 Inca / Windows x64**。
 
+另有 **Steam Linux 原生版 / x86_64 通用 glibc 构建**，与 Windows 共用 Unicode 核心并分别构建原生插件。支持通过 P 社启动器加载，安装一次后 Steam 启动选项留空，也可使用自动恢复集成的启动项；安装方法、游戏布局与指令校验及功能范围见 [Linux 原生适配](docs/linux.md)。Linux 包按宿主机 ICU 主版本运行时加载，使用 Ubuntu LTS、Arch 和 Fedora 43/44 进行构建检查，并在 Fedora 验证 Ubuntu 22.04 生成的同一个通用包；Fedora 桌面游戏与 Steam Linux Runtime 仍需单独验证。运行时仍需要系统提供 Pango、Cairo、Fontconfig、SDL2 兼容库和 glibc。
+
+Linux **Augustus 玩家包已包含启动器**，将包解压到游戏根目录，并在 Steam 的游戏兼容性设置中选择 **Steam Linux Runtime 3.0 (sniper)**。此包由 Valve 官方 Sniper SDK `3.0.20261007.263965` 和 SDK 自带的 GCC 14 构建，ICU、Pango、Cairo、Fontconfig 与 SDL 使用 Runtime 提供的库，玩家包包含启动器、插件、配置、使用说明和 `LICENSE`。[使用方法](docs/linux-plugin.txt)。构建前初始化子模块，再运行 `docker build -f packaging/Dockerfile.linux-plugin --output dist .`，产物为 `dist/EU4UnicodePatch-Linux-Augustus.zip`。构建会检查 glibc 2.31 ABI 上限、动态依赖与导出符号，拒绝混入构建机运行库。
+
 [正式版与可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/latest) · [Nightly 测试版](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
 
 ## 功能
@@ -13,11 +17,11 @@
 - **标准 UTF-8**：本地化和编辑文本保留标准 UTF-8，支持 UTF-8 BOM 与 ParaTranz 导出文件，便于直接编辑、维护和分享汉化。
 - **旧汉化包直接使用**：本地化、GUI 和脚本中的 EU4dll 双字节转义在导入时转换为 UTF-8，无需修改原汉化文件。
 - **生僻字支持**：支持“𠮷”等补充平面汉字，字形由所用字体提供。
-- **中文输入与编辑**：支持输入法候选窗和未提交拼音；单行、多行编辑按字素边界处理光标、整字退格与选区替换。`Esc` 取消未提交输入并退出输入状态，`Ctrl+Z` 撤销，`Ctrl+Shift+Z` 重做。
+- **中文输入与编辑**：支持输入法候选窗和未提交拼音；单行、多行编辑按字素边界处理光标、整字退格与选区替换。`Esc` 取消未提交输入并退出输入状态，`Ctrl+A` 全选，`Ctrl+Z` 撤销，`Ctrl+Shift+Z` 重做。
 - **中文与拼音搜索**：外交国家列表与省份查找支持中文、全拼、首字母、部分拼音及混合输入，例如用 `法兰西`、`falanxi`、`flx` 或 `法lanxi` 查找法兰西。支持简繁匹配和词组读音，长全拼容忍一次输错，模糊音匹配可[按需开启](docs/development.md#输入与保存)。
 - **复杂文字排版**：支持阿拉伯文连写、从右向左文字、天城文组合字与附加符号；颜色、国旗、点数及货币图标参与整段排版，地图文字按字形簇适配领土布局。
 - **系统与模组字体**：优先使用系统字体，额外字库作为可选包提供；保留模组已有字形、字号和字宽，缺字按需补齐。
-- **按文化处理姓名**：汉文化、日文、韩文和匈牙利姓名采用姓在前的顺序，覆盖商人、外交官、传教士和随机顾问等新生成的人物；模组可[自定义顺序与分隔符](docs/development.md#姓名顺序)。历史文件或旧存档中已经合成的完整姓名保持原值。
+- **按文化处理姓名**：汉文化、日文、韩文和匈牙利姓名采用姓在前的顺序，覆盖商人、外交官、传教士和随机顾问等新生成的人物；模组可[自定义顺序与分隔符](docs/development.md#姓名顺序)。历史文件或旧存档中已经合成的完整姓名保留原来的顺序；旧转码内容在读入时转换为 UTF-8，见[旧转码存档读取](docs/legacy-save-import.md)。
 - **Steam 中文状态**：游戏状态文字直接使用 UTF-8，正确显示中文国家名等内容。
 
 ## 与双字节补丁的区别
@@ -89,7 +93,7 @@ UTF-8 import, UI, format, map and bitmap iterators enabled.
 
 ## 构建
 
-源码使用 C++17、MSVC、MASM 和 Windows SDK。构建、保护检查和打包命令见[构建说明](docs/build.md)。
+Windows 构建使用 C++17、MSVC、MASM 和 Windows SDK，命令见[构建说明](docs/build.md)。Linux 原生插件使用 C++23、SafetyHook、PicoSHA2 和系统 ICU，构建与依赖见 [Linux 原生适配](docs/linux.md)；两平台的共享边界见 [platforms.md](docs/platforms.md)。
 
 ## 许可证
 

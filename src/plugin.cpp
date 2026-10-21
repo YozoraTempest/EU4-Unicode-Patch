@@ -4,6 +4,7 @@
 #include "unicode_text.hpp"
 #include "unicode_services.hpp"
 #include "formatted_text.hpp"
+#include "formatted_text_cache.hpp"
 #include "unicode_editor.hpp"
 #include "native_editor_text.hpp"
 #include "native_editor_presentation.hpp"
@@ -13,8 +14,11 @@
 #include "native_search.hpp"
 #include "native_steam_presence.hpp"
 #include "native_script_bom.hpp"
+#include "native_yaml.hpp"
+#include "search_resources.hpp"
 #include "native_legacy_import.hpp"
 #include "native_name_order.hpp"
+#include "native_mod_registry.hpp"
 #include "native_localized_format.hpp"
 #include "glyph_registry.hpp"
 #include "native_ime.hpp"
@@ -50,24 +54,9 @@ thread_local std::uint32_t button_slot=0;
 thread_local std::uint32_t last_scalar_bytes=1;
 thread_local std::shared_ptr<const eu4unicode::FormattedText> active_line_breaks,button_line_breaks;
 thread_local std::shared_ptr<const eu4unicode::FormattedText> popup_line_breaks,fit_line_breaks;
-struct CachedFormattedText { std::shared_ptr<const eu4unicode::FormattedText> value; std::size_t bytes; };
-thread_local std::unordered_map<std::string,CachedFormattedText> formatted_cache;
-thread_local std::size_t formatted_cache_bytes=0;
+thread_local eu4unicode::FormattedTextCache formatted_cache;
 std::shared_ptr<const eu4unicode::FormattedText> formatted_boundaries(std::string_view text) {
-    std::string key(text);
-    const auto found=formatted_cache.find(key);
-    if(found!=formatted_cache.end()) return found->second.value;
-    auto value=std::make_shared<const eu4unicode::FormattedText>(text);
-    const auto bytes=key.size()+value->memory_size()+sizeof(CachedFormattedText);
-    constexpr std::size_t budget=1024*1024;
-    if(bytes<=budget) {
-        if(formatted_cache.size()>=256||formatted_cache_bytes>budget-bytes) {
-            formatted_cache.clear();formatted_cache_bytes=0;
-        }
-        formatted_cache.emplace(std::move(key),CachedFormattedText{value,bytes});
-        formatted_cache_bytes+=bytes;
-    }
-    return value;
+    return formatted_cache.get(text);
 }
 void log(const char* message) {
     if(log_file==INVALID_HANDLE_VALUE) return;
@@ -128,19 +117,13 @@ std::filesystem::path search_dictionary_path;
 void load_search_resources() {
     static std::once_flag loaded;
     std::call_once(loaded,[] {
-        const auto config=search_dictionary_path.parent_path()/L"config.ini";
-        eu4unicode::set_search_options({
-            GetPrivateProfileIntW(L"search",L"typo_tolerance",1,config.c_str())!=0,
-            GetPrivateProfileIntW(L"search",L"fuzzy_pinyin",0,config.c_str())!=0});
         try {
-            if(!std::filesystem::exists(search_dictionary_path)) return;
-            std::ifstream file(search_dictionary_path,std::ios::binary);
-            if(!file) throw std::runtime_error("Cannot read pinyin dictionary");
-            const std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
-            if(file.bad()) throw std::runtime_error("Cannot read pinyin dictionary");
-            eu4unicode::set_pinyin_dictionary(content);
-            log("Custom pinyin dictionary loaded.");
-        } catch(...) { log("Custom pinyin dictionary rejected; builtin pronunciations retained."); }
+            const auto custom=eu4unicode::load_search_resources(search_dictionary_path.parent_path());
+            const auto options=eu4unicode::search_options();
+            log(custom?"Custom pinyin dictionary loaded.":"Builtin pinyin dictionary enabled.");
+            log(options.typo_tolerance?"Search typo tolerance enabled.":"Search typo tolerance disabled.");
+            log(options.fuzzy_pinyin?"Search fuzzy pinyin enabled.":"Search fuzzy pinyin disabled.");
+        } catch(const std::exception& error) { log(error.what()); }
     });
 }
 std::uint64_t find_country_name(const char* name,std::uint64_t length,std::uint64_t start,
@@ -544,7 +527,12 @@ int editor_word_break(void* widget,const EngineString* text,int fit) {
     const auto value=std::string_view(text->data(),static_cast<std::size_t>(text->size));
     if(result<0||text->size>32000||!eu4unicode::valid_utf8(value)) return result;
     try {
-        return static_cast<int>(eu4unicode::grapheme_prefix(value,static_cast<std::size_t>(result)+1))-1;
+        // Native wrapping consumes the returned space as well. Include its
+        // entire grapheme: rounding a leading space plus combining marks down
+        // yields -1 and makes the row builder repeatedly consume zero bytes.
+        const auto boundaries=eu4unicode::grapheme_boundaries(value);
+        const auto end=std::lower_bound(boundaries.begin(),boundaries.end(),static_cast<std::size_t>(result)+1);
+        return static_cast<int>(*end)-1;
     } catch(...) { log("Unicode editor word boundary failed; word break excluded."); return -1; }
 }
 void editor_arrow(void* widget,bool right) {
@@ -654,6 +642,10 @@ bool editor_key(void* widget,const KeyEvent* event) {
     try {
         if(event->key==27&&eu4unicode::exit_native_editor()) return true;
         const auto composing=eu4unicode::native_ime_owns_edit_keys();
+        if((event->key=='a'||event->key=='A')&&event->modifiers==1) {
+            if(!composing) {eu4unicode::native_edit_select_all(widget);clear_editor_affinity();}
+            return true;
+        }
         if(composing&&(event->key==8||event->key==127||event->key==13||
            (event->key>=0x4000004a&&event->key<=0x40000052))) return true;
         if(event->key=='z'&&(event->modifiers==1||event->modifiers==5)) {
@@ -842,13 +834,17 @@ void legacy_import_error(std::string_view source,int line,std::string_view key,
     log(message);
 }
 void log_legacy_import_counts() {
-    const auto counts=eu4unicode::legacy_import_counts();
-    if(!counts.localization&&!counts.script&&!counts.rejected) return;
     char message[256];
+    std::snprintf(message,sizeof(message),"Native YAML UTF-8 signatures supplied=%llu",
+        static_cast<unsigned long long>(eu4unicode::native_yaml_signatures()));
+    log(message);
+    const auto counts=eu4unicode::legacy_import_counts();
+    if(!counts.localization&&!counts.script&&!counts.binary&&!counts.rejected) return;
     std::snprintf(message,sizeof(message),
-        "Legacy import summary: %llu localization values, %llu script tokens, %llu escapes, %llu remapped units, %llu rejected values.",
+        "Legacy import summary: %llu localization values, %llu script tokens, %llu binary tokens, %llu escapes, %llu remapped units, %llu rejected values.",
         static_cast<unsigned long long>(counts.localization),static_cast<unsigned long long>(counts.script),
-        static_cast<unsigned long long>(counts.sequences),static_cast<unsigned long long>(counts.relocated),
+        static_cast<unsigned long long>(counts.binary),static_cast<unsigned long long>(counts.sequences),
+        static_cast<unsigned long long>(counts.relocated),
         static_cast<unsigned long long>(counts.rejected));
     log(message);
 }
@@ -1513,15 +1509,31 @@ bool initialize(HMODULE module) {
         reinterpret_cast<void**>(&eu4unicode::original_text_height))!=MH_OK) {
         log("Paragraph measurement hook creation failed; no hooks enabled.");return false;
     }
-    if(MH_CreateHook(image+0x170cd10,reinterpret_cast<void*>(eu4unicode::construct_script_file),
+    if(MH_CreateHook(image+0x16fc3d0,reinterpret_cast<void*>(eu4unicode::parse_utf8_yaml),
+        reinterpret_cast<void**>(&eu4unicode::original_yaml_parse))!=MH_OK ||
+       MH_CreateHook(image+0x170cd10,reinterpret_cast<void*>(eu4unicode::construct_script_file),
         reinterpret_cast<void**>(&eu4unicode::original_script_file))!=MH_OK||
        MH_CreateHook(image+0x170ca20,reinterpret_cast<void*>(eu4unicode::construct_script_file_mode),
         reinterpret_cast<void**>(&eu4unicode::original_script_file_mode))!=MH_OK||
        MH_CreateHook(image+0x170d1d0,reinterpret_cast<void*>(eu4unicode::construct_script_stream),
         reinterpret_cast<void**>(&eu4unicode::original_script_stream))!=MH_OK||
        MH_CreateHook(image+0x170e700,reinterpret_cast<void*>(eu4unicode::read_legacy_script_token),
-        reinterpret_cast<void**>(&eu4unicode::original_script_token))!=MH_OK) {
+        reinterpret_cast<void**>(&eu4unicode::original_script_token))!=MH_OK||
+       MH_CreateHook(image+0x170ebf0,reinterpret_cast<void*>(eu4unicode::read_legacy_binary_token),
+        reinterpret_cast<void**>(&eu4unicode::original_binary_token))!=MH_OK) {
         log("Script lexer hook creation failed; no hooks enabled."); return false;
+    }
+    eu4unicode::native_mod_register=reinterpret_cast<eu4unicode::NativeModRegister>(image+0x150e720);
+    eu4unicode::native_mod_assign=reinterpret_cast<eu4unicode::NativeModAssign>(image+0x1508310);
+    eu4unicode::native_mod_enabled=reinterpret_cast<eu4unicode::NativeModEnabled>(image+0x1dc380);
+    eu4unicode::native_mod_log=log;
+    if(MH_CreateHook(image+0x1506d30,reinterpret_cast<void*>(eu4unicode::initialize_mod_registry),
+        reinterpret_cast<void**>(&eu4unicode::original_mod_initialize))!=MH_OK||
+       MH_CreateHook(image+0x1508860,reinterpret_cast<void*>(eu4unicode::scan_mod_registry),
+        reinterpret_cast<void**>(&eu4unicode::original_mod_scan))!=MH_OK||
+       MH_CreateHook(image+0x15105b0,reinterpret_cast<void*>(eu4unicode::insert_mod_registry),
+        reinterpret_cast<void**>(&eu4unicode::original_mod_insert))!=MH_OK) {
+        log("Mod registry hook creation failed; no hooks enabled.");return false;
     }
     if(MH_CreateHook(image+0x1706010,reinterpret_cast<void*>(convert_steam_presence),
         reinterpret_cast<void**>(&original_presence_conversion))!=MH_OK) {
@@ -1610,6 +1622,8 @@ bool initialize(HMODULE module) {
              reinterpret_cast<void**>(&original_editor_width_fit))!=MH_OK ||
            MH_CreateHook(image+0x1539820,reinterpret_cast<void*>(editor_word_break),
              reinterpret_cast<void**>(&original_editor_word_break))!=MH_OK ||
+           MH_CreateHook(image+0x1539620,reinterpret_cast<void*>(eu4unicode::construct_editor_space_row),
+             reinterpret_cast<void**>(&eu4unicode::original_editor_space_row))!=MH_OK ||
            MH_CreateHook(image+0x1539240,reinterpret_cast<void*>(paste_editor_clipboard),nullptr)!=MH_OK ||
            MH_CreateHook(image+0x1534250,reinterpret_cast<void*>(paint_editor_ime_rect),
              reinterpret_cast<void**>(&original_editor_paint))!=MH_OK ||
@@ -1662,7 +1676,7 @@ bool initialize(HMODULE module) {
     transaction.commit();
     patch_enabled.store(true,std::memory_order_release);
     log("UTF-8 import, UI, format, map and bitmap iterators enabled.");
-    log("Script lexer UTF-8 BOM handling enabled.");
+    log("YAML and script UTF-8 input with or without BOM enabled.");
     log("Steam Rich Presence UTF-8 passthrough enabled.");
     log("Chinese and pinyin country/province search enabled.");
     return true;

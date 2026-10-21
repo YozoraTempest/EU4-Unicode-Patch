@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 namespace eu4unicode {
+NativeSpaceRow original_editor_space_row=nullptr;
 namespace {
 using Assign=EngineString*(*)(EngineString*,const char*,std::uint64_t);
 using Destroy=void(*)(EngineString*);
@@ -23,6 +24,37 @@ void configure_native_editor_text(void* image) {
     const auto base=static_cast<std::byte*>(image);
     assign=reinterpret_cast<Assign>(base+0x95110);destroy=reinterpret_cast<Destroy>(base+0x95660);
     move=reinterpret_cast<Move>(base+0x1536f50);
+}
+void configure_native_editor_text(NativeEditorTextApi api) {
+    assign=api.assign;destroy=api.destroy;move=api.move;
+}
+void native_edit_select_all(void* widget) {
+    const auto view=native_edit_view(widget);
+    native_edit_caret(widget,view.text.size());
+    word(widget,0x92)=word(widget,0x94)=0;
+    static_cast<std::byte*>(widget)[0x90]=static_cast<std::byte>(!view.text.empty());
+    assign(reinterpret_cast<EngineString*>(static_cast<std::byte*>(widget)+0x70),view.text.data(),view.text.size());
+    // Selection changes redraw the caret without emitting a text-change event.
+    reinterpret_cast<void(*)(void*)>((*static_cast<void***>(widget))[0x208/8])(widget);
+}
+EngineString* construct_editor_space_row(EngineString* row,const EngineString* source) {
+    // The native space-wrap constructor replaces its final byte with LF and
+    // marks it as consumed source. A decorated space needs a synthetic LF so
+    // the complete source grapheme and the native row/source mapping survive.
+    std::string replacement;
+    if(source->size<=32000) {
+        const std::string_view text(source->data(),static_cast<std::size_t>(source->size));
+        if(!text.empty()&&valid_utf8(text)) {
+            const auto boundaries=grapheme_boundaries(text);
+            const auto begin=boundaries[boundaries.size()-2];
+            if(text[begin]==' '&&text.size()-begin>1) {replacement=text;replacement+='\n';}
+        }
+    }
+    if(replacement.empty()) return original_editor_space_row(row,source);
+    *row=EngineString{};row->capacity=15;
+    assign(row,replacement.data(),replacement.size());
+    reinterpret_cast<std::byte*>(row)[32]=std::byte{1};
+    return row;
 }
 NativeEditView native_edit_view(void* widget) {
     const auto base=static_cast<const std::byte*>(widget);

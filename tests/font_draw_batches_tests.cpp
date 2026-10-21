@@ -49,6 +49,18 @@ int main() {
             eu4unicode::tag_font_vertices(popup.data()+first,6,page);
         }
         const auto popup_before=popup;
+        std::vector<eu4unicode::MapFontVertex> triangles;
+        for(const auto& vertex:popup) triangles.push_back({vertex.x,vertex.y,vertex.z,vertex.u,vertex.v});
+        const auto triangle_batches=eu4unicode::split_font_triangles(triangles,equal_pages(3));
+        require(triangle_batches.size()==4&&triangle_batches[1].first_quad==1&&triangle_batches[1].quad_count==2,
+                "Native six-vertex map glyphs changed order or triangle grouping");
+        for(std::size_t index=0;index<triangles.size();++index)
+            require(triangles[index].x==popup_before[index].x&&triangles[index].u==0.25f&&triangles[index].v==0.5f,
+                    "Native map triangles changed geometry or physical UVs");
+        triangles.pop_back();rejected=false;
+        try {eu4unicode::split_font_triangles(triangles,equal_pages(3));}
+        catch(const std::invalid_argument&) {rejected=true;}
+        require(rejected,"Incomplete native map triangle glyph was accepted");
         const auto popup_batches=eu4unicode::split_popup_glyphs(popup,equal_pages(3));
         require(popup_batches.size()==4&&popup_batches[1].first_quad==1&&popup_batches[1].quad_count==2,
                 "Popup page runs changed glyph order");

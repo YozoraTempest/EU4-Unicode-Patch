@@ -66,5 +66,6 @@ void check_font_page_budget(std::uint64_t supplemental_bytes,std::uint64_t initi
 void tag_font_vertices(MapFontVertex* vertices,std::size_t count,std::uint32_t page) noexcept { tag_vertices(vertices,count,page); }
 void tag_font_vertices(PopupFontVertex* vertices,std::size_t count,std::uint32_t page) noexcept { tag_vertices(vertices,count,page); }
 std::vector<FontDrawBatch> split_font_quads(std::vector<MapFontVertex>& vertices,const std::vector<FontPageSize>& pages) { return split_glyphs(vertices,pages,4); }
+std::vector<FontDrawBatch> split_font_triangles(std::vector<MapFontVertex>& vertices,const std::vector<FontPageSize>& pages) { return split_glyphs(vertices,pages,6); }
 std::vector<FontDrawBatch> split_popup_glyphs(std::vector<PopupFontVertex>& vertices,const std::vector<FontPageSize>& pages) { return split_glyphs(vertices,pages,6); }
 }

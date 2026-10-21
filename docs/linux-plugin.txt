@@ -1,0 +1,23 @@
+EU4 Unicode Patch — Augustus 插件版
+
+适用：EU4 1.37.5 原生 Linux x86_64，Steam Linux Runtime 3.0 (sniper)。
+
+1. 本包已包含 Augustus-Launcher，将本包解压到游戏根目录（eu4 所在目录）。
+2. Steam → 游戏属性 → 兼容性，选择 Steam Linux Runtime 3.0 (sniper)。
+3. Steam 启动选项填写：
+   bash ./launch.sh --steam -- %command%
+4. 正常启动游戏，在 P 社启动器中点击开始游戏。
+
+插件：plugin/libeu4_unicode.so
+配置：plugin/eu4_unicode/config.ini
+自定义拼音词典：plugin/eu4_unicode/pinyin.txt（可选）
+可选字体：plugin/eu4_unicode/fonts/
+日志：游戏根目录 eu4_unicode_linux.log
+
+ICU、Pango、Cairo、Fontconfig 和 SDL 由 Steam Runtime 提供，无需复制运行库。
+系统需要提供所用语言的字体，也可使用原来的可选字体包。
+插件会准备 UTF-8 输入环境，并保留显式设置的 SDL_DYNAMIC_API。
+本地启动也需要由 Steam Linux Runtime 3.0 (sniper) 运行 launch.sh。
+
+停用：将 plugin/libeu4_unicode.so 改名为 libeu4_unicode.so.disabled。
+恢复：将文件名改回。
