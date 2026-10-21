@@ -20,6 +20,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  augustus-sniper:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Build and test Augustus package in the pinned Valve sniper SDK
+        run: docker build --progress=plain -f packaging/Dockerfile.linux-plugin --output dist .
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-augustus-sniper-${{ github.sha }}
+          retention-days: 14
+          path: dist/EU4UnicodePatch-Linux-Augustus.zip
+          if-no-files-found: error
   arch-core:
     runs-on: ubuntu-24.04
     container: archlinux:base

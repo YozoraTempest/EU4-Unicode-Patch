@@ -5,6 +5,7 @@
 #include "linux/font_pages.hpp"
 #include "linux/ime_presentation.hpp"
 #include "linux/script_legacy.hpp"
+#include "linux/plugin_runtime.hpp"
 #include <dlfcn.h>
 #include <elf.h>
 #include <picosha2.h>
@@ -28,6 +29,7 @@ FILE* logfile=nullptr;
 int patched_main(int argc,char** argv,char** envp) {
     if(!verify_executable()) return 1;
     try {
+        prepare_environment(resource_directory());
         icu_runtime::ensure_loaded();
         verify_profile();
         hooks=new Hooks;
@@ -149,7 +151,9 @@ void Hooks::clear() noexcept {mid_.clear();inline_.clear();}
 extern "C" int __libc_start_main(int(*main)(int,char**,char**),int argc,char** argv,
     void(*init)(),void(*fini)(),void(*rtld_fini)(),void* stack_end) {
     using Start=int(*)(int(*)(int,char**,char**),int,char**,void(*)(),void(*)(),void(*)(),void*);
-    const auto original=reinterpret_cast<Start>(dlsym(RTLD_NEXT,"__libc_start_main"));
+    // Resolve the versioned glibc entry directly. Another preloader can
+    // interpose dlsym and change the caller used for RTLD_NEXT resolution.
+    const auto original=reinterpret_cast<Start>(dlvsym(RTLD_NEXT,"__libc_start_main","GLIBC_2.2.5"));
     if(!original) _exit(127);
     char path[4096]{};
     const auto length=readlink("/proc/self/exe",path,sizeof(path)-1);

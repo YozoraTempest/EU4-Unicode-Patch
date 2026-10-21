@@ -1,4 +1,5 @@
 #include "linux/native.hpp"
+#include <exception>
 #include <algorithm>
 #include <cstring>
 #include <map>

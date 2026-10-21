@@ -1,4 +1,5 @@
 #include "linux/font_pages.hpp"
+#include "linux/plugin_runtime.hpp"
 #include "scalar_glyph.hpp"
 #include "formatted_paragraph.hpp"
 #include "linux/paragraph.hpp"
@@ -8,7 +9,6 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
-#include <dlfcn.h>
 #include <filesystem>
 #include <map>
 #include <mutex>
@@ -71,10 +71,7 @@ void check_graphics_thread() {
     if(graphics_thread!=current) throw std::runtime_error("Font GPU operation outside native graphics thread");
 }
 void load_optional_fonts() {
-    Dl_info info{};
-    if(!dladdr(reinterpret_cast<void*>(load_optional_fonts),&info)||!info.dli_fname)
-        throw std::runtime_error("Cannot locate optional Linux font directory");
-    const auto directory=std::filesystem::path(info.dli_fname).parent_path()/"fonts";
+    const auto directory=resource_directory()/"fonts";
     std::vector<std::filesystem::path> files;
     for(const auto name:{"SourceHanSansSC-Regular.otf","PlangothicP1-Regular.ttf","PlangothicP2-Regular.ttf"})
         if(std::filesystem::is_regular_file(directory/name)) files.push_back(directory/name);
