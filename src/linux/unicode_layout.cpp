@@ -10,6 +10,7 @@
 #include <limits>
 #include <map>
 #include <stdexcept>
+#include "linux/render_api.hpp"
 
 namespace eu4unicode {
 namespace {
@@ -71,7 +72,7 @@ struct TextFonts::Impl {
         if(names.empty()) throw std::invalid_argument("Private fonts have no usable families");
         map.reset(pango_cairo_font_map_new_for_font_type(CAIRO_FONT_TYPE_FT));
         if(!map) throw std::runtime_error("Pango FreeType font map is unavailable");
-        pango_fc_font_map_set_config(PANGO_FC_FONT_MAP(map.get()),config.get());
+        pango_fc_font_map_set_config(reinterpret_cast<PangoFcFontMap*>(map.get()),config.get());
     }
 };
 TextFonts::TextFonts(const std::vector<std::filesystem::path>& files,bool system_first):impl_(std::make_unique<Impl>(files,system_first)) {}
@@ -84,7 +85,7 @@ public:
     cairo_scaled_font_t* scaled;
     float size;
     explicit GlyphFace(PangoFont* value,float em):font(static_cast<PangoFont*>(g_object_ref(value))),
-        scaled(pango_cairo_font_get_scaled_font(PANGO_CAIRO_FONT(value))),size(em) {
+        scaled(pango_cairo_font_get_scaled_font(reinterpret_cast<PangoCairoFont*>(value))),size(em) {
         if(!scaled) throw std::runtime_error("Pango did not retain a Cairo font");
     }
 };
@@ -133,7 +134,8 @@ struct TextLayout::Impl {
         pango_font_description_set_absolute_size(description.get(),units(size));
         pango_layout_set_font_description(layout.get(),description.get());
         std::unique_ptr<PangoAttrList,decltype(&pango_attr_list_unref)> attrs(pango_attr_list_new(),pango_attr_list_unref);
-        if(options.line_height>0) add_attribute(attrs.get(),pango_attr_line_height_new_absolute(units(options.line_height)),0,text.size());
+        // Fixed game line height is applied by our metrics, hit testing and
+        // drawing below. Pango keeps its natural extents for shaping.
         for(const auto& style:options.styles) if(style.style) {
             validate_range(text,style.text_start,style.text_length);
             // Distinct paint attributes make Pango itemize at application style

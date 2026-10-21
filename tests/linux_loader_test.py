@@ -16,7 +16,7 @@ assert [line.split()[-1] for line in exports.splitlines()]==["__libc_start_main"
 fixture_exports=subprocess.check_output(["nm","-D","--defined-only",str(fixture)],text=True)
 assert "EVP_DigestInit_ex" in fixture_exports and "EVP_MD_CTX_free" in fixture_exports
 with tempfile.TemporaryDirectory(prefix="eu4-linux-loader-") as directory:
-    helper = subprocess.run(["/usr/bin/true"], cwd=directory, env=env,
+    helper = subprocess.run([shutil.which("true")], cwd=directory, env=env,
                             capture_output=True, timeout=10)
     assert helper.returncode == 0, helper.stderr
     assert not (Path(directory) / "eu4_unicode_linux.log").exists()
@@ -46,12 +46,12 @@ with tempfile.TemporaryDirectory(prefix="eu4-linux-loader-") as directory:
     shutil.copyfile(fixture,game/"eu4")
     (game/"eu4").chmod(0o755)
     steam=subprocess.run([str(package/"launch-linux.sh"),"--steam",str(game/"eu4"),
-        "-debug","--","/usr/bin/false"],cwd=package,capture_output=True,timeout=10)
+        "-debug","--",shutil.which("false")],cwd=package,capture_output=True,timeout=10)
     assert steam.returncode==1,(steam.returncode,steam.stderr)
     log=(game/"eu4_unicode_linux.log").read_text()
     assert "Executable SHA256="+hashlib.sha256(original).hexdigest() in log
     assert not (package/"eu4_unicode_linux.log").exists()
-    direct=subprocess.run([str(package/"launch-linux.sh"),"/usr/bin/true"],
+    direct=subprocess.run([str(package/"launch-linux.sh"),shutil.which("true")],
         cwd=package,capture_output=True,timeout=10)
     assert direct.returncode==0,direct.stderr
     for locale in ["C","POSIX","C.UTF-8"]:

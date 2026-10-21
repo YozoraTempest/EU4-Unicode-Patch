@@ -1,0 +1,24 @@
+FROM registry.gitlab.steamos.cloud/steamrt/sniper/sdk:3.0.20261007.263965 AS build
+USER root
+# Only build tools and test fonts are added. Runtime dependencies are supplied by the
+# matching sniper Platform; no host libraries are copied into the package.
+RUN apt-get update \
+    && apt-get install --no-upgrade --no-install-recommends -y python3-pip fonts-noto-cjk fonts-noto-core \
+    && python3 -m pip install --no-cache-dir cmake==3.31.6 \
+    && rm -rf /var/lib/apt/lists/*
+COPY . /source
+WORKDIR /source
+RUN mkdir -p build/_deps/zydis-src/dependencies/zycore \
+    && curl -fL https://codeload.github.com/zyantific/zydis/tar.gz/569320ad3c4856da13b9dbf1f0d9e20bda63870e -o /zydis.tar.gz \
+    && tar -xzf /zydis.tar.gz --strip-components=1 -C build/_deps/zydis-src \
+    && curl -fL https://codeload.github.com/zyantific/zycore-c/tar.gz/74620eefd233bec20daeb66e78e744ff06e273b7 -o /zycore.tar.gz \
+    && tar -xzf /zycore.tar.gz --strip-components=1 -C build/_deps/zydis-src/dependencies/zycore
+RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_TOOLCHAIN_FILE=/usr/share/steamrt/cmake/gcc-14.cmake \
+      -DFETCHCONTENT_SOURCE_DIR_ZYDIS=/source/build/_deps/zydis-src \
+    && cmake --build build --parallel 2 \
+    && ctest --test-dir build --output-on-failure \
+    && python3 tools/package-linux-plugin.py \
+    && python3 tests/linux_plugin_package_test.py dist/EU4UnicodePatch-Linux-Augustus.zip build
+FROM scratch
+COPY --from=build /source/dist/EU4UnicodePatch-Linux-Augustus.zip /

@@ -78,7 +78,7 @@ with tempfile.TemporaryDirectory(prefix="eu4-paradox-launcher-") as temporary:
     command = [package / "start-paradox-launcher.sh", game, "--", sys.executable, "-c", probe, "dowser"]
     outer = json.loads(run(command, root).stdout.splitlines()[-1])
     assert outer["args"] == ["dowser"] and outer["preload"] is None, outer
-    run([package / "start-paradox-launcher.sh", game, "--", "/usr/bin/false"], root, code=1)
+    run([package / "start-paradox-launcher.sh", game, "--", shutil.which("false")], root, code=1)
 
     # Steam validation restores the official settings; the Steam option repairs it.
     settings.write_bytes(original)

@@ -1,0 +1,7 @@
+.git
+build
+build-ci
+dist
+private
+**/.git
+**/__pycache__
