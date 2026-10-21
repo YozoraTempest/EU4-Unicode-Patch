@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory(prefix="eu4-linux-loader-") as directory:
         assert b"fixture main called" not in refused.stdout
         log = (case / "eu4_unicode_linux.log").read_text()
         assert "Executable SHA256="+hashlib.sha256(payload).hexdigest() in log
-        assert "Refused: Native instruction outside executable mapping" in log
+        assert "Refused: Native instruction outside executable mapping" in log, log
         assert "hooks enabled" not in log
     package=Path(directory)/"package"
     package.mkdir()

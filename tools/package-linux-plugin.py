@@ -10,6 +10,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_BUILD = "3.0.20261007.263965"
+AUGUSTUS_SHA256 = "01794f6cb8ce8234a156cbde0b62d9bb2afb2b57d7de08b1e063eca3e24e0e68"
 # Rendering, ICU and SDL are supplied by the supported Steam Runtime. The
 # SDK's GCC 14 wrapper links its newer C++ and compiler runtimes statically.
 ALLOWED_NEEDED = {"libc.so.6", "libm.so.6", "libdl.so.2", "libpthread.so.0",
@@ -27,6 +28,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
     parser.add_argument("--output", type=Path, default=ROOT / "dist/EU4UnicodePatch-Linux-Augustus.zip")
+    parser.add_argument("--launcher", type=Path, required=True, help="Augustus-Launcher v0.1.0 release ZIP")
     args = parser.parse_args()
     release = dict(re.findall(r'^([A-Z_]+)=["\']?([^"\'\n]+)', Path("/etc/os-release").read_text(), re.MULTILINE))
     if (release.get("ID") != "steamrt" or release.get("VERSION_CODENAME") != "sniper"
@@ -72,16 +74,25 @@ def main():
         "plugin/eu4_unicode/使用说明.txt": (ROOT / "docs/linux-plugin.txt").read_bytes(),
         "plugin/eu4_unicode/LICENSE": "\n".join(notices).encode("utf-8"),
     }
+    if hashlib.sha256(args.launcher.read_bytes()).hexdigest() != AUGUSTUS_SHA256:
+        parser.error("Expected the pinned Augustus-Launcher v0.1.0 release package")
+    with zipfile.ZipFile(args.launcher) as launcher:
+        if launcher.testzip() is not None or set(launcher.namelist()) != {
+            "eu4-plugin-loader", "launch.sh", "使用说明.txt", "LICENSE", "plugin/",
+        }:
+            parser.error("Unexpected Augustus-Launcher package contents")
+        for name in ("eu4-plugin-loader", "launch.sh", "使用说明.txt", "LICENSE"):
+            files[name] = launcher.read(name)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(args.output, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for name, data in files.items():
             entry = zipfile.ZipInfo(name)
             entry.create_system = 3
-            entry.external_attr = 0o100644 << 16
+            entry.external_attr = (0o100755 if name in ("eu4-plugin-loader", "launch.sh") else 0o100644) << 16
             entry.compress_type = zipfile.ZIP_DEFLATED
             archive.writestr(entry, data)
     print(args.output)
-    print("Files:", len(files), "; bundled runtime libraries: 0")
+    print("Files:", len(files), "; Augustus-Launcher: 0.1.0; bundled runtime libraries: 0")
     print("NEEDED:", ", ".join(sorted(needed)))
     print("SHA256:", hashlib.sha256(args.output.read_bytes()).hexdigest())
 

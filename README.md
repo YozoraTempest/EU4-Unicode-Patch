@@ -8,7 +8,7 @@
 
 另有 **Steam Linux 原生版 / x86_64 通用 glibc 构建**，与 Windows 共用 Unicode 核心并分别构建原生插件。支持通过 P 社启动器加载，安装一次后 Steam 启动选项留空，也可使用自动恢复集成的启动项；安装方法、游戏布局与指令校验及功能范围见 [Linux 原生适配](docs/linux.md)。Linux 包按宿主机 ICU 主版本运行时加载，使用 Ubuntu LTS、Arch 和 Fedora 43/44 进行构建检查，并在 Fedora 验证 Ubuntu 22.04 生成的同一个通用包；Fedora 桌面游戏与 Steam Linux Runtime 仍需单独验证。运行时仍需要系统提供 Pango、Cairo、Fontconfig、SDL2 兼容库和 glibc。
 
-使用 Augustus-Launcher 时，选择独立的 **Augustus 插件版**，解压到游戏根目录，并在 Steam 的游戏兼容性设置中选择 **Steam Linux Runtime 3.0 (sniper)**。此包由 Valve 官方 Sniper SDK `3.0.20261007.263965` 和 SDK 自带的 GCC 14 构建，ICU、Pango、Cairo、Fontconfig 与 SDL 使用 Runtime 提供的库，玩家包仅含插件、配置、使用说明和 `LICENSE`。[使用方法](docs/linux-plugin.txt)。构建前初始化子模块，再运行 `docker build -f packaging/Dockerfile.linux-plugin --output dist .`，产物为 `dist/EU4UnicodePatch-Linux-Augustus.zip`。构建会检查 glibc 2.31 ABI 上限、动态依赖与导出符号，拒绝混入构建机运行库。
+Linux **Augustus 玩家包已包含启动器**，将包解压到游戏根目录，并在 Steam 的游戏兼容性设置中选择 **Steam Linux Runtime 3.0 (sniper)**。此包由 Valve 官方 Sniper SDK `3.0.20261007.263965` 和 SDK 自带的 GCC 14 构建，ICU、Pango、Cairo、Fontconfig 与 SDL 使用 Runtime 提供的库，玩家包包含启动器、插件、配置、使用说明和 `LICENSE`。[使用方法](docs/linux-plugin.txt)。构建前初始化子模块，再运行 `docker build -f packaging/Dockerfile.linux-plugin --output dist .`，产物为 `dist/EU4UnicodePatch-Linux-Augustus.zip`。构建会检查 glibc 2.31 ABI 上限、动态依赖与导出符号，拒绝混入构建机运行库。
 
 [正式版与可选字体包](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases/latest) · [Nightly 测试版](https://github.com/YozoraTempest/EU4-Unicode-Patch/releases) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/YozoraTempest/EU4-Unicode-Patch/issues)
 

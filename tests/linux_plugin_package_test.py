@@ -1,5 +1,6 @@
 """Run the actual plugin package against the supported runtime's libraries."""
 import os
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,8 +17,12 @@ with tempfile.TemporaryDirectory(prefix="eu4-unicode-package-") as temporary:
         assert set(package.namelist()) == {
             "plugin/libeu4_unicode.so", "plugin/eu4_unicode/config.ini",
             "plugin/eu4_unicode/使用说明.txt", "plugin/eu4_unicode/LICENSE",
+            "eu4-plugin-loader", "launch.sh", "使用说明.txt", "LICENSE",
         }, package.namelist()
+        for name in ("eu4-plugin-loader", "launch.sh"):
+            assert package.getinfo(name).external_attr >> 16 & 0o111, name
         package.extractall(game)
+    (game / "eu4-plugin-loader").chmod(0o755)
     environment = os.environ.copy()
     for key in ("LD_PRELOAD", "LD_LIBRARY_PATH", "SDL_DYNAMIC_API"):
         environment.pop(key, None)
@@ -39,10 +44,19 @@ with tempfile.TemporaryDirectory(prefix="eu4-unicode-package-") as temporary:
         assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
         assert "cannot be preloaded" not in result.stderr, result.stderr
     shutil.copy2(build / "loader-fixture/eu4", game / "eu4")
-    result = subprocess.run(["./eu4"], cwd=game,
-        env=environment | {"LD_PRELOAD": "./plugin/libeu4_unicode.so"}, capture_output=True, text=True, timeout=15)
-    assert result.returncode == 1, (result.returncode, result.stdout, result.stderr)
+    (game / "launcher-settings.json").write_text(json.dumps({
+        "gameId": "eu4", "exePath": "./eu4", "exeArgs": [], "displayName": "EU4 package check",
+    }))
+    (game / "dowser").write_text('#!/bin/sh\nset -eu\n'
+        'case "${LD_PRELOAD-}" in *libeu4_unicode.so*) exit 99;; esac\n'
+        'exec ./eu4-plugin-loader\n')
+    (game / "dowser").chmod(0o755)
+    for command in (["bash", "./launch.sh"], ["bash", "./launch.sh", "--steam", "--", "./dowser"]):
+        result = subprocess.run(command, cwd=game, env=environment,
+            capture_output=True, text=True, timeout=15)
+        assert result.returncode == 1, (command, result.returncode, result.stdout, result.stderr)
+        assert json.loads((game / "launcher-settings.json").read_text())["exePath"] == "./eu4-plugin-loader"
     log = (game / "eu4_unicode_linux.log").read_text()
     assert "Refused: Native instruction outside executable mapping" in log, log
     assert "Cannot find a matching" not in log and "runtime is missing" not in log, log
-print("Four-file package, runtime ICU/rendering, symbol collisions and game entry checks passed")
+print("Bundled Augustus package, Steam/local entries, runtime rendering and symbol isolation checks passed")

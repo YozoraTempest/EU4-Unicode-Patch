@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory)][ValidateSet('Release','Nightly')][string]$Channel,
     [string]$BuildDate='',
     [string]$BuildDirectory='build',
-    [switch]$CheckOnly
+    [switch]$CheckOnly,
+    [switch]$Draft
 )
 $ErrorActionPreference='Stop'
 $PSNativeCommandUseErrorActionPreference=$false
@@ -26,7 +27,7 @@ if ($tag) {
 }
 $release=Get-GitHubObject "releases/tags/$($info.Tag)"
 if ($release -and !$release.draft) {
-    $expectedAssets=@($info.PlayerPackage,$info.FontPackage,'SHA256SUMS.txt') | Sort-Object
+    $expectedAssets=@($info.PlayerPackage,$info.FontPackage,$info.LinuxPackage,'SHA256SUMS.txt') | Sort-Object
     if (!$tag -or [bool]$release.prerelease -ne ($Channel -eq 'Nightly') -or
         (@($release.assets.name | Sort-Object) -join ',') -cne ($expectedAssets -join ',')) {
         throw 'Existing published release does not match the expected channel or assets.'
@@ -48,6 +49,19 @@ $root=Get-BuildRoot $BuildDirectory
 $package=Get-Content -LiteralPath (Join-Path $root 'package-info.json') -Raw | ConvertFrom-Json
 if ($package.Tag -ne $info.Tag -or $package.SourceCommit -ne $info.SourceCommit) { throw 'Package does not match this release.' }
 & (Join-Path $PSScriptRoot 'test-package.ps1') -BuildDirectory $BuildDirectory
+$dist=Join-Path $releaseProjectRoot 'dist'
+$linuxSource=Join-Path $dist 'EU4UnicodePatch-Linux-Augustus.zip'
+$linuxInfo=Get-Content -LiteralPath (Join-Path $dist 'linux-build-info.json') -Raw | ConvertFrom-Json
+if ($linuxInfo.source_commit -ne $info.SourceCommit -or
+    $linuxInfo.package_sha256 -ne (Get-Sha256 $linuxSource)) {
+    throw 'Linux package must be built and tested from the same source commit.'
+}
+$linuxArchive=Join-Path $dist $info.LinuxPackage
+Copy-Item -LiteralPath $linuxSource -Destination $linuxArchive -Force
+[IO.File]::WriteAllText((Join-Path $dist 'SHA256SUMS.txt'),
+    "$(Get-Sha256 (Join-Path $dist $info.PlayerPackage))  $($info.PlayerPackage)`n"+
+    "$(Get-Sha256 (Join-Path $dist $info.FontPackage))  $($info.FontPackage)`n"+
+    "$(Get-Sha256 $linuxArchive)  $($info.LinuxPackage)`n",[Text.UTF8Encoding]::new($false))
 $updates=''
 if ($Channel -eq 'Release') {
     $changelog=[IO.File]::ReadAllText((Join-Path $releaseProjectRoot 'CHANGELOG.md'))
@@ -57,9 +71,9 @@ if ($Channel -eq 'Release') {
 }
 $channelNote=if ($Channel -eq 'Nightly') { "Nightly 测试版，构建日期：$($info.BuildDate)（北京时间）。`n`n" } else { '' }
 $notes=$channelNote+$updates+@"
-适用：EU4 1.37.5.0 Inca / Windows x64，Windows 10 1903 或更新版本。
+适用：EU4 1.37.5.0 Inca / Windows x64，以及使用 Steam Linux Runtime 3.0 (sniper) 的原生 Linux x86_64。
 
-安装：退出游戏，将主包全部内容解压到 eu4.exe 所在目录并覆盖。需要补字时再安装可选字体包；补丁优先使用系统字体。
+安装：退出游戏，将对应平台的主包全部解压到游戏根目录。Linux 包已包含 Augustus-Launcher；Windows 主包适用于 eu4.exe。补丁优先使用系统字体。
 
 限制：图集和排版缓存有内存上限；字体覆盖取决于系统或可选字库；是否允许输入换行由游戏或模组控件决定。
 
@@ -79,10 +93,13 @@ if (!$release) {
     & gh release edit $info.Tag --repo $repo --notes-file $notesFile
     if ($LASTEXITCODE -ne 0) { throw 'Cannot update draft release notes.' }
 }
-$dist=Join-Path $releaseProjectRoot 'dist'
-$assets=@(@($info.PlayerPackage,$info.FontPackage,'SHA256SUMS.txt') | ForEach-Object { Join-Path $dist $_ })
+$assets=@(@($info.PlayerPackage,$info.FontPackage,$info.LinuxPackage,'SHA256SUMS.txt') | ForEach-Object { Join-Path $dist $_ })
 & gh release upload $info.Tag @assets --repo $repo --clobber
 if ($LASTEXITCODE -ne 0) { throw 'Draft release asset upload failed.' }
+if ($Draft) {
+    Write-Output "Prepared release draft $($info.Tag) with Windows and Linux player packages."
+    exit 0
+}
 $arguments=@('release','edit',$info.Tag,'--repo',$repo,'--draft=false')
 if ($Channel -eq 'Nightly') { $arguments+=@('--prerelease','--latest=false') } else { $arguments+=@('--prerelease=false','--latest') }
 & gh @arguments
