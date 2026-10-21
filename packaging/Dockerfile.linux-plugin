@@ -8,6 +8,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY . /source
 WORKDIR /source
+RUN curl -fL --retry 3 \
+      https://github.com/YozoraTempest/Augustus-Launcher/releases/download/v0.1.0/Augustus-Launcher-Linux-x86_64-v0.1.0.zip \
+      -o /augustus-launcher.zip
 RUN mkdir -p build/_deps/zydis-src/dependencies/zycore \
     && curl -fL https://codeload.github.com/zyantific/zydis/tar.gz/569320ad3c4856da13b9dbf1f0d9e20bda63870e -o /zydis.tar.gz \
     && tar -xzf /zydis.tar.gz --strip-components=1 -C build/_deps/zydis-src \
@@ -18,7 +21,7 @@ RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DFETCHCONTENT_SOURCE_DIR_ZYDIS=/source/build/_deps/zydis-src \
     && cmake --build build --parallel 2 \
     && ctest --test-dir build --output-on-failure \
-    && python3 tools/package-linux-plugin.py \
+    && python3 tools/package-linux-plugin.py --launcher /augustus-launcher.zip \
     && python3 tests/linux_plugin_package_test.py dist/EU4UnicodePatch-Linux-Augustus.zip build
 FROM scratch
 COPY --from=build /source/dist/EU4UnicodePatch-Linux-Augustus.zip /

@@ -1,0 +1,42 @@
+name: Linux player package
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Build and test the player package in the pinned Valve sniper SDK
+        run: docker build --progress=plain -f packaging/Dockerfile.linux-plugin --output dist .
+      - name: Record package source and checksum
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, subprocess
+          package = Path('dist/EU4UnicodePatch-Linux-Augustus.zip')
+          info = {'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+                  'package_sha256': hashlib.sha256(package.read_bytes()).hexdigest()}
+          Path('dist/linux-build-info.json').write_text(json.dumps(info), encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-augustus-sniper
+          retention-days: 14
+          path: |
+            dist/EU4UnicodePatch-Linux-Augustus.zip
+            dist/linux-build-info.json
+          if-no-files-found: error

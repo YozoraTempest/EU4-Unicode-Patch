@@ -38,6 +38,7 @@ function Get-ReleaseInfo([string]$Channel,[string]$BuildDate='') {
         SourceCommit=$commit; BuildDate=$BuildDate
         PlayerPackage="EU4UnicodePatch-1.37.5-$suffix.zip"
         FontPackage="EU4UnicodePatch-fonts-$suffix.zip"
+        LinuxPackage="EU4UnicodePatch-Linux-Augustus-$suffix.zip"
     }
 }
 

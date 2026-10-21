@@ -1,6 +1,8 @@
 # 更新记录
 
-## 未发布
+## 0.1.15
+
+- Linux 玩家包整合 Augustus-Launcher，解压到游戏根目录即可使用；插件使用 Steam Linux Runtime 3.0 (sniper) 提供的运行库。
 
 - 修复 Windows 与 Linux 读取旧双字节转码的二进制存档时，人物、军队及自定义名称未转换为 UTF-8 的问题，补齐原生读取入口与回归检查。
 

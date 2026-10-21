@@ -2,7 +2,7 @@ EU4 Unicode Patch — Augustus 插件版
 
 适用：EU4 1.37.5 原生 Linux x86_64，Steam Linux Runtime 3.0 (sniper)。
 
-1. 将 Augustus-Launcher 和本包解压到游戏根目录。
+1. 本包已包含 Augustus-Launcher，将本包解压到游戏根目录（eu4 所在目录）。
 2. Steam → 游戏属性 → 兼容性，选择 Steam Linux Runtime 3.0 (sniper)。
 3. Steam 启动选项填写：
    bash ./launch.sh --steam -- %command%

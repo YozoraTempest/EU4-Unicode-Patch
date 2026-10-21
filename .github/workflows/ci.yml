@@ -21,28 +21,16 @@ concurrency:
 
 jobs:
   augustus-sniper:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: recursive
-          persist-credentials: false
-      - name: Build and test Augustus package in the pinned Valve sniper SDK
-        run: docker build --progress=plain -f packaging/Dockerfile.linux-plugin --output dist .
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: linux-augustus-sniper-${{ github.sha }}
-          retention-days: 14
-          path: dist/EU4UnicodePatch-Linux-Augustus.zip
-          if-no-files-found: error
+    uses: ./.github/workflows/linux-player.yml
+    with:
+      source: ${{ github.sha }}
   arch-core:
     runs-on: ubuntu-24.04
     container: archlinux:base
     timeout-minutes: 20
     steps:
       - name: Install Arch build dependencies
-        run: pacman -Syu --noconfirm --needed base-devel cmake ninja python git icu file binutils pango cairo fontconfig noto-fonts noto-fonts-cjk ttf-dejavu
+        run: pacman -Syu --noconfirm --needed base-devel cmake ninja python git icu file binutils pango cairo fontconfig sdl2-compat noto-fonts noto-fonts-cjk ttf-dejavu
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
@@ -90,7 +78,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             build-essential cmake ninja-build python3 git file binutils pkg-config \
-            libicu-dev libpango1.0-dev libpangocairo-1.0-0 \
+            libicu-dev libpango1.0-dev libpangocairo-1.0-0 libsdl2-2.0-0 \
             libfontconfig1-dev libcairo2-dev libharfbuzz-dev libfreetype6-dev \
             fonts-noto-core fonts-noto-cjk fonts-dejavu-core ${{ matrix.compiler_package }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

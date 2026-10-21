@@ -94,7 +94,7 @@ with tempfile.TemporaryDirectory(prefix="eu4-paradox-launcher-") as temporary:
     assert "fixture main called" not in real.stdout
     log = (game / "eu4_unicode_linux.log").read_text()
     assert "Executable SHA256=" + hashlib.sha256(fixture.read_bytes()).hexdigest() in log
-    assert "Refused: Native instruction outside executable mapping" in log
+    assert "Refused: Native instruction outside executable mapping" in log, log
 
     # Uninstall restores original bytes; if the launcher updated another field,
     # restore only exePath so that new settings are preserved.
