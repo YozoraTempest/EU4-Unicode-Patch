@@ -47,6 +47,7 @@ int patched_main(int argc,char** argv,char** envp) {
         prepare_editor_input(*hooks);
         prepare_editor_mutation(*hooks);
         prepare_multiplayer_name(*hooks);
+        prepare_save_names(*hooks);
         prepare_search(*hooks);
         prepare_ime(*hooks);
         prepare_ime_presentation(*hooks);
