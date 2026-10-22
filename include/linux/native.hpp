@@ -53,6 +53,7 @@ void report_map_counts() noexcept;
 void prepare_mod_registry(Hooks&);
 void prepare_editor_input(Hooks&);
 void prepare_multiplayer_name(Hooks&);
+void prepare_save_names(Hooks&);
 void prepare_search(Hooks&);
 void prepare_ime(Hooks&);
 void configure_ime();
