@@ -40,6 +40,8 @@ struct Rows {const Row* begin;const Row* end;const Row* capacity;};
 Rows rows{};int redraws=0;
 const Rows* get_rows(const void*) {return &rows;}
 void redraw(void*) {++redraws;}
+const void* save_settings=nullptr;
+const void* get_save_settings() {return save_settings;}
 void yaml_tests() {
     reinterpret_cast<void(*)(bool)>(0x2365c2e)(false);
     int index=0;
@@ -135,6 +137,38 @@ void date_tests() {
     destroy(&province_name);
     std::puts("PASS native date/month-year and combat/siege title builders (controlled localization)");
 }
+void save_name_tests() {
+    // The game main normally creates CSettings; provide only its empty mod path.
+    alignas(16) std::array<unsigned char,256> settings{};
+    auto* mod_path=reinterpret_cast<String*>(settings.data()+0xe0);
+    construct(mod_path,"");save_settings=settings.data();
+    auto settings_hook=SafetyHookInline::create(reinterpret_cast<void*>(0x16f7128),
+                                               reinterpret_cast<void*>(get_save_settings));
+    check(static_cast<bool>(settings_hook),"native save settings fixture hook");
+    const auto build=reinterpret_cast<String*(*)(String*,const String*,const void*)>(0x128327c);
+    const auto transliterate=reinterpret_cast<void(*)(String*)>(0x254d05a);
+    const std::array<void*,3> folders{};
+    for(const auto name:{std::string("France1444_11_11"),std::string("测试015"),
+                         std::string("法兰西_𠮷_é_سلام"),std::string("Café_Å_Ω_Ж")}) {
+        String input{},path{};
+        construct(&input,name);build(&path,&input,folders.data());
+        check(path.view()=="save games/"+name+".eu4","native save path preserves UTF-8 bytes");
+        check(input.view()==name,"native save path leaves source unchanged");
+        destroy(&input);destroy(&path);
+    }
+    for(const auto name:{std::string("caf\xe9"),std::string("\xe6\xb5")}) {
+        String input{},expected{},path{};
+        construct(&input,name);construct(&expected,name);transliterate(&expected);
+        build(&path,&input,folders.data());
+        check(path.view()=="save games/"+std::string(expected.view())+".eu4",
+              "native save path retains legacy non-UTF-8 transliteration");
+        destroy(&input);destroy(&expected);destroy(&path);
+    }
+    String outside{};construct(&outside,"测试");transliterate(&outside);
+    check(outside.view()=="a??e??","transliteration outside save sites remains native");destroy(&outside);
+    destroy(mod_path);save_settings=nullptr;
+    std::puts("PASS native save paths: UTF-8, supplementary/combining text, legacy bytes and scoped transliteration");
+}
 void select_tests() {
     auto wrap_hook=SafetyHookInline::create(reinterpret_cast<void*>(0x20d69ac),reinterpret_cast<void*>(wrapped));
     check(static_cast<bool>(wrap_hook),"native wrap fixture hook");
@@ -170,7 +204,7 @@ void select_tests() {
 int contract_main(int,char**,char**) {
     std::setvbuf(stdout,nullptr,_IONBF,0);
     try {
-        yaml_tests();lexer_tests();binary_lexer_tests();date_tests();select_tests();
+        yaml_tests();lexer_tests();binary_lexer_tests();date_tests();select_tests();save_name_tests();
         reinterpret_cast<void(*)()>(0x2365c77)();
         std::puts("PASS all native contract checks; game main was not entered");return 0;
     } catch(const std::exception& error) {std::fprintf(stderr,"Native contract failure: %s\n",error.what());return 1;}

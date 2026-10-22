@@ -111,7 +111,7 @@ add_library(EU4UnicodePatchLinux SHARED
     src/linux/localization.cpp src/linux/script_bom.cpp src/linux/bitmap_fonts.cpp src/linux/text_layout.cpp src/linux/map_names.cpp
     src/linux/font_pages.cpp src/linux/font_draw.cpp src/linux/paragraph.cpp src/linux/paragraph_fit.cpp
     src/linux/mod_registry.cpp src/linux/editor_input.cpp src/linux/editor_layout.cpp src/linux/editor_mutation.cpp
-    src/linux/multiplayer_name.cpp src/linux/search.cpp src/linux/ime.cpp src/linux/ime_presentation.cpp src/linux/name_presence.cpp src/legacy_text.cpp)
+    src/linux/multiplayer_name.cpp src/linux/save_names.cpp src/linux/search.cpp src/linux/ime.cpp src/linux/ime_presentation.cpp src/linux/name_presence.cpp src/legacy_text.cpp)
 target_include_directories(EU4UnicodePatchLinux PRIVATE include vendor/picosha2)
 target_compile_features(EU4UnicodePatchLinux PRIVATE cxx_std_23)
 target_compile_options(EU4UnicodePatchLinux PRIVATE -Wall -Wextra -Wpedantic)
