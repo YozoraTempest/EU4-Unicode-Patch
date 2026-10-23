@@ -14,7 +14,7 @@ extern NativeCountryGeometry original_country_geometry;
 extern NativeVertexUpload original_vertex_upload;
 extern NativeVertexCreate original_vertex_create;
 extern NativeVertexRelease original_vertex_release;
-void configure_font_draw(FontLog log) noexcept;
+void configure_font_draw(FontLog log,bool dxvk_compatibility=false) noexcept;
 void build_map_font_geometry(void* owner,void* sector,void* labels,int count,void* font);
 bool build_country_font_geometry(void* owner,const int* provinces,int country,int label,int width,int height,void* name);
 void upload_map_font_vertices(void* context,void* buffer,const void* data,int vertices,int offset,int mode);

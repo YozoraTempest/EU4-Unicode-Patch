@@ -70,8 +70,21 @@ FontLog logger=nullptr;
 std::shared_ptr<const TextFonts> text_fonts;
 std::shared_ptr<const TextFonts> paragraph_fonts;
 bool prefer_system=false,font_files_checked=false;
+bool dxvk_compatibility=false;
 std::unordered_map<const void*,std::shared_ptr<Atlas>> bindings;
 std::recursive_mutex mutex;
+
+bool detect_dxvk() noexcept {
+    HMODULE module=GetModuleHandleW(L"d3d9.dll");
+    if(!module) return false;
+    wchar_t path[32768]{};
+    const auto length=GetModuleFileNameW(module,path,static_cast<DWORD>(std::size(path)));
+    if(!length||length>=std::size(path)) return false;
+    std::ifstream file(std::filesystem::path(path),std::ios::binary);
+    if(!file) return false;
+    std::string bytes((std::istreambuf_iterator<char>(file)),{});
+    return bytes.find("DXVK")!=std::string::npos||bytes.find("dxvk")!=std::string::npos;
+}
 using DeviceReset=HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*,D3DPRESENT_PARAMETERS*);
 DeviceReset original_reset=nullptr;
 void* reset_entry=nullptr;
@@ -303,17 +316,24 @@ void sync_page(Atlas& a,Page& page,IDirect3DTexture9* texture,bool initial) {
         throw std::runtime_error("Native font GPU texture contract mismatch");
     prepare_staging(a,page,texture,initial);
     if(texture!=page.uploaded) checked(page.staging->AddDirtyRect(nullptr));
+    const bool batch_lock=dxvk_compatibility||page.pending.size()>8;
+    D3DLOCKED_RECT pixels{};
+    if(batch_lock) checked(page.staging->LockRect(0,&pixels,nullptr,0));
     for(const auto& glyph:page.pending) {
         const auto& g=glyph.metrics;
         RECT rect{g.x,g.y,g.x+g.width,g.y+g.height};
-        D3DLOCKED_RECT pixels{};checked(page.staging->LockRect(0,&pixels,&rect,0));
+        D3DLOCKED_RECT local{};
+        auto* target=&pixels;
+        if(!batch_lock) { checked(page.staging->LockRect(0,&local,&rect,0));target=&local; }
         for(int y=0;y<g.height;++y) for(int x=0;x<g.width;++x) {
             const auto color=a.black?0u:0xffffffu;
             const auto alpha=glyph.alpha[static_cast<std::size_t>(y)*g.width+x];
-            reinterpret_cast<std::uint32_t*>(static_cast<char*>(pixels.pBits)+y*pixels.Pitch)[x]=color|(static_cast<std::uint32_t>(alpha)<<24);
+            auto* row=static_cast<char*>(target->pBits)+y*target->Pitch;
+            reinterpret_cast<std::uint32_t*>(row)[batch_lock?g.x+x:x]=color|(static_cast<std::uint32_t>(alpha)<<24);
         }
-        checked(page.staging->UnlockRect(0));
+        if(!batch_lock) checked(page.staging->UnlockRect(0));
     }
+    if(batch_lock) checked(page.staging->UnlockRect(0));
     ComPtr<IDirect3DDevice9> device;checked(texture->GetDevice(&device));
     checked(device->UpdateTexture(page.staging.Get(),texture));page.uploaded=texture;
     if(logger&&!page.pending.empty()) { char message[100];std::snprintf(message,sizeof(message),"Dynamic font texture uploaded: size=%d glyphs=%zu",a.size,page.pending.size());logger(message); }
@@ -360,9 +380,11 @@ void configure_font_atlases(const std::filesystem::path& fixture,const std::file
     std::lock_guard<std::recursive_mutex> lock(mutex);
     fixture_path=fixture;font_path=fonts;logger=log;atlas_prefix=prefix;
     prefer_system=prefer_system_fonts;font_files_checked=false;text_fonts.reset();paragraph_fonts.reset();
-    configure_font_draw(log);
+    dxvk_compatibility=detect_dxvk();
+    configure_font_draw(log,dxvk_compatibility);
     configure_paragraph_log(log);
     if(logger&&prefer_system) logger("Font source: system fonts first; optional font files supplement missing glyphs.");
+    if(logger) logger(dxvk_compatibility?"D3D9 backend: DXVK compatibility mode enabled.":"D3D9 backend: native compatibility mode enabled.");
 }
 void register_font_atlas(void* object,std::string_view selected_path) noexcept {
     try {
