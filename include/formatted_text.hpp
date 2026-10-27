@@ -15,7 +15,10 @@ struct TextUnit {
 };
 // Native compiled literals can contain the same single-byte glyphs supported
 // by the existing engine adapter. Imported localization remains strict UTF-8.
-TextUnit native_text_unit(std::string_view text,std::size_t offset,bool formatted=true);
+TextUnit native_text_unit(std::string_view text,std::size_t offset,bool formatted=true) noexcept;
+// Compact a writable native string in place, preserving all non-color bytes.
+// The buffer must have room for its terminating NUL at text[size].
+std::size_t strip_native_colors(char* text,std::size_t size) noexcept;
 std::size_t native_scalar_start(std::string_view text,std::size_t offset) noexcept;
 std::size_t native_scalar_next(std::string_view text,std::size_t offset) noexcept;
 Scalar native_measure_scalar(std::string_view text) noexcept;

@@ -5,6 +5,7 @@
 #include "unicode_services.hpp"
 #include "formatted_text.hpp"
 #include "formatted_text_cache.hpp"
+#include "native_color_strip.hpp"
 #include "unicode_editor.hpp"
 #include "native_editor_text.hpp"
 #include "native_editor_presentation.hpp"
@@ -1234,6 +1235,8 @@ bool initialize(HMODULE module) {
     log(checked_message);
 
     auto address=[](std::size_t rva){ return reinterpret_cast<std::uintptr_t>(image+rva); };
+    eu4unicode::native_color_assign=reinterpret_cast<eu4unicode::ColorStringAssign>(address(0x95110));
+    eu4unicode::native_color_log=log;
     g_person_name_return=address(0xa4b4a6);
     g_generated_name_return=address(0x314301);
     eu4unicode::native_name_append=reinterpret_cast<eu4unicode::NameAppend>(address(0x932f0));
@@ -1402,7 +1405,8 @@ bool initialize(HMODULE module) {
     if(MH_Initialize()!=MH_OK) { log("MinHook initialization failed."); return false; }
     PatchInitialization transaction(constants);
     struct Hook { std::size_t rva; void* callback; };
-    const Hook hooks[]={ {0xa4b48c,reinterpret_cast<void*>(person_name_hook)},
+    const Hook hooks[]={ {0x17046a0,reinterpret_cast<void*>(eu4unicode::construct_colorless_text)},
+        {0xa4b48c,reinterpret_cast<void*>(person_name_hook)},
         {0x816dd5,reinterpret_cast<void*>(speed_increase_hook)},
         {0x3142f2,reinterpret_cast<void*>(generated_name_hook)},
         {0x16fd650,reinterpret_cast<void*>(eu4unicode::import_legacy_localization)},

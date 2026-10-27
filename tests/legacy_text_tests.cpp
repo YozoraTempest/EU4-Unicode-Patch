@@ -61,6 +61,8 @@ int main() {
     decoded(std::string("\x10-N\x11\x0eN\x12\xf9R\x13it"),raw,u8"中一对絛",4);
     decoded(u8"\x10\x00€"sv,wrapped,u8"耀",1);
     decoded(bytes({0x10,0x01,0xe1}),raw,u8"ā",1,1);
+    decoded(bytes({0x10,0xbf,0x59}),raw,u8"妿",1);
+    decoded(u8"\x10¿Y",wrapped,u8"妿",1);
     decoded(bytes({0x10,0,0xe1}),raw,u8"\ue100",1);
     decoded(bytes({0x10,0,0xea}),raw,u8"\uea00",1);
     decoded(u8"\x10=Ø\x10\x00Þ"sv,wrapped,u8"😀",2);

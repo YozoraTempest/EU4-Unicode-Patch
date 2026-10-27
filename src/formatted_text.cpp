@@ -3,6 +3,7 @@
 #include "unicode_services.hpp"
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <iterator>
 
 namespace eu4unicode {
@@ -17,7 +18,7 @@ Scalar native_scalar(std::string_view value) noexcept {
     return scalar;
 }
 }
-TextUnit native_text_unit(std::string_view text,std::size_t offset,bool formatted) {
+TextUnit native_text_unit(std::string_view text,std::size_t offset,bool formatted) noexcept {
     if(offset>=text.size()) return {TextUnitKind::glyph,0,text.size(),text.size()};
     const auto scalar=native_scalar(text.substr(offset));
     const auto end=offset+scalar.bytes;
@@ -43,6 +44,25 @@ TextUnit native_text_unit(std::string_view text,std::size_t offset,bool formatte
         }
     }
     return {TextUnitKind::glyph,scalar.value,offset,end};
+}
+std::size_t strip_native_colors(char* text,std::size_t size) noexcept {
+    const std::string_view source(text,size);
+    std::size_t begin=0,written=0;
+    for(std::size_t cursor=0;cursor<size;) {
+        const auto unit=native_text_unit(source,cursor);
+        if(unit.kind==TextUnitKind::color) {
+            const auto length=unit.begin-begin;
+            if(length) std::memmove(text+written,text+begin,length);
+            written+=length;
+            begin=unit.end;
+        }
+        cursor=unit.end;
+    }
+    const auto length=size-begin;
+    if(length) std::memmove(text+written,text+begin,length);
+    written+=length;
+    text[written]='\0';
+    return written;
 }
 std::size_t native_scalar_start(std::string_view text,std::size_t offset) noexcept {
     if(offset>=text.size()) return text.size();

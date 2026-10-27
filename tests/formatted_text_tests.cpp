@@ -9,6 +9,34 @@ using namespace eu4unicode;
 void check(bool value,const char* message) {
     if(!value) throw std::runtime_error(message);
 }
+void check_color_strip() {
+    const auto stripped=[](std::string value) {
+        const auto size=strip_native_colors(value.data(),value.size());
+        check(size<=value.size()&&value.data()[size]=='\0',"color stripping lost its native length or terminator");
+        value.resize(size);
+        return value;
+    };
+    check(stripped(u8"§J瓦兰吉卫队§!")==u8"瓦兰吉卫队","UTF-8 color markers left orphan bytes");
+    check(stripped("\xa7J"+std::string(u8"瓦兰吉卫队")+"\xa7!")==u8"瓦兰吉卫队",
+          "single-byte native color commands were not removed");
+    check(stripped(u8"§Y红"+std::string("\xa7R")+u8"蓝§!"+"\xa7!")==u8"红蓝",
+          "mixed native and UTF-8 color commands were not removed");
+    for(const auto text:{"",u8"俧X",u8"¿Cómo estás? Âdel Shâh",u8" ¿李",u8"§中文§",u8"£adm£ @FRA ¤1 {12 $NAME$ [Root.GetName]",
+                         "\xa3" "adm\xa3 @FRA \xa4" "1 {12", "\xe4\xbf", "\xa7"})
+        check(stripped(text)==text,"color stripping changed literal text or another format token");
+    check(stripped(u8"§Y£adm£ @FRA ¤1 {12 $NAME$ [Root.GetName]§!")==
+          u8"£adm£ @FRA ¤1 {12 $NAME$ [Root.GetName]","color stripping replaced native inline objects");
+    const std::string embedded("A\0B",3);
+    check(stripped(u8"§Y"+embedded+u8"§!")==embedded,"embedded NUL changed the length-based string contract");
+    // Cover every valid scalar whose UTF-8 encoding contains the native marker
+    // byte, including the two-, three- and four-byte continuation collisions.
+    for(std::uint32_t scalar=0x80;scalar<=0x10ffff;++scalar) {
+        if(scalar==0xa7||(scalar>=0xd800&&scalar<=0xdfff)) continue;
+        const auto text=encode(scalar);
+        if(text.find('\xa7')!=std::string::npos)
+            check(stripped(u8"§Y"+text+"X"+u8"§!")==text+"X","UTF-8 continuation byte was treated as a color marker");
+    }
+}
 void check_cache() {
     FormattedTextCache cache(1024*1024,2);
     std::string source=u8"中e§R\u0301§!文";
@@ -71,6 +99,7 @@ void check_cache() {
 }
 int main() {
     try {
+        check_color_strip();
         check_cache();
         for(const auto text:{u8"万帕诺亚格",u8"施泰亚莫阿克",u8"é中𠮷A",u8"A e\u0301 中",u8"§Y万帕诺亚格§!",u8"A£adm£中文"}) {
             const std::string_view source(text);

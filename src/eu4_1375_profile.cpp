@@ -64,6 +64,7 @@ const ImageProfile& eu4_1375_profile() {
             {0x159f1db,"ffc78bd7448b5310413bfa0f8d17020000","bitmap_advance_hook"},
             {0x159f87d,"4c8b45b8f3410f10b0480800000fb604104d8b24c04d85e4","list_measure_hook"},
             {0x159fde5,"ffc38bf38b4f10440fb68d480100004533d23bd9","list_advance_hook"},
+            {0x17046a0,"48895c240848896c24184889542410565741564883ec50","construct_colorless_text"},
             {0x1704af0,"48895c2408574883ec40488bda443b4910","layout_substring"},
             {0x159eddd,"488bcb4c8b4b184983f9107203488b0b803c0aa7","split_format_hook"},
             {0x159f6ef,"488bcf4c8b47184983f8107203488b0f8bc6803c01a7","list_format_hook"},

@@ -61,6 +61,8 @@ int main() {
     native_name_policy_lookup=lookup;
     check("德操"," ¿危","危德操",true);
     check("Reimu"," ¿Hakurei","HakureiReimu",true);
+    check("世民"," ¿李","李世民",true);
+    check("世民",std::string(" \xbf")+"李","李世民",true);
     check("景哲",std::string(" ")+char(0xbf)+"扁","扁景哲",true);
     check("Jean"," de Valois","Jean de Valois",false);
     check("中文"," 姓氏","中文 姓氏",false);
