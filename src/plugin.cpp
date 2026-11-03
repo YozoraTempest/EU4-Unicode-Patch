@@ -1376,7 +1376,10 @@ bool initialize(HMODULE module) {
         // Save-name builders and save/load selection call the CP1252 transliterator.
         // Skip only those calls: their strings already contain UTF-8. The
         // later filename-character validation and other callers stay native.
+        {0x1174a99,bytes("e8e2065900"),bytes("9090909090")},
         {0x1174e95,bytes("e8e6025900"),bytes("9090909090")},
+        {0x13b8de1,bytes("e89ac33400"),bytes("9090909090")},
+        {0x13b8f6c,bytes("e80fc23400"),bytes("9090909090")},
         {0x13b9567,bytes("e814bc3400"),bytes("9090909090")},
         {0x117519e,bytes("e8ddff5800"),bytes("9090909090")},
         {0x1175c2c,bytes("e84ff55800"),bytes("9090909090")},
