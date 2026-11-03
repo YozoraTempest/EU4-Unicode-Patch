@@ -120,6 +120,13 @@ fuzzy_pinyin=1
 
 保存路径修正代理对转换与比较，并保留已观察保存入口的 UTF-8 名称。
 
+Windows 存档名称还会在选中存档回填输入框、默认名称、保存确认以及前端菜单确认时经过原生单字节转写。补丁在这些已验证的调用点跳过转写，保留原始文件名；实际写入仍使用原生文件名校验和保存流程。`tools/test-native-save-names.py` 在独立映射的游戏 EXE 中重放回填和保存确认，检查覆盖提示收到原中文名、原生路径构造与 UTF-16 转换，以及前端菜单保存的文件名。夹具替代 UI 和存档序列化依赖，不启动游戏，不改写玩家存档。
+
+```powershell
+python tools/test-native-save-names.py --executable "D:/SteamLibrary/steamapps/common/Europa Universalis IV/eu4.exe" --build-directory build --report private/save-names-player.json
+python tools/test-native-save-names.py --executable "D:/SteamLibrary/steamapps/common/Europa Universalis IV/eu4.exe" --build-directory build --dll eu4_unicode_probe --report private/save-names-probe.json
+```
+
 ## 姓名顺序
 
 分开的姓与名在原生姓名拼接入口处理，使用人物自身的文化，不按所属国家改变顺序。汉文化、日文和韩文姓名默认姓在前：原文字形通常连写，拉丁字母转写加空格；匈牙利姓名默认姓在前并加空格。未知文化保持原顺序。旧 `¿` 姓氏标记仍优先决定姓在前，源文本附带的分隔符保留。
