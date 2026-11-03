@@ -53,7 +53,7 @@ cd EU4UnicodePatch
 | Nightly | `v版本-nightly-yyyyMMdd-短SHA` | `EU4UnicodePatch-1.37.5-nightly-yyyyMMdd-短SHA.zip` |
 | 正式版 | `v版本` | `EU4UnicodePatch-1.37.5-v版本.zip` |
 
-Nightly 日期按北京时间计算，标记为 Pre-release。正式发布前在 `develop` 更新 `VERSION` 和 `CHANGELOG.md`；将本仓库的 `develop` PR 合并到 `main` 后，自动构建该次合并提交并发布 Latest。其他来源的 PR 不发布正式版。
+Nightly 日期按北京时间计算，标记为 Pre-release。正式发布前在 `develop` 更新 `VERSION` 和 `CHANGELOG.md`；将本仓库的 `develop` PR 合并到 `main` 后，自动构建该次合并提交并上传正式版草稿。检查构建、安装包及验证范围后，将草稿公开并设为 Latest。其他来源的 PR 不触发正式版构建。
 
 两种 Release 均附主包、可选字体包及 `SHA256SUMS.txt`。先上传到草稿，全部上传成功后公开；重跑可恢复草稿，已经公开的版本保留原标签和文件。正式版本号必须递增。
 
